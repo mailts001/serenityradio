@@ -1,0 +1,801 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Serenity Radio — Your 24/7 Mental Wellness Station</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;1,400&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --sage:#7a9e7e;--sage-light:#b8d4bb;--sage-dark:#3d5c40;
+    --dusk:#6b7fa8;--dusk-light:#c2cde0;
+    --amber:#c9956a;--amber-light:#f0d9c5;
+    --bg:#1a1e2e;--bg2:#22273a;--bg3:#2a3045;
+    --text:#e8e0d5;--text-muted:#9a9590;
+    --border:rgba(255,255,255,0.08);
+  }
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;overflow-x:hidden;}
+
+  #bg-canvas{position:fixed;inset:0;z-index:0;pointer-events:none;}
+
+  .breath-orb{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);width:600px;height:600px;border-radius:50%;background:radial-gradient(circle,rgba(122,158,126,0.06) 0%,rgba(107,127,168,0.04) 50%,transparent 70%);animation:breathOrb 8s ease-in-out infinite;pointer-events:none;z-index:0;}
+  @keyframes breathOrb{0%,100%{transform:translate(-50%,-50%) scale(1);opacity:.5;}50%{transform:translate(-50%,-50%) scale(1.15);opacity:1;}}
+
+  .page{position:relative;z-index:1;max-width:900px;margin:0 auto;padding:0 1rem 4rem;}
+
+  header{text-align:center;padding:2.5rem 1rem 1.5rem;position:relative;}
+  .header-actions{display:flex;justify-content:flex-end;gap:10px;position:absolute;top:1.5rem;right:0;flex-wrap:wrap;}
+  .btn{font-family:'DM Sans',sans-serif;font-size:13px;font-weight:500;padding:8px 18px;border-radius:50px;border:none;cursor:pointer;transition:transform .2s,opacity .2s,box-shadow .3s;letter-spacing:.02em;position:relative;overflow:hidden;}
+  .btn:active{transform:scale(.95);}
+  .btn-subscribe{background:var(--sage);color:#fff;animation:btnPulse 3s ease-in-out infinite;}
+  .btn-donate{background:var(--amber);color:#fff;}
+  .btn-upload{background:var(--dusk);color:#fff;}
+  @keyframes btnPulse{0%,100%{box-shadow:0 0 0 0 rgba(122,158,126,.4);}50%{box-shadow:0 0 0 8px rgba(122,158,126,0);}}
+
+  .logo-glyph{width:70px;height:70px;margin:0 auto 1rem;position:relative;}
+  .logo-ring{position:absolute;inset:0;border-radius:50%;border:1px solid rgba(122,158,126,.3);animation:logoSpin 20s linear infinite;}
+  .logo-ring:nth-child(2){inset:12px;border-color:rgba(107,127,168,.2);animation-duration:14s;animation-direction:reverse;}
+  @keyframes logoSpin{to{transform:rotate(360deg);}}
+
+  h1{font-family:'Playfair Display',serif;font-size:clamp(2rem,6vw,3rem);font-weight:400;letter-spacing:-.01em;}
+  h1 em{font-style:italic;color:var(--sage-light);}
+  .tagline{font-size:14px;color:var(--text-muted);margin-top:.5rem;letter-spacing:.05em;}
+
+  .visitor-bar{display:flex;align-items:center;justify-content:center;gap:8px;margin:1rem 0 0;font-size:13px;color:var(--text-muted);}
+  .live-dot{width:8px;height:8px;border-radius:50%;background:#5dde82;animation:livePulse 2s infinite;}
+  @keyframes livePulse{0%,100%{opacity:1;box-shadow:0 0 0 0 rgba(93,222,130,.5);}50%{opacity:.8;box-shadow:0 0 0 6px rgba(93,222,130,0);}}
+  .visitor-count{font-weight:500;color:var(--text);}
+
+  .breathe-ring{width:90px;height:90px;border-radius:50%;margin:1.5rem auto;border:2px solid rgba(122,158,126,.3);display:flex;align-items:center;justify-content:center;position:relative;cursor:pointer;}
+  .breathe-inner{width:54px;height:54px;border-radius:50%;background:rgba(122,158,126,.15);display:flex;align-items:center;justify-content:center;font-size:11px;color:var(--sage-light);letter-spacing:.05em;transition:transform 4s ease-in-out,background 4s ease-in-out;}
+  .breathe-ring.inhale .breathe-inner{transform:scale(1.45);background:rgba(122,158,126,.3);}
+  .breathe-ring.exhale .breathe-inner{transform:scale(.75);background:rgba(122,158,126,.08);}
+  .breathe-text{font-size:11px;color:var(--sage-light);margin-top:-.4rem;text-align:center;letter-spacing:.08em;text-transform:uppercase;}
+
+  .stats-strip{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:12px;margin:1.5rem 0;}
+  .stat-card{background:var(--bg2);border:1px solid var(--border);border-radius:14px;padding:1rem;text-align:center;transition:border-color .3s,transform .3s;animation:fadeUp .6s ease both;}
+  .stat-card:hover{border-color:rgba(122,158,126,.3);transform:translateY(-2px);}
+  .stat-card:nth-child(1){animation-delay:.05s;}.stat-card:nth-child(2){animation-delay:.12s;}.stat-card:nth-child(3){animation-delay:.19s;}.stat-card:nth-child(4){animation-delay:.26s;}
+  @keyframes fadeUp{from{opacity:0;transform:translateY(16px);}to{opacity:1;transform:translateY(0);}}
+  .stat-value{font-family:'Playfair Display',serif;font-size:1.8rem;font-weight:400;color:var(--sage-light);}
+  .stat-label{font-size:12px;color:var(--text-muted);margin-top:.2rem;}
+
+  .player-card{background:var(--bg2);border:1px solid var(--border);border-radius:20px;padding:2rem;margin:2rem 0 1.5rem;position:relative;overflow:hidden;animation:fadeUp .5s ease both;}
+  .player-card::before{content:'';position:absolute;top:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,rgba(122,158,126,.6),transparent);animation:shimmer 3s ease-in-out infinite;}
+  @keyframes shimmer{0%,100%{opacity:.4;}50%{opacity:1;}}
+
+  .now-playing-label{font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--sage-light);margin-bottom:.5rem;display:flex;align-items:center;gap:6px;}
+  .bars{display:flex;gap:2px;align-items:flex-end;height:14px;}
+  .bars span{width:3px;border-radius:2px;background:var(--sage-light);animation:barDance 1.1s ease-in-out infinite;}
+  .bars span:nth-child(1){animation-delay:0s;}.bars span:nth-child(2){animation-delay:.18s;}.bars span:nth-child(3){animation-delay:.36s;}.bars span:nth-child(4){animation-delay:.09s;}.bars span:nth-child(5){animation-delay:.27s;}
+  .bars.paused span{animation-play-state:paused;}
+  @keyframes barDance{0%,100%{height:3px;}50%{height:14px;}}
+
+  .track-title{font-family:'Playfair Display',serif;font-size:clamp(1.1rem,3vw,1.5rem);font-weight:400;margin-bottom:.2rem;transition:opacity .4s;}
+  .track-artist{font-size:14px;color:var(--text-muted);margin-bottom:1.5rem;transition:opacity .4s;}
+
+  .waveform{height:48px;display:flex;align-items:center;gap:2px;margin-bottom:1rem;overflow:hidden;}
+  .wave-bar{flex:1;border-radius:2px;background:var(--bg3);transition:background .3s;min-width:3px;}
+  .wave-bar.played{background:rgba(122,158,126,.5);}
+  .wave-bar.current{background:var(--sage-light);animation:wavePulse .5s ease-in-out infinite alternate;}
+  @keyframes wavePulse{to{transform:scaleY(1.4);}}
+
+  .progress-row{display:flex;align-items:center;gap:10px;margin-bottom:1rem;}
+  .progress-track{flex:1;height:4px;background:var(--bg3);border-radius:4px;cursor:pointer;}
+  .progress-fill{height:100%;background:linear-gradient(90deg,var(--sage),var(--sage-light));border-radius:4px;transition:width .5s linear;position:relative;}
+  .progress-fill::after{content:'';width:12px;height:12px;border-radius:50%;background:#fff;position:absolute;right:-6px;top:50%;transform:translateY(-50%);box-shadow:0 0 6px rgba(184,212,187,.6);}
+  .time-label{font-size:12px;color:var(--text-muted);min-width:36px;}
+
+  .controls{display:flex;align-items:center;justify-content:center;gap:1rem;margin-bottom:1rem;}
+  .ctrl-btn{background:none;border:none;cursor:pointer;color:var(--text-muted);transition:color .2s,transform .15s;display:flex;align-items:center;justify-content:center;}
+  .ctrl-btn:hover{color:var(--text);transform:scale(1.12);}
+  .play-btn{width:52px;height:52px;border-radius:50%;background:var(--sage);color:#fff;display:flex;align-items:center;justify-content:center;cursor:pointer;border:none;transition:background .2s,transform .15s;}
+  .play-btn.playing{animation:playRipple 2s ease-out infinite;}
+  @keyframes playRipple{0%{box-shadow:0 0 0 0 rgba(122,158,126,.5);}100%{box-shadow:0 0 0 18px rgba(122,158,126,0);}}
+  .play-btn:hover{transform:scale(1.06);}
+
+  .volume-row{display:flex;align-items:center;gap:8px;justify-content:center;}
+  .volume-slider{-webkit-appearance:none;appearance:none;width:100px;height:4px;border-radius:4px;background:var(--bg3);outline:none;cursor:pointer;}
+  .volume-slider::-webkit-slider-thumb{-webkit-appearance:none;width:14px;height:14px;border-radius:50%;background:var(--sage-light);cursor:pointer;}
+
+  .mood-controls{display:flex;justify-content:center;gap:12px;margin-top:15px;}
+  .mood-btn{background:var(--bg3);border:1px solid var(--border);border-radius:20px;padding:6px 14px;font-size:12px;cursor:pointer;color:var(--text-muted);transition:all .2s;}
+  .mood-btn:hover{border-color:var(--sage);color:var(--sage-light);}
+  .current-mood{text-align:center;margin-top:10px;font-size:12px;color:var(--sage-light);}
+
+  .particle{position:fixed;border-radius:50%;pointer-events:none;z-index:0;animation:floatUp linear infinite;opacity:0;}
+  @keyframes floatUp{0%{transform:translateY(100vh) scale(0);opacity:0;}10%{opacity:.5;}90%{opacity:.25;}100%{transform:translateY(-10vh) scale(1);opacity:0;}}
+
+  .dj-card{background:var(--bg2);border:1px solid var(--border);border-left:3px solid var(--dusk);border-radius:14px;padding:1.25rem 1.5rem;margin:1.5rem 0;display:flex;gap:1rem;align-items:flex-start;animation:fadeUp .5s .3s ease both;}
+  .dj-avatar{width:44px;height:44px;border-radius:50%;flex-shrink:0;background:linear-gradient(135deg,var(--dusk),var(--dusk-light));display:flex;align-items:center;justify-content:center;font-size:20px;animation:avatarFloat 5s ease-in-out infinite;}
+  @keyframes avatarFloat{0%,100%{transform:translateY(0);}50%{transform:translateY(-4px);}}
+  .dj-meta{font-size:12px;color:var(--text-muted);margin-bottom:.4rem;}
+  .dj-meta strong{color:var(--dusk-light);}
+  .dj-quote{font-family:'Playfair Display',serif;font-size:clamp(.95rem,2.5vw,1.1rem);line-height:1.6;font-style:italic;transition:opacity .5s;}
+  .dj-attribution{font-size:13px;color:var(--text-muted);margin-top:.5rem;}
+
+  .donation-card{background:var(--bg2);border:1px solid var(--border);border-radius:16px;padding:1.5rem;margin:1.5rem 0;animation:fadeUp .5s .35s ease both;}
+  .donation-header{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:.8rem;}
+  .donation-amount{font-family:'Playfair Display',serif;font-size:2rem;color:var(--amber);}
+  .donation-bar{height:8px;background:var(--bg3);border-radius:8px;overflow:hidden;margin-bottom:.6rem;}
+  .donation-fill{height:100%;background:linear-gradient(90deg,var(--amber),#e8b87a);border-radius:8px;transition:width 1.2s cubic-bezier(.34,1.56,.64,1);}
+  .donation-meta{display:flex;justify-content:space-between;font-size:13px;color:var(--text-muted);}
+
+  .section-title{font-family:'Playfair Display',serif;font-size:1.3rem;font-weight:400;margin-bottom:1rem;display:flex;align-items:center;gap:8px;}
+  .section-title::after{content:'';flex:1;height:1px;background:var(--border);}
+  .schedule-list{display:flex;flex-direction:column;gap:8px;}
+  .schedule-item{background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:.9rem 1.1rem;display:flex;align-items:center;gap:1rem;transition:border-color .3s,transform .2s;animation:fadeUp .5s ease both;}
+  .schedule-item:hover{transform:translateX(3px);border-color:rgba(122,158,126,.25);}
+  .schedule-item.active{border-color:var(--sage);background:rgba(122,158,126,.08);}
+  .sched-time{font-size:13px;color:var(--text-muted);min-width:80px;}
+  .sched-badge{font-size:11px;padding:3px 9px;border-radius:50px;font-weight:500;letter-spacing:.04em;}
+  .badge-music{background:rgba(122,158,126,.2);color:var(--sage-light);}
+  .badge-dj{background:rgba(107,127,168,.2);color:var(--dusk-light);}
+  .badge-meditation{background:rgba(201,149,106,.2);color:var(--amber-light);}
+  .sched-name{font-size:14px;flex:1;}
+
+  .modal-overlay{position:fixed;inset:0;background:rgba(10,13,25,.85);backdrop-filter:blur(8px);z-index:100;display:flex;align-items:center;justify-content:center;padding:1rem;opacity:0;pointer-events:none;transition:opacity .25s;}
+  .modal-overlay.open{opacity:1;pointer-events:all;}
+  .modal{background:var(--bg2);border:1px solid rgba(255,255,255,.12);border-radius:20px;padding:2rem;width:100%;max-width:460px;transform:translateY(24px) scale(.97);transition:transform .3s cubic-bezier(.34,1.56,.64,1);position:relative;}
+  .modal-overlay.open .modal{transform:translateY(0) scale(1);}
+  .modal-close{position:absolute;top:1rem;right:1rem;background:none;border:none;cursor:pointer;color:var(--text-muted);font-size:22px;transition:color .2s,transform .2s;}
+  .modal-close:hover{color:var(--text);transform:rotate(90deg);}
+  .modal h2{font-family:'Playfair Display',serif;font-size:1.5rem;font-weight:400;margin-bottom:.4rem;}
+  .modal p{font-size:14px;color:var(--text-muted);margin-bottom:1.2rem;line-height:1.6;}
+  .form-group{margin-bottom:1rem;}
+  .form-label{font-size:13px;color:var(--text-muted);display:block;margin-bottom:.4rem;}
+  .form-input,.form-select{width:100%;padding:10px 14px;background:var(--bg3);border:1px solid var(--border);border-radius:10px;color:var(--text);font-family:'DM Sans',sans-serif;font-size:14px;outline:none;transition:border-color .2s,box-shadow .2s;}
+  .form-input:focus,.form-select:focus{border-color:var(--sage);box-shadow:0 0 0 3px rgba(122,158,126,.12);}
+  .form-input::placeholder{color:var(--text-muted);opacity:.7;}
+  .form-select option{background:var(--bg2);}
+  .donate-amounts{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:1rem;}
+  .amount-btn{background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:10px 0;cursor:pointer;font-family:'DM Sans',sans-serif;font-size:14px;color:var(--text);transition:all .2s;}
+  .amount-btn:hover,.amount-btn.sel{border-color:var(--amber);color:var(--amber);background:rgba(201,149,106,.1);}
+  .btn-full{width:100%;padding:12px;border-radius:50px;font-size:15px;font-weight:500;cursor:pointer;border:none;font-family:'DM Sans',sans-serif;transition:opacity .2s,transform .15s;}
+  .btn-full:active{transform:scale(.98);}
+  .btn-full:hover{opacity:.88;}
+  .btn-sage{background:var(--sage);color:#fff;}.btn-amber{background:var(--amber);color:#fff;}.btn-dusk{background:var(--dusk);color:#fff;}
+  .drop-zone{border:2px dashed var(--border);border-radius:12px;padding:2rem;text-align:center;cursor:pointer;transition:border-color .2s,background .2s;margin-bottom:1rem;}
+  .drop-zone:hover,.drop-zone.dragover{border-color:var(--dusk);background:rgba(107,127,168,.05);}
+  .drop-icon{font-size:36px;margin-bottom:.5rem;}
+  .drop-text{font-size:14px;color:var(--text-muted);}
+  .drop-text strong{color:var(--dusk-light);}
+
+  .toast{position:fixed;bottom:2rem;left:50%;transform:translateX(-50%) translateY(10px);background:var(--sage-dark);color:#fff;padding:.75rem 1.5rem;border-radius:50px;font-size:14px;z-index:200;opacity:0;pointer-events:none;transition:opacity .3s,transform .3s;}
+  .toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
+  .fade-out{opacity:0 !important;}
+
+  @media(max-width:600px){.header-actions{position:static;justify-content:center;margin-top:1rem;}.controls{gap:.75rem;}}
+  @media(prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms !important;transition-duration:.01ms !important;}}
+</style>
+</head>
+<body>
+<canvas id="bg-canvas"></canvas>
+<div class="breath-orb"></div>
+
+<div class="page">
+  <header>
+    <div class="header-actions">
+      <button class="btn btn-subscribe" onclick="openModal('modal-subscribe')">✦ Subscribe</button>
+      <button class="btn btn-donate" onclick="openModal('modal-donate')">♡ Donate</button>
+      <button class="btn btn-upload" onclick="openModal('modal-upload')">↑ Upload Music</button>
+    </div>
+    <div class="logo-glyph">
+      <div class="logo-ring"></div><div class="logo-ring"></div>
+      <svg viewBox="0 0 70 70" fill="none" style="width:70px;height:70px;position:relative">
+        <circle cx="35" cy="35" r="10" fill="rgba(122,158,126,0.5)"/>
+        <circle cx="35" cy="35" r="6" fill="rgba(184,212,187,0.8)"/>
+      </svg>
+    </div>
+    <h1>Serenity <em>Radio</em></h1>
+    <div class="tagline">24 · 7 · 365 — A safe harbour for every mind</div>
+    <div class="visitor-bar">
+      <span class="live-dot"></span>
+      <span><span class="visitor-count" id="visitor-count">2,847</span> souls tuned in right now</span>
+    </div>
+    <div class="breathe-ring" id="breathe-ring" onclick="startBreath()" title="Click to start breathing exercise">
+      <div class="breathe-inner" id="breathe-inner">Breathe</div>
+    </div>
+    <div class="breathe-text" id="breathe-text">Click to breathe with us</div>
+  </header>
+
+  <div class="stats-strip">
+    <div class="stat-card"><div class="stat-value" id="stat-listeners">2.8k</div><div class="stat-label">Live Listeners</div></div>
+    <div class="stat-card"><div class="stat-value" id="track-count">0</div><div class="stat-label">Tracks in Library</div></div>
+    <div class="stat-card"><div class="stat-value">24/7</div><div class="stat-label">Always On</div></div>
+    <div class="stat-card"><div class="stat-value">98%</div><div class="stat-label">Uptime</div></div>
+  </div>
+
+  <div class="player-card">
+    <div class="now-playing-label">
+      <div class="bars" id="eq-bars"><span></span><span></span><span></span><span></span><span></span></div>
+      Now Playing
+    </div>
+    <div class="track-title" id="track-title">Loading...</div>
+    <div class="track-artist" id="track-artist">Loading playlist...</div>
+    <div class="waveform" id="waveform"></div>
+    <div class="progress-row">
+      <span class="time-label" id="time-current">0:00</span>
+      <div class="progress-track" onclick="seekTo(event,this)">
+        <div class="progress-fill" id="progress-fill" style="width:0%"></div>
+      </div>
+      <span class="time-label" id="time-total">0:00</span>
+    </div>
+    <div class="controls">
+      <button class="ctrl-btn" onclick="prevTrack()"><svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path d="M6 6h2v12H6zm3.5 6 8.5 6V6z"/></svg></button>
+      <button class="play-btn" id="play-btn" onclick="togglePlay()"><svg id="play-icon" width="24" height="24" viewBox="0 0 24 24" fill="white"><path d="M8 5v14l11-7z"/></svg></button>
+      <button class="ctrl-btn" onclick="nextTrack()"><svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path d="M6 18l8.5-6L6 6v12zm2-8.14L11.03 12 8 14.14V9.86zM16 6h2v12h-2z"/></svg></button>
+    </div>
+    <div class="volume-row">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="color:var(--text-muted)"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02z"/></svg>
+      <input type="range" class="volume-slider" id="volume-slider" min="0" max="100" value="72" oninput="setVolume(this.value)">
+      <span id="vol-label" style="font-size:12px;color:var(--text-muted);min-width:28px">72%</span>
+    </div>
+    <div class="current-mood" id="current-mood">Loading mood...</div>
+    <div class="mood-controls">
+      <button class="mood-btn" onclick="toggleShuffle()" id="shuffle-btn">🔀 Shuffle OFF</button>
+      <button class="mood-btn" onclick="refreshPlaylist()">↻ Refresh</button>
+    </div>
+  </div>
+
+  <div class="dj-card">
+    <div class="dj-avatar">🎙</div>
+    <div>
+      <div class="dj-meta"><strong>DJ Solace</strong> — Interlude • Live from Studio Serenity</div>
+      <div class="dj-quote" id="dj-quote">"You don't have to control your thoughts. You just have to stop letting them control you."</div>
+      <div class="dj-attribution" id="dj-author">— Dan Millman</div>
+    </div>
+  </div>
+
+  <div class="donation-card">
+    <div class="donation-header">
+      <div>
+        <div style="font-size:12px;color:var(--text-muted);letter-spacing:.08em;text-transform:uppercase;margin-bottom:.3rem">Community Fund</div>
+        <div class="donation-amount" id="donated-amount">$4,320</div>
+      </div>
+      <div style="text-align:right">
+        <div style="font-size:13px;color:var(--text-muted)">of $10,000 goal</div>
+        <div style="font-size:13px;color:var(--sage-light);margin-top:.2rem" id="pct-label">43% reached</div>
+      </div>
+    </div>
+    <div class="donation-bar"><div class="donation-fill" id="donation-fill" style="width:43%"></div></div>
+    <div class="donation-meta">
+      <span id="contributor-count">238 generous contributors</span>
+      <span id="remaining-label">$5,680 to go</span>
+    </div>
+    <button class="btn-full btn-amber" style="margin-top:1rem" onclick="openModal('modal-donate')">♡ Support This Station</button>
+  </div>
+
+  <div class="section-title">Today's Schedule</div>
+  <div class="schedule-list" id="schedule"></div>
+</div>
+
+<!-- MODALS -->
+<div class="modal-overlay" id="modal-subscribe">
+  <div class="modal">
+    <button class="modal-close" onclick="closeModal('modal-subscribe')">✕</button>
+    <h2>✦ Daily Soul Letters</h2>
+    <p>Begin each day with a handpicked quote — wisdom from those who walked through darkness into light.</p>
+    <div class="form-group"><label class="form-label">Your Name</label><input class="form-input" type="text" id="sub-name" placeholder="What shall we call you?"></div>
+    <div class="form-group"><label class="form-label">Email Address</label><input class="form-input" type="email" id="sub-email" placeholder="your@email.com"></div>
+    <div class="form-group"><label class="form-label">What brings you here?</label>
+      <select class="form-select" id="sub-reason"><option value="">Choose one…</option><option>I'm navigating depression</option><option>Managing stress &amp; anxiety</option><option>Caregiver seeking support</option><option>Supporting a loved one</option><option>General wellness</option></select>
+    </div>
+    <button class="btn-full btn-sage" onclick="handleSubscribe()">Subscribe — It's Free ✦</button>
+    <p style="font-size:12px;text-align:center;margin-top:.8rem;color:var(--text-muted)">No spam. Unsubscribe any time.</p>
+  </div>
+</div>
+
+<div class="modal-overlay" id="modal-donate">
+  <div class="modal">
+    <button class="modal-close" onclick="closeModal('modal-donate')">✕</button>
+    <h2>♡ Give Kindness</h2>
+    <p>Your contribution keeps Serenity Radio on air — free, forever, for anyone who needs it.</p>
+    <div class="form-group"><label class="form-label">Choose an amount (USD)</label>
+      <div class="donate-amounts">
+        <button class="amount-btn" onclick="selectAmount(this,'5')">$5</button>
+        <button class="amount-btn sel" onclick="selectAmount(this,'10')">$10</button>
+        <button class="amount-btn" onclick="selectAmount(this,'25')">$25</button>
+        <button class="amount-btn" onclick="selectAmount(this,'50')">$50</button>
+        <button class="amount-btn" onclick="selectAmount(this,'100')">$100</button>
+        <button class="amount-btn" onclick="selectAmount(this,'other')">Other</button>
+      </div>
+    </div>
+    <div class="form-group" id="custom-amount-group" style="display:none"><label class="form-label">Custom Amount</label><input class="form-input" type="number" id="custom-amount" placeholder="Enter amount"></div>
+    <div class="form-group"><label class="form-label">Your Email</label><input class="form-input" type="email" id="donate-email" placeholder="your@email.com"></div>
+    <div class="form-group"><label class="form-label">Leave a kind word (optional)</label><input class="form-input" type="text" id="donate-message" placeholder="A message of hope…"></div>
+    <button class="btn-full btn-amber" onclick="handleDonate()">Complete Donation ♡</button>
+    <p style="font-size:12px;text-align:center;margin-top:.8rem;color:var(--text-muted)">Powered by Stripe. Secure &amp; encrypted.</p>
+  </div>
+</div>
+
+<div class="modal-overlay" id="modal-upload">
+  <div class="modal">
+    <button class="modal-close" onclick="closeModal('modal-upload')">✕</button>
+    <h2>↑ Submit Your Music</h2>
+    <p>Registered musicians can submit healing compositions for curatorial review.</p>
+    <div class="form-group"><label class="form-label">Artist / Stage Name</label><input class="form-input" type="text" id="upload-artist" placeholder="Your name or alias"></div>
+    <div class="form-group"><label class="form-label">Registered Email</label><input class="form-input" type="email" id="upload-email" placeholder="Registered account email"></div>
+    <div class="form-group"><label class="form-label">Track Title</label><input class="form-input" type="text" id="upload-title" placeholder="Name of your piece"></div>
+    <div class="form-group"><label class="form-label">Genre / Mood</label>
+      <select class="form-select" id="upload-genre"><option>Ambient &amp; Healing</option><option>Nature Soundscapes</option><option>Soft Piano</option><option>Guided Meditation</option><option>Binaural Beats</option><option>Acoustic &amp; Folk</option><option>Other</option></select>
+    </div>
+    <div class="drop-zone" id="drop-zone" ondragover="this.classList.add('dragover');event.preventDefault()" ondragleave="this.classList.remove('dragover')" ondrop="handleDrop(event)" onclick="document.getElementById('file-input').click()">
+      <div class="drop-icon">🎵</div>
+      <div class="drop-text"><strong>Click to browse</strong> or drag &amp; drop<br>MP3, WAV, FLAC — max 50MB</div>
+      <div id="file-name" style="margin-top:.5rem;font-size:13px;color:var(--sage-light)"></div>
+    </div>
+    <input type="file" id="file-input" accept=".mp3,.wav,.flac" style="display:none" onchange="showFileName(this)">
+    <button class="btn-full btn-dusk" onclick="handleUpload()">Submit for Review ↑</button>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// Radio Player State
+let tracks = [];
+let currentTrack = 0;
+let isPlaying = false;
+let progressSec = 0;
+let audioElement = null;
+let shuffleMode = false;
+
+// UI Elements
+const trackTitleEl = document.getElementById('track-title');
+const trackArtistEl = document.getElementById('track-artist');
+const playBtn = document.getElementById('play-btn');
+const playIcon = document.getElementById('play-icon');
+const progressFill = document.getElementById('progress-fill');
+const timeCurrent = document.getElementById('time-current');
+const timeTotal = document.getElementById('time-total');
+const eqBars = document.getElementById('eq-bars');
+
+// Quotes
+const quotes = [
+  {text:"You don't have to control your thoughts. You just have to stop letting them control you.",author:"Dan Millman"},
+  {text:"Almost everything will work again if you unplug it for a few minutes — including you.",author:"Anne Lamott"},
+  {text:"You are enough. You have always been enough.",author:"Brené Brown"},
+  {text:"Not everything that is faced can be changed. But nothing can be changed until it is faced.",author:"James Baldwin"},
+  {text:"Your present circumstances don't determine where you can go. They merely determine where you start.",author:"Nido Qubein"},
+  {text:"The flower that blooms in adversity is the most rare and beautiful of all.",author:"Walt Disney"},
+  {text:"Sometimes the bravest thing you can do is to keep going when you really want to stop.",author:"Unknown"},
+  {text:"You are not a drop in the ocean. You are the entire ocean in a drop.",author:"Rumi"},
+  {text:"Healing is not linear. Be patient with yourself.",author:"Unknown"},
+  {text:"What lies within us is far greater than what lies behind or before us.",author:"Ralph Waldo Emerson"},
+];
+
+let donatedTotal = 4320, visitorBase = 2847, contributorCount = 238, quoteIdx = 0;
+let breatheActive = false, breatheTimer = null;
+
+// ── CANVAS STARS ──
+const canvas = document.getElementById('bg-canvas');
+const ctx = canvas.getContext('2d');
+let W, H, stars = [], shooters = [];
+
+function resizeCanvas() { W = canvas.width = window.innerWidth; H = canvas.height = window.innerHeight; }
+resizeCanvas();
+window.addEventListener('resize', () => { resizeCanvas(); initStars(); });
+
+function initStars() {
+  stars = [];
+  const n = Math.floor(W * H / 11000);
+  for (let i = 0; i < n; i++) stars.push({ x: Math.random() * W, y: Math.random() * H, r: Math.random() * 1.4 + 0.3, op: Math.random() * 0.7 + 0.15, speed: Math.random() * 0.4 + 0.05, phase: Math.random() * Math.PI * 2 });
+}
+initStars();
+
+function drawCanvas(t) {
+  ctx.clearRect(0, 0, W, H);
+  const ts = t * 0.001;
+  stars.forEach(s => {
+    const o = s.op * (0.65 + 0.35 * Math.sin(ts * s.speed + s.phase));
+    ctx.beginPath(); ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
+    ctx.fillStyle = `rgba(220,215,200,${o})`; ctx.fill();
+  });
+  if (Math.random() < 0.004) shooters.push({ x: Math.random() * W * 0.6, y: Math.random() * H * 0.35, len: Math.random() * 80 + 40, spd: Math.random() * 6 + 4, op: 1, a: Math.PI / 4 });
+  shooters = shooters.filter(s => s.op > 0);
+  shooters.forEach(s => {
+    ctx.beginPath(); ctx.moveTo(s.x, s.y); ctx.lineTo(s.x - Math.cos(s.a) * s.len, s.y - Math.sin(s.a) * s.len);
+    const g = ctx.createLinearGradient(s.x, s.y, s.x - Math.cos(s.a) * s.len, s.y - Math.sin(s.a) * s.len);
+    g.addColorStop(0, `rgba(200,220,200,${s.op})`); g.addColorStop(1, 'rgba(200,220,200,0)');
+    ctx.strokeStyle = g; ctx.lineWidth = 1.5; ctx.stroke();
+    s.x += Math.cos(s.a) * s.spd; s.y += Math.sin(s.a) * s.spd; s.op -= 0.018;
+  });
+  requestAnimationFrame(drawCanvas);
+}
+requestAnimationFrame(drawCanvas);
+
+// ── FLOATING PARTICLES ──
+function spawnParticle() {
+  const el = document.createElement('div'); el.className = 'particle';
+  const sz = Math.random() * 5 + 2;
+  const cols = ['rgba(122,158,126,.4)', 'rgba(107,127,168,.35)', 'rgba(201,149,106,.3)', 'rgba(184,212,187,.3)'];
+  el.style.cssText = `width:${sz}px;height:${sz}px;left:${Math.random() * 100}%;background:${cols[Math.floor(Math.random() * cols.length)]};animation-duration:${12 + Math.random() * 20}s;animation-delay:${Math.random() * 8}s;`;
+  document.body.appendChild(el); setTimeout(() => el.remove(), 35000);
+}
+setInterval(spawnParticle, 1800);
+for (let i = 0; i < 6; i++) spawnParticle();
+
+// ── WAVEFORM ──
+function buildWaveform() {
+  const wf = document.getElementById('waveform');
+  if (!wf) return;
+  wf.innerHTML = '';
+  const progress = (progressSec / (tracks[currentTrack]?.duration || 1)) * 100;
+  for (let i = 0; i < 60; i++) {
+    const h = 16 + Math.random() * 30, b = document.createElement('div');
+    b.className = 'wave-bar';
+    b.style.height = h + 'px';
+    const th = 60 * progress / 100;
+    if (i < th - 1) b.classList.add('played');
+    else if (i === Math.floor(th)) b.classList.add('current');
+    wf.appendChild(b);
+  }
+}
+
+// ── SCHEDULE BUILDER ──
+const SCHEDULE = [
+  { time: '12:00 AM', type: 'music', name: 'Deep Sleep Frequencies' },
+  { time: '02:00 AM', type: 'meditation', name: 'Midnight Meditation Hour' },
+  { time: '04:00 AM', type: 'music', name: 'Dawn Ambient Session' },
+  { time: '06:00 AM', type: 'dj', name: 'Morning Affirmations with DJ Solace' },
+  { time: '08:00 AM', type: 'music', name: 'Gentle Mornings Playlist' },
+  { time: '10:00 AM', type: 'dj', name: 'Midday Mindfulness — Quotes & Calm' },
+  { time: '12:00 PM', type: 'music', name: 'Healing Harmonics' },
+  { time: '02:00 PM', type: 'meditation', name: 'Afternoon Stillness Session' },
+  { time: '04:00 PM', type: 'music', name: 'Nature Soundscapes' },
+  { time: '06:00 PM', type: 'dj', name: 'Evening Reflections with DJ Solace' },
+  { time: '08:00 PM', type: 'music', name: 'Twilight Piano Hour' },
+  { time: '10:00 PM', type: 'meditation', name: 'Night Wind-Down & Breathing' },
+];
+
+function getActiveIndex() {
+  const now = new Date();
+  const hour = now.getHours();
+  const minute = now.getMinutes();
+  return Math.floor((hour * 60 + minute) / 120) % SCHEDULE.length;
+}
+
+function buildScheduleDisplay() {
+  const el = document.getElementById('schedule');
+  if (!el) return;
+  el.innerHTML = '';
+  const active = getActiveIndex();
+
+  SCHEDULE.forEach((s, i) => {
+    const div = document.createElement('div');
+    div.className = 'schedule-item' + (i === active ? ' active' : '');
+    div.style.animationDelay = (0.04 * i) + 's';
+
+    const badgeClass = { music: 'badge-music', dj: 'badge-dj', meditation: 'badge-meditation' }[s.type];
+    const badgeText = { music: '♫ Music', dj: '🎙 DJ', meditation: '✦ Meditation' }[s.type];
+
+    div.innerHTML = `
+      <span class="sched-time">${s.time}</span>
+      <span class="sched-badge ${badgeClass}">${badgeText}</span>
+      <span class="sched-name">${s.name}</span>
+      ${i === active ? '<span style="font-size:11px;color:var(--sage-light);white-space:nowrap">● LIVE</span>' : ''}
+    `;
+    el.appendChild(div);
+  });
+}
+
+// ── AUDIO PLAYER ──
+function initAudio() {
+  audioElement = new Audio();
+  audioElement.volume = 0.72;
+  audioElement.addEventListener('timeupdate', updateProgressFromAudio);
+  audioElement.addEventListener('ended', () => {
+    console.log('Track ended, playing next...');
+    nextTrack();
+  });
+  audioElement.addEventListener('canplay', () => {
+    if (isPlaying) audioElement.play();
+  });
+  audioElement.addEventListener('error', (e) => {
+    console.error('Audio error:', e);
+    showToast('Error playing track, skipping to next...');
+    nextTrack();
+  });
+}
+
+function loadTrack(index) {
+  if (!tracks.length || index >= tracks.length) {
+    console.log('No tracks available');
+    return;
+  }
+  const track = tracks[index];
+  console.log(`Loading track: ${track.title} (${track.file})`);
+  trackTitleEl.textContent = track.title;
+  trackArtistEl.textContent = track.artist;
+  audioElement.src = `/assets/music/${track.file}`;
+  audioElement.load();
+  progressSec = 0;
+  updateProgressDisplay();
+  buildWaveform();
+  document.getElementById('track-count').textContent = tracks.length;
+}
+
+function updateProgressFromAudio() {
+  if (audioElement && audioElement.duration) {
+    progressSec = audioElement.currentTime;
+    updateProgressDisplay();
+    buildWaveform();
+  }
+}
+
+function updateProgressDisplay() {
+  const duration = tracks[currentTrack]?.duration || 0;
+  const progress = (progressSec / duration) * 100;
+  progressFill.style.width = progress + '%';
+  timeCurrent.textContent = formatTime(progressSec);
+  timeTotal.textContent = formatTime(duration);
+}
+
+function formatTime(seconds) {
+  if (isNaN(seconds)) return "0:00";
+  const mins = Math.floor(seconds / 60);
+  const secs = Math.floor(seconds % 60);
+  return `${mins}:${secs.toString().padStart(2, '0')}`;
+}
+
+function togglePlay() {
+  if (!tracks.length) {
+    showToast('No tracks available. Add MP3 files to the music folder.');
+    return;
+  }
+  isPlaying = !isPlaying;
+  if (isPlaying) {
+    audioElement.play().catch(e => console.error('Play error:', e));
+    playIcon.innerHTML = '<path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/>';
+    playBtn.classList.add('playing');
+    if (eqBars) eqBars.classList.remove('paused');
+  } else {
+    audioElement.pause();
+    playIcon.innerHTML = '<path d="M8 5v14l11-7z"/>';
+    playBtn.classList.remove('playing');
+    if (eqBars) eqBars.classList.add('paused');
+  }
+}
+
+function nextTrack() {
+  if (!tracks.length) return;
+  currentTrack = (currentTrack + 1) % tracks.length;
+  loadTrack(currentTrack);
+  if (isPlaying) {
+    audioElement.play().catch(e => console.error('Play error:', e));
+  }
+  if (Math.random() > 0.5) rotateQuote();
+}
+
+function prevTrack() {
+  if (!tracks.length) return;
+  currentTrack = (currentTrack - 1 + tracks.length) % tracks.length;
+  loadTrack(currentTrack);
+  if (isPlaying) {
+    audioElement.play().catch(e => console.error('Play error:', e));
+  }
+}
+
+function seekTo(event, element) {
+  if (!tracks.length) return;
+  const rect = element.getBoundingClientRect();
+  const percent = Math.max(0, Math.min(1, (event.clientX - rect.left) / rect.width));
+  const duration = tracks[currentTrack]?.duration || 0;
+  audioElement.currentTime = percent * duration;
+}
+
+function setVolume(value) {
+  if (audioElement) audioElement.volume = value / 100;
+  document.getElementById('vol-label').textContent = value + '%';
+}
+
+// ── SHUFFLE & REFRESH FUNCTIONS ──
+async function toggleShuffle() {
+  try {
+    const response = await fetch('/api/playlist/shuffle', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ enabled: !shuffleMode })
+    });
+    const data = await response.json();
+    shuffleMode = data.shuffle_mode;
+    const shuffleBtn = document.getElementById('shuffle-btn');
+    if (shuffleBtn) {
+      shuffleBtn.textContent = shuffleMode ? '🔀 Shuffle ON' : '🔀 Shuffle OFF';
+    }
+    showToast(`Shuffle ${shuffleMode ? 'ON' : 'OFF'}`);
+    await loadPlaylist();
+  } catch (error) {
+    console.error('Error toggling shuffle:', error);
+  }
+}
+
+async function refreshPlaylist() {
+  showToast('Refreshing playlist...');
+  try {
+    const response = await fetch('/api/playlist/refresh', { method: 'POST' });
+    const data = await response.json();
+    showToast(`Playlist refreshed! Found ${data.count} tracks`);
+    await loadPlaylist();
+  } catch (error) {
+    console.error('Error refreshing playlist:', error);
+    showToast('Error refreshing playlist');
+  }
+}
+
+async function updateMoodDisplay() {
+  try {
+    const response = await fetch('/api/playlist');
+    const data = await response.json();
+    const moodElement = document.getElementById('current-mood');
+    if (moodElement && data.mood) {
+      moodElement.innerHTML = `🎵 ${data.mood} 🎵`;
+    }
+  } catch (error) {
+    console.error('Error updating mood:', error);
+  }
+}
+
+// ── LOAD PLAYLIST FROM SERVER ──
+async function loadPlaylist() {
+  try {
+    const response = await fetch('/api/playlist');
+    const data = await response.json();
+    // Handle both formats: {tracks: [...]} or just [...]
+    if (data.tracks) {
+      tracks = data.tracks;
+    } else if (Array.isArray(data)) {
+      tracks = data;
+    } else {
+      tracks = [];
+    }
+    
+    console.log(`Loaded ${tracks.length} tracks:`, tracks.map(t => t.file));
+    
+    if (tracks.length > 0) {
+      currentTrack = 0;
+      loadTrack(0);
+      document.getElementById('track-count').textContent = tracks.length;
+    } else {
+      trackTitleEl.textContent = "No tracks available";
+      trackArtistEl.textContent = "Please add MP3 files to frontend/assets/music/";
+      showToast('No music files found! Add MP3 files to the music folder.');
+    }
+  } catch (error) {
+    console.error('Error loading playlist:', error);
+    trackTitleEl.textContent = "Error loading playlist";
+    trackArtistEl.textContent = "Check server connection";
+  }
+}
+
+// ── VISITORS ──
+setInterval(() => {
+  visitorBase = Math.max(2400, visitorBase + Math.floor(Math.random() * 7) - 2);
+  document.getElementById('visitor-count').textContent = visitorBase.toLocaleString();
+  document.getElementById('stat-listeners').textContent = (visitorBase / 1000).toFixed(1) + 'k';
+}, 4000);
+
+// ── QUOTES ──
+function rotateQuote() {
+  quoteIdx = (quoteIdx + 1) % quotes.length;
+  const el = document.getElementById('dj-quote');
+  if (el) {
+    el.style.opacity = 0;
+    setTimeout(() => {
+      el.textContent = '"' + quotes[quoteIdx].text + '"';
+      document.getElementById('dj-author').textContent = '— ' + quotes[quoteIdx].author;
+      el.style.opacity = 1;
+    }, 500);
+  }
+}
+setInterval(rotateQuote, 20000);
+
+// ── BREATHING ──
+function startBreath() {
+  breatheActive = !breatheActive;
+  const ring = document.getElementById('breathe-ring'), inner = document.getElementById('breathe-inner'), text = document.getElementById('breathe-text');
+  if (!breatheActive) {
+    if (breatheTimer) clearTimeout(breatheTimer);
+    ring.className = 'breathe-ring';
+    inner.textContent = 'Breathe';
+    text.textContent = 'Click to breathe with us';
+    return;
+  }
+  let phase = 0;
+  const phases = [
+    { cls: 'inhale', label: 'Breathe in…', text: 'Inhaling — 4 seconds', dur: 4000 },
+    { cls: '', label: 'Hold', text: 'Hold — 4 seconds', dur: 4000 },
+    { cls: 'exhale', label: 'Breathe out…', text: 'Exhaling — 6 seconds', dur: 6000 },
+    { cls: '', label: 'Rest', text: 'Rest — 2 seconds', dur: 2000 },
+  ];
+  function cycle() {
+    if (!breatheActive) return;
+    const p = phases[phase % phases.length];
+    ring.className = 'breathe-ring ' + p.cls;
+    inner.textContent = p.label;
+    text.textContent = p.text;
+    phase++;
+    breatheTimer = setTimeout(cycle, p.dur);
+  }
+  cycle();
+}
+
+// ── MODALS ──
+function openModal(id) { document.getElementById(id).classList.add('open'); }
+function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+document.querySelectorAll('.modal-overlay').forEach(m => m.addEventListener('click', e => { if (e.target === m) m.classList.remove('open'); }));
+
+function selectAmount(btn, val) {
+  document.querySelectorAll('.amount-btn').forEach(b => b.classList.remove('sel'));
+  btn.classList.add('sel');
+  document.getElementById('custom-amount-group').style.display = val === 'other' ? 'block' : 'none';
+}
+
+function handleDonate() {
+  const sel = document.querySelector('.amount-btn.sel');
+  let amt = 10;
+  if (sel) {
+    const v = sel.textContent.replace('$', '');
+    amt = v === 'other' ? (parseInt(document.getElementById('custom-amount').value) || 10) : parseInt(v);
+  }
+  donatedTotal += amt;
+  contributorCount++;
+  const pct = Math.min(100, Math.round((donatedTotal / 10000) * 100));
+  document.getElementById('donated-amount').textContent = '$' + donatedTotal.toLocaleString();
+  document.getElementById('donation-fill').style.width = pct + '%';
+  document.getElementById('pct-label').textContent = pct + '% reached';
+  document.getElementById('contributor-count').textContent = contributorCount + ' generous contributors';
+  document.getElementById('remaining-label').textContent = '$' + Math.max(0, 10000 - donatedTotal).toLocaleString() + ' to go';
+  closeModal('modal-donate');
+  showToast('Thank you for your generosity! 💛');
+}
+
+function handleSubscribe() {
+  closeModal('modal-subscribe');
+  showToast('Welcome! Your first quote arrives tomorrow morning ✦');
+}
+
+function handleUpload() {
+  closeModal('modal-upload');
+  showToast('Submitted! Our curators will review within 5–7 days ↑');
+}
+
+function showFileName(input) {
+  if (input.files[0]) document.getElementById('file-name').textContent = '✓ ' + input.files[0].name;
+}
+
+function handleDrop(e) {
+  e.preventDefault();
+  document.getElementById('drop-zone').classList.remove('dragover');
+  const f = e.dataTransfer.files[0];
+  if (f) document.getElementById('file-name').textContent = '✓ ' + f.name;
+}
+
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 3500);
+}
+
+// Initialize everything
+console.log('Initializing Serenity Radio...');
+initAudio();
+loadPlaylist();
+buildScheduleDisplay();
+updateMoodDisplay();
+setInterval(buildScheduleDisplay, 60000);
+setInterval(updateMoodDisplay, 60000);
+setInterval(() => {
+  if (!isPlaying) {
+    loadPlaylist(); // Refresh playlist periodically when not playing
+  }
+}, 120000);
+</script>
+</body>
+</html>

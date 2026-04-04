@@ -1,0 +1,21 @@
+# Create a test file
+cat > /Users/tslee/Documents/serenity-radio/frontend/pages/test.html << 'EOF'
+<!DOCTYPE html>
+<html>
+<head><title>Test</title></head>
+<body>
+<h1>Serenity Radio Test</h1>
+<div id="tracks"></div>
+<script>
+fetch('/api/playlist')
+  .then(r => r.json())
+  .then(data => {
+    const tracks = data.tracks || data;
+    document.getElementById('tracks').innerHTML = 
+      '<h2>Found ' + tracks.length + ' tracks:</h2>' +
+      '<ul>' + tracks.map(t => '<li>' + t.file + ' - ' + t.title + '</li>').join('') + '</ul>';
+  });
+</script>
+</body>
+</html>
+EOF
