@@ -482,9 +482,9 @@ function initStars() {
 }
 initStars();
 
-let _activeScene = 'default'; // set by channel switcher
+window._activeScene = 'default'; // global so canvas_scenes.js can suppress it
 function drawCanvas(t) {
-  if (_activeScene !== 'default') return; // let canvas_scenes.js drive
+  if (window._activeScene !== 'default') return; // let canvas_scenes.js drive
   ctx.clearRect(0, 0, W, H);
   const ts = t * 0.001;
   stars.forEach(s => {

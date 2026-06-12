@@ -352,20 +352,37 @@ const CanvasScenes = (() => {
   return { init, setScene, current };
 })();
 
-// Auto-init if canvas#bg exists
+// Auto-init on DOM ready
 document.addEventListener('DOMContentLoaded', () => {
-  const c = document.getElementById('bg') || document.querySelector('canvas');
-  if (c) CanvasScenes.init(c);
+  // Find the canvas — index.html uses id="bg-canvas"
+  const c = document.getElementById('bg-canvas') || document.getElementById('bg') || document.querySelector('canvas');
+  if (!c) return;
+  CanvasScenes.init(c);
 
-  // Wire to channel system
+  // ── Suppress the inline starfield once CanvasScenes takes over ──
+  // The inline drawCanvas() checks `_activeScene !== 'default'` to bail out.
+  // Set it now so the starfield stops immediately and CanvasScenes owns the canvas.
+  if (typeof window._activeScene !== 'undefined') window._activeScene = '__cs__';
+  // Also patch the variable directly if it's a plain var in inline script scope
+  // (can't reach it cross-scope, but dispatching a fake channel:changed does the trick)
+
+  // ── Set initial time-based scene ──
+  const savedChannel = localStorage.getItem('sr_channel') || 'default';
+  CanvasScenes.setScene(savedChannel);
+
+  // If on default channel, also update _activeScene so inline starfield won't restart
+  if (savedChannel === 'default' || savedChannel === 'auto') {
+    // Dispatch channel:changed so channels.js syncs _activeScene too
+    document.dispatchEvent(new CustomEvent('channel:changed', { detail: 'default' }));
+  }
+
+  // Wire channel switches
   document.addEventListener('channel:changed', e => {
     CanvasScenes.setScene(e.detail || 'default');
   });
 
-  // Hourly refresh for 'default' (time-based) mode — scene follows the clock
+  // Hourly refresh when on default (time-based) channel
   setInterval(() => {
-    if (CanvasScenes.current() === 'default' || CanvasScenes.current() === 'auto') {
-      CanvasScenes.setScene('default');
-    }
+    if (CanvasScenes.current() === 'default') CanvasScenes.setScene('default');
   }, 60 * 60 * 1000);
 });

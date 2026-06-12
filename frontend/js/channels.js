@@ -38,8 +38,8 @@ async function switchChannel(channelId) {
     ))
   );
 
-  // Update canvas background scene
-  if (typeof _activeScene !== 'undefined') _activeScene = channelId;
+  // Update canvas background scene — use window._activeScene (global, set in index.html)
+  window._activeScene = channelId;
   if (typeof CanvasScenes !== 'undefined') CanvasScenes.setScene(channelId);
   document.dispatchEvent(new CustomEvent('channel:changed', { detail: channelId }));
 
