@@ -31,6 +31,14 @@ from backend.api.donate import (
 from backend.api.subscribe import handle_subscribe
 from backend.api.upload import handle_upload
 from backend.api.tracks import get_tracks
+from backend.api.monitor import handle_heartbeat, handle_stats, record_bytes
+from backend.api.score import init_score_table, handle_checkin, handle_history
+from backend.api.ai_companion import handle_companion, handle_provider_status
+from backend.api.admin import (
+    require_admin, admin_list_tracks, admin_upload_tracks,
+    admin_delete_track, admin_list_submissions,
+    admin_approve_submission, admin_reject_submission,
+)
 
 load_dotenv()
 
@@ -221,14 +229,17 @@ def serve_music(filename):
 
 @app.route('/api/playlist', methods=['GET'])
 def api_playlist():
-    """Return playlist - automatically scanned from folder!"""
-    tracks, mood = get_time_based_playlist()
-    return jsonify({
-        'tracks': tracks,
-        'mood': mood,
-        'total_tracks': len(tracks),
-        'shuffle_mode': shuffle_mode
-    })
+    channel = request.args.get('channel', 'default')
+    import os as _os
+    ch_dir  = _os.path.join(MUSIC_DIR, channel) if channel != 'default' else None
+    if ch_dir and _os.path.isdir(ch_dir):
+        mp3s   = sorted(f for f in _os.listdir(ch_dir) if f.lower().endswith('.mp3'))
+        tracks = [{'id':i,'file':f,'title':f.rsplit('.',1)[0].replace('-',' ').replace('_',' ').title(),
+                   'artist':'Serenity Radio','duration':180,'src':f'/assets/music/{channel}/{f}'}
+                  for i,f in enumerate(mp3s)] or scan_music_folder()
+    else:
+        tracks, _ = get_time_based_playlist()
+    return jsonify({'tracks': tracks, 'total_tracks': len(tracks), 'channel': channel})
 
 @app.route('/api/playlist/shuffle', methods=['POST'])
 def api_toggle_shuffle():
@@ -295,6 +306,53 @@ def api_upload():
 # ════════════════════════════════════
 #  Error handlers
 # ════════════════════════════════════
+
+
+@app.route('/admin')
+def admin_page():
+    return send_from_directory(os.path.join(FRONTEND_DIR, 'pages'), 'admin.html')
+
+@app.route('/api/heartbeat', methods=['POST'])
+def api_heartbeat(): return handle_heartbeat()
+
+@app.route('/api/monitor', methods=['GET'])
+def api_monitor(): return handle_stats()
+
+@app.route('/api/score/checkin', methods=['POST'])
+def api_checkin(): return handle_checkin()
+
+@app.route('/api/score/history', methods=['GET'])
+def api_score_history(): return handle_history()
+
+@app.route('/api/companion', methods=['POST'])
+def api_companion(): return handle_companion()
+
+@app.route('/api/companion/status', methods=['GET'])
+def api_companion_status(): return handle_provider_status()
+
+@app.route('/api/admin/tracks', methods=['GET'])
+@require_admin
+def api_admin_list_tracks(): return admin_list_tracks()
+
+@app.route('/api/admin/upload', methods=['POST'])
+@require_admin
+def api_admin_upload(): return admin_upload_tracks()
+
+@app.route('/api/admin/tracks/<path:filename>', methods=['DELETE'])
+@require_admin
+def api_admin_delete_track(filename): return admin_delete_track(filename)
+
+@app.route('/api/admin/submissions', methods=['GET'])
+@require_admin
+def api_admin_submissions(): return admin_list_submissions()
+
+@app.route('/api/admin/submissions/<int:sub_id>/approve', methods=['POST'])
+@require_admin
+def api_admin_approve(sub_id): return admin_approve_submission(sub_id)
+
+@app.route('/api/admin/submissions/<int:sub_id>/reject', methods=['POST'])
+@require_admin
+def api_admin_reject(sub_id): return admin_reject_submission(sub_id)
 
 @app.errorhandler(404)
 def not_found(e):

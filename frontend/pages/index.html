@@ -172,6 +172,8 @@
   @media(max-width:600px){.header-actions{position:static;justify-content:center;margin-top:1rem;}.controls{gap:.75rem;}}
   @media(prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms !important;transition-duration:.01ms !important;}}
 </style>
+<link rel="stylesheet" href="/css/moat.css">
+<link rel="manifest" href="/manifest.json">
 </head>
 <body>
 <canvas id="bg-canvas"></canvas>
@@ -203,6 +205,7 @@
     <div class="breathe-text" id="breathe-text">Click to breathe with us</div>
   </header>
 
+  <div id="channel-tabs"></div>
   <div class="stats-strip">
     <div class="stat-card"><div class="stat-value" id="stat-listeners">2.8k</div><div class="stat-label">Live Listeners</div></div>
     <div class="stat-card"><div class="stat-value" id="track-count">0</div><div class="stat-label">Tracks in Library</div></div>
@@ -797,5 +800,7 @@ setInterval(() => {
   }
 }, 120000);
 </script>
+<script src="/js/channels.js"></script>
+<script src="/js/score.js"></script>
 </body>
 </html>

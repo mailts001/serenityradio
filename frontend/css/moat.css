@@ -1,0 +1,140 @@
+/* ══════════════════════════════════════════
+   SERENITY RADIO — moat.css
+   Score, channels, companion, toast styles
+   ══════════════════════════════════════════ */
+
+/* ── Channel tabs ── */
+#channel-tabs {
+  display: flex; gap: 8px; justify-content: center;
+  flex-wrap: wrap; margin: 1rem 0 1.5rem;
+}
+.ch-tab {
+  background: var(--bg2); border: 1px solid var(--border);
+  border-radius: 20px; padding: 7px 16px; font-size: 13px;
+  color: var(--text-muted); cursor: pointer;
+  transition: all .2s; font-family: inherit;
+}
+.ch-tab:hover { border-color: var(--sage); color: var(--text); }
+.ch-tab.active {
+  background: var(--sage); color: #fff;
+  border-color: var(--sage);
+  box-shadow: 0 0 14px rgba(122,158,126,.3);
+}
+
+/* ── Channel switch toast ── */
+#ch-toast {
+  position: fixed; bottom: 2rem; left: 50%;
+  transform: translateX(-50%) translateY(20px);
+  background: var(--bg2); border: 1px solid var(--border);
+  border-radius: 14px; padding: .85rem 1.4rem;
+  display: flex; align-items: center; gap: 12px;
+  font-size: 14px; opacity: 0; transition: all .35s;
+  pointer-events: none; z-index: 200;
+  box-shadow: 0 8px 32px rgba(0,0,0,.4);
+}
+#ch-toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+/* ── Check-in toast ── */
+#checkin-toast {
+  position: fixed; bottom: 1.5rem; right: 1.5rem;
+  background: var(--bg2); border: 1px solid rgba(122,158,126,.4);
+  border-radius: 12px; padding: .75rem 1rem;
+  display: flex; align-items: center; font-size: 13px;
+  color: var(--text-muted); z-index: 200;
+  box-shadow: 0 4px 20px rgba(0,0,0,.4);
+  animation: fadeUp .4s ease both;
+}
+
+/* ── Score badge in header ── */
+#score-badge {
+  font-size: 13px; font-weight: 600;
+  padding: 7px 14px; border-radius: 20px;
+  transition: all .3s;
+}
+#score-badge:hover { transform: scale(1.05); }
+
+/* ── Modal base ── */
+.modal-backdrop {
+  position: fixed; inset: 0;
+  background: rgba(10,12,20,.7); backdrop-filter: blur(4px);
+  z-index: 300;
+}
+.modal-box {
+  position: fixed; top: 50%; left: 50%;
+  transform: translate(-50%, -54%);
+  width: min(520px, 94vw); max-height: 88vh; overflow-y: auto;
+  background: var(--bg2); border: 1px solid var(--border);
+  border-radius: 20px; padding: 1.75rem;
+  z-index: 301; opacity: 0;
+  transition: transform .35s ease, opacity .35s ease;
+}
+.modal-box.visible {
+  opacity: 1; transform: translate(-50%, -50%);
+}
+.modal-wide { width: min(680px, 94vw); }
+.modal-header {
+  display: flex; justify-content: space-between;
+  align-items: center; margin-bottom: .5rem;
+}
+.modal-title { font-size: 1.1rem; color: var(--sage-light); }
+.modal-close {
+  background: none; border: none; color: var(--text-muted);
+  cursor: pointer; font-size: 18px; line-height: 1;
+  transition: color .2s;
+}
+.modal-close:hover { color: var(--text); }
+.modal-sub { font-size: 13px; color: var(--text-muted); margin-bottom: 1.5rem; }
+
+/* ── Sliders ── */
+.slider-row { margin-bottom: 1.1rem; }
+.slider-label {
+  display: flex; justify-content: space-between;
+  font-size: 14px; margin-bottom: 4px;
+}
+.slider-val {
+  font-weight: 600; color: var(--sage-light);
+  min-width: 20px; text-align: right;
+}
+.score-slider {
+  -webkit-appearance: none; appearance: none;
+  width: 100%; height: 4px; border-radius: 4px;
+  background: var(--bg3); outline: none; cursor: pointer;
+  margin-top: 6px;
+}
+.score-slider::-webkit-slider-thumb {
+  -webkit-appearance: none; width: 16px; height: 16px;
+  border-radius: 50%; background: var(--sage-light); cursor: pointer;
+}
+.btn-checkin {
+  width: 100%; padding: 12px; border-radius: 10px;
+  background: var(--sage); color: #fff; border: none;
+  font-size: 15px; font-weight: 500; cursor: pointer;
+  margin-top: 1rem; transition: opacity .2s;
+  font-family: inherit;
+}
+.btn-checkin:disabled { opacity: .5; cursor: not-allowed; }
+
+/* ── Score reveal ── */
+.score-reveal { text-align: center; padding-top: 1rem; }
+.score-circle {
+  width: 100px; height: 100px; border-radius: 50%;
+  border: 3px solid; margin: 0 auto 1rem;
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  animation: scoreIn .6s ease both;
+}
+@keyframes scoreIn {
+  from { transform: scale(.5); opacity: 0; }
+  to   { transform: scale(1);  opacity: 1; }
+}
+.score-number { font-size: 2.2rem; font-weight: 700; line-height: 1; }
+.score-denom  { font-size: 12px; opacity: .6; }
+.score-insight {
+  font-size: 15px; line-height: 1.6;
+  color: var(--text); margin-bottom: .5rem;
+  font-style: italic;
+}
+.score-rec { font-size: 12px; color: var(--text-muted); margin-bottom: .5rem; }
+
+/* ── Companion message in DJ card ── */
+#dj-quote { transition: opacity .4s ease; }

@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Serenity Radio — Admin</title>
+<style>
+:root{--sage:#7a9e7e;--sage-light:#b8d4bb;--amber:#c9956a;--red:#c96a6a;--green:#6ac98a;--bg:#1a1e2e;--bg2:#22273a;--bg3:#2a3045;--text:#e8e0d5;--text-muted:#9a9590;--border:rgba(255,255,255,0.08);}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:system-ui,sans-serif;background:var(--bg);color:var(--text);min-height:100vh;padding:2rem 1rem;}
+h1{font-size:1.6rem;margin-bottom:.25rem;color:var(--sage-light);}
+.sub{color:var(--text-muted);font-size:14px;margin-bottom:2rem;}
+#login{max-width:360px;margin:15vh auto;background:var(--bg2);border:1px solid var(--border);border-radius:16px;padding:2rem;text-align:center;}
+#login h2{margin-bottom:1.5rem;}
+input[type=password]{width:100%;padding:10px 14px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:15px;margin-bottom:1rem;outline:none;font-family:inherit;}
+input[type=password]:focus{border-color:var(--sage);}
+#app{display:none;max-width:960px;margin:0 auto;}
+.tabs{display:flex;gap:8px;margin-bottom:1.5rem;flex-wrap:wrap;}
+.tab{padding:8px 20px;border-radius:20px;border:1px solid var(--border);background:var(--bg2);color:var(--text-muted);cursor:pointer;font-size:13px;transition:all .2s;font-family:inherit;}
+.tab.active{background:var(--sage);color:#fff;border-color:var(--sage);}
+.panel{display:none;}.panel.active{display:block;}
+.card{background:var(--bg2);border:1px solid var(--border);border-radius:14px;padding:1.5rem;margin-bottom:1rem;}
+.card h3{font-size:1rem;margin-bottom:1rem;color:var(--sage-light);}
+.drop-zone{border:2px dashed var(--border);border-radius:12px;padding:3rem 2rem;text-align:center;cursor:pointer;transition:border-color .2s,background .2s;}
+.drop-zone:hover,.drop-zone.over{border-color:var(--sage);background:rgba(122,158,126,.05);}
+.drop-zone p{color:var(--text-muted);margin-bottom:.5rem;}
+.drop-zone small{font-size:12px;color:var(--text-muted);}
+#file-input{display:none;}
+.ch-select{background:var(--bg3);border:1px solid var(--border);color:var(--text);padding:8px 12px;border-radius:8px;font-family:inherit;font-size:13px;margin-right:8px;}
+.btn{padding:8px 18px;border-radius:8px;border:none;cursor:pointer;font-size:13px;font-weight:500;font-family:inherit;transition:opacity .2s;}
+.btn-primary{background:var(--sage);color:#fff;}
+.btn-danger{background:var(--red);color:#fff;}
+.btn-sm{padding:5px 12px;font-size:12px;}
+.btn:disabled{opacity:.4;cursor:not-allowed;}
+.track-row{display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--border);}
+.track-row:last-child{border-bottom:none;}
+.track-name{flex:1;font-size:14px;}
+.track-ch{font-size:11px;background:var(--bg3);padding:2px 8px;border-radius:10px;color:var(--text-muted);}
+.track-size{font-size:12px;color:var(--text-muted);min-width:55px;text-align:right;}
+.sub-row{display:grid;grid-template-columns:1fr 1fr auto auto auto;gap:10px;align-items:center;padding:10px 0;border-bottom:1px solid var(--border);font-size:13px;}
+.sub-row:last-child{border-bottom:none;}
+.badge{display:inline-block;padding:2px 10px;border-radius:10px;font-size:11px;}
+.badge-pending{background:rgba(201,149,106,.2);color:var(--amber);}
+.badge-approved{background:rgba(106,201,138,.2);color:var(--green);}
+.badge-rejected{background:rgba(201,106,106,.2);color:var(--red);}
+#log{margin-top:1rem;font-size:12px;max-height:130px;overflow-y:auto;background:var(--bg3);border-radius:8px;padding:.75rem;display:none;}
+.lok{color:var(--green);}.lerr{color:var(--red);}
+.stats-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:12px;}
+.stat{background:var(--bg3);border-radius:12px;padding:1rem;text-align:center;}
+.stat-val{font-size:2rem;font-weight:700;color:var(--sage-light);}
+.stat-lbl{font-size:12px;color:var(--text-muted);margin-top:.25rem;}
+.status-ok{color:var(--green);}.status-warning{color:var(--amber);}.status-critical{color:var(--red);}
+</style>
+</head>
+<body>
+<div id="login">
+  <h2>🔒 Serenity Admin</h2>
+  <input type="password" id="pwd" placeholder="Admin password" autocomplete="current-password">
+  <button class="btn btn-primary" style="width:100%" onclick="doLogin()">Enter</button>
+  <p id="err" style="color:var(--red);font-size:13px;margin-top:.75rem;display:none">Incorrect password</p>
+</div>
+<div id="app">
+  <h1>Serenity Radio</h1><p class="sub">Admin Panel</p>
+  <div class="tabs">
+    <div class="tab active" onclick="show('upload',this)">⬆ Upload</div>
+    <div class="tab" onclick="show('tracks',this)">🎵 Tracks</div>
+    <div class="tab" onclick="show('subs',this)">📬 Submissions</div>
+    <div class="tab" onclick="show('stats',this)">📊 Stats</div>
+    <div class="tab" style="margin-left:auto" onclick="logout()">Logout</div>
+  </div>
+
+  <div id="panel-upload" class="panel active">
+    <div class="card">
+      <h3>Bulk Upload to Live Playlist</h3>
+      <div class="drop-zone" id="dz" onclick="document.getElementById('file-input').click()">
+        <p>🎵 Drag & drop MP3 files here, or click to browse</p>
+        <small>MP3 / WAV / FLAC &nbsp;·&nbsp; Multiple files supported</small>
+      </div>
+      <input type="file" id="file-input" multiple accept=".mp3,.wav,.flac">
+      <div style="margin-top:1rem;display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+        <select class="ch-select" id="ch-select">
+          <option value="default">✦ All (default)</option>
+          <option value="sleep">🌙 Sleep</option>
+          <option value="focus">🎯 Focus</option>
+          <option value="yoga">🧘 Yoga</option>
+          <option value="nature">🌿 Nature</option>
+        </select>
+        <button class="btn btn-primary" id="upload-btn" onclick="doUpload()" disabled>Upload to Playlist</button>
+        <span id="fc" style="font-size:13px;color:var(--text-muted)"></span>
+      </div>
+      <div id="log"></div>
+    </div>
+  </div>
+
+  <div id="panel-tracks" class="panel">
+    <div class="card"><h3>Live Tracks</h3><div id="track-list"><p style="color:var(--text-muted);font-size:14px">Loading...</p></div></div>
+  </div>
+
+  <div id="panel-subs" class="panel">
+    <div class="card"><h3>Artist Submissions</h3><div id="sub-list"><p style="color:var(--text-muted);font-size:14px">Loading...</p></div></div>
+  </div>
+
+  <div id="panel-stats" class="panel">
+    <div class="card"><h3>Overview</h3>
+      <div class="stats-grid">
+        <div class="stat"><div class="stat-val" id="s-tracks">—</div><div class="stat-lbl">Live Tracks</div></div>
+        <div class="stat"><div class="stat-val" id="s-listeners">—</div><div class="stat-lbl">Active Now</div></div>
+        <div class="stat"><div class="stat-val" id="s-gb">—</div><div class="stat-lbl">GB/day est.</div></div>
+        <div class="stat"><div class="stat-val" id="s-status">—</div><div class="stat-lbl">BW Status</div></div>
+        <div class="stat"><div class="stat-val" id="s-subs">—</div><div class="stat-lbl">Submissions</div></div>
+        <div class="stat"><div class="stat-val" id="s-pending">—</div><div class="stat-lbl">Pending</div></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+let T='';
+function doLogin(){
+  const p=document.getElementById('pwd').value;
+  fetch('/api/admin/tracks',{headers:{'X-Admin-Token':p}}).then(r=>{
+    if(r.ok){T=p;sessionStorage.setItem('at',T);document.getElementById('login').style.display='none';document.getElementById('app').style.display='block';loadStats();}
+    else document.getElementById('err').style.display='block';
+  });
+}
+document.getElementById('pwd').addEventListener('keydown',e=>{if(e.key==='Enter')doLogin();});
+window.addEventListener('load',()=>{const t=sessionStorage.getItem('at');if(t){document.getElementById('pwd').value=t;doLogin();}});
+function logout(){sessionStorage.removeItem('at');location.reload();}
+function api(path,opts={}){opts.headers={...(opts.headers||{}),{'X-Admin-Token':T}};return fetch(path,opts);}
+function show(name,el){
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+  el.classList.add('active');
+  document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
+  document.getElementById('panel-'+name).classList.add('active');
+  if(name==='tracks')loadTracks();
+  if(name==='subs')loadSubs();
+  if(name==='stats')loadStats();
+}
+// Drag & drop
+const dz=document.getElementById('dz'),fi=document.getElementById('file-input');
+let sel=[];
+dz.addEventListener('dragover',e=>{e.preventDefault();dz.classList.add('over');});
+dz.addEventListener('dragleave',()=>dz.classList.remove('over'));
+dz.addEventListener('drop',e=>{e.preventDefault();dz.classList.remove('over');setFiles([...e.dataTransfer.files]);});
+fi.addEventListener('change',()=>setFiles([...fi.files]));
+function setFiles(f){sel=f.filter(x=>/\.(mp3|wav|flac)$/i.test(x.name));document.getElementById('fc').textContent=sel.length?`${sel.length} file(s) selected`:'No valid audio files';document.getElementById('upload-btn').disabled=!sel.length;}
+async function doUpload(){
+  if(!sel.length)return;
+  const btn=document.getElementById('upload-btn'),log=document.getElementById('log');
+  btn.disabled=true;btn.textContent='Uploading...';log.style.display='block';log.innerHTML='';
+  const fd=new FormData();
+  sel.forEach(f=>fd.append('files',f));
+  fd.append('channel',document.getElementById('ch-select').value);
+  try{
+    const d=await fetch('/api/admin/upload',{method:'POST',headers:{'X-Admin-Token':T},body:fd}).then(r=>r.json());
+    d.saved.forEach(f=>log.innerHTML+=`<div class="lok">✓ ${f}</div>`);
+    d.errors.forEach(e=>log.innerHTML+=`<div class="lerr">✗ ${e}</div>`);
+    log.innerHTML+=`<div style="margin-top:.5rem;color:var(--text-muted)">✅ ${d.count} track(s) added.</div>`;
+    sel=[];fi.value='';document.getElementById('fc').textContent='';
+  }catch(e){log.innerHTML=`<div class="lerr">Failed: ${e.message}</div>`;}
+  btn.disabled=false;btn.textContent='Upload to Playlist';
+}
+async function loadTracks(){
+  const d=await api('/api/admin/tracks').then(r=>r.json());
+  const el=document.getElementById('track-list');
+  if(!d.tracks.length){el.innerHTML='<p style="color:var(--text-muted);font-size:14px">No tracks yet.</p>';return;}
+  el.innerHTML=d.tracks.map(t=>`<div class="track-row"><div class="track-name">🎵 ${t.title}</div><span class="track-ch">${t.channel}</span><div class="track-size">${t.size_mb}MB</div><button class="btn btn-danger btn-sm" onclick="delTrack('${t.filename}',this)">Delete</button></div>`).join('');
+}
+async function delTrack(fn,btn){if(!confirm(`Delete "${fn}"?`))return;btn.disabled=true;await api('/api/admin/tracks/'+encodeURIComponent(fn),{method:'DELETE'});btn.closest('.track-row').remove();}
+async function loadSubs(){
+  const d=await api('/api/admin/submissions').then(r=>r.json());
+  const el=document.getElementById('sub-list');
+  if(!d.submissions.length){el.innerHTML='<p style="color:var(--text-muted);font-size:14px">No submissions.</p>';return;}
+  el.innerHTML=d.submissions.map(s=>`<div class="sub-row" id="sub-${s.id}"><div><strong>${s.title}</strong><br><small style="color:var(--text-muted)">${s.created_at}</small></div><div style="color:var(--text-muted)">${s.artist}</div><span class="badge badge-${s.status}">${s.status}</span>${s.status==='pending'?`<button class="btn btn-primary btn-sm" onclick="appSub(${s.id})">Approve</button><button class="btn btn-danger btn-sm" onclick="rejSub(${s.id})">Reject</button>`:'<div></div><div></div>'}</div>`).join('');
+}
+async function appSub(id){await api('/api/admin/submissions/'+id+'/approve',{method:'POST'});document.querySelector('#sub-'+id+' .badge').className='badge badge-approved';document.querySelector('#sub-'+id+' .badge').textContent='approved';document.querySelectorAll('#sub-'+id+' button').forEach(b=>b.remove());}
+async function rejSub(id){await api('/api/admin/submissions/'+id+'/reject',{method:'POST'});document.querySelector('#sub-'+id+' .badge').className='badge badge-rejected';document.querySelector('#sub-'+id+' .badge').textContent='rejected';document.querySelectorAll('#sub-'+id+' button').forEach(b=>b.remove());}
+async function loadStats(){
+  const [t,s,m]=await Promise.all([
+    api('/api/admin/tracks').then(r=>r.json()),
+    api('/api/admin/submissions').then(r=>r.json()),
+    fetch('/api/monitor').then(r=>r.json()),
+  ]);
+  document.getElementById('s-tracks').textContent=t.count;
+  document.getElementById('s-subs').textContent=s.submissions.length;
+  document.getElementById('s-pending').textContent=s.submissions.filter(x=>x.status==='pending').length;
+  document.getElementById('s-listeners').textContent=m.active_listeners||0;
+  document.getElementById('s-gb').textContent=m.gb_day_estimate||0;
+  const sv=document.getElementById('s-status');
+  sv.textContent=m.status||'ok';sv.className='stat-val status-'+(m.status||'ok');
+}
+</script>
+</body>
+</html>
