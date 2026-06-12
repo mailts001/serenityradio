@@ -173,6 +173,7 @@
   @media(prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms !important;transition-duration:.01ms !important;}}
 </style>
 <link rel="stylesheet" href="/css/moat.css">
+<link rel="stylesheet" href="/css/moat2.css">
 <link rel="manifest" href="/manifest.json">
 </head>
 <body>
@@ -276,6 +277,72 @@
       <span id="remaining-label">$5,680 to go</span>
     </div>
     <button class="btn-full btn-amber" style="margin-top:1rem" onclick="openModal('modal-donate')">♡ Support This Station</button>
+  </div>
+
+  <!-- ══ USER ACCOUNT SECTION ══ -->
+  <div id="account-section">
+    <!-- Logged-out state -->
+    <div id="account-guest" class="account-guest-card">
+      <div class="ag-left">
+        <div class="ag-icon">✦</div>
+        <div>
+          <div class="ag-title">Create your free account</div>
+          <div class="ag-sub">Save favourite songs · Track your Serenity Score™ · Unlock AI companion</div>
+        </div>
+      </div>
+      <button class="btn ag-btn" onclick="Auth.openLogin()">Sign in free →</button>
+    </div>
+
+    <!-- Logged-in state -->
+    <div id="account-user" class="account-user-card" style="display:none">
+      <div class="au-row">
+        <div class="au-avatar" id="au-avatar">?</div>
+        <div class="au-info">
+          <div class="au-name" id="au-name">Loading…</div>
+          <div class="au-email" id="au-email"></div>
+        </div>
+        <span class="au-plan-badge" id="au-plan-badge">FREE</span>
+      </div>
+      <div class="au-actions">
+        <button class="au-action-btn" onclick="Favorites&&Favorites.openPanel()">♡ My Favorites</button>
+        <button class="au-action-btn" onclick="typeof openModal==='function'&&openModal('modal-score')">📊 Serenity Score</button>
+        <button class="au-action-btn" id="au-teacher-btn" onclick="window.location='/teacher'" style="display:none">🧘 Teacher Portal</button>
+        <button class="au-action-btn au-upgrade-btn" id="au-upgrade-btn" onclick="Auth.openUpgrade()">★ Upgrade Pro</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ PRO UPGRADE BANNER ══ -->
+  <div id="upgrade-banner" class="upgrade-banner">
+    <div class="ub-left">
+      <div class="ub-title">★ Go Pro — Unlock the full Serenity experience</div>
+      <div class="ub-feats">
+        <span>♡ Unlimited favorites</span>
+        <span>📊 1-year score history</span>
+        <span>🤖 AI companion unlimited</span>
+        <span>🧘 Teacher portal</span>
+      </div>
+    </div>
+    <div class="ub-right">
+      <div class="ub-prices">
+        <button class="ub-plan-btn" onclick="Auth.isLoggedIn()?Auth.checkout('listener'):Auth.openLogin()">
+          Listener Pro<br><strong>$9</strong><span>/mo</span>
+        </button>
+        <button class="ub-plan-btn featured" onclick="Auth.isLoggedIn()?Auth.checkout('teacher'):Auth.openLogin()">
+          Teacher Pro<br><strong>$29</strong><span>/mo</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ TEACHER PORTAL CALLOUT ══ -->
+  <div class="teacher-callout">
+    <div class="tc-emoji">🧘</div>
+    <div class="tc-body">
+      <div class="tc-title">Are you a yoga teacher or wellness guide?</div>
+      <div class="tc-sub">Share your playlists, build a following, embed a player on your site. Serenity Radio is your stage.</div>
+    </div>
+    <a href="/teacher" class="tc-btn">Open Teacher Portal →</a>
   </div>
 
   <div class="section-title">Today's Schedule</div>
@@ -822,6 +889,41 @@ setInterval(() => {
 <script src="/js/auth.js"></script>
 <script src="/js/favorites.js"></script>
 <script src="/js/canvas_scenes.js"></script>
+<script>
+// ── Wire account section to auth state ──
+document.addEventListener('auth:changed', function(e) {
+  const user = e.detail;
+  const guest = document.getElementById('account-guest');
+  const userEl = document.getElementById('account-user');
+  const banner = document.getElementById('upgrade-banner');
+
+  if (!user) {
+    guest.style.display = '';
+    userEl.style.display = 'none';
+    banner.style.display = '';
+    return;
+  }
+
+  guest.style.display = 'none';
+  userEl.style.display = '';
+
+  const initial = (user.name || user.email || '?')[0].toUpperCase();
+  document.getElementById('au-avatar').textContent = initial;
+  document.getElementById('au-name').textContent   = user.name || user.email.split('@')[0];
+  document.getElementById('au-email').textContent  = user.email;
+
+  const planBadge = document.getElementById('au-plan-badge');
+  const isPro     = user.plan === 'pro' || user.plan === 'pro_teacher';
+  const isTeacher = user.plan === 'pro_teacher';
+  planBadge.textContent = isTeacher ? 'TEACHER PRO' : isPro ? 'PRO' : 'FREE';
+  planBadge.style.background = isPro ? 'rgba(212,168,67,.2)' : 'rgba(154,149,144,.15)';
+  planBadge.style.color = isPro ? '#d4a843' : '#9a9590';
+
+  if (isTeacher) document.getElementById('au-teacher-btn').style.display = '';
+  if (isPro) document.getElementById('au-upgrade-btn').style.display = 'none';
+  if (isPro) banner.style.display = 'none';
+});
+</script>
 <!-- subtle admin link — visible only if you know to look -->
 <div style="text-align:center;padding:2rem 0 1rem;opacity:.2;font-size:11px;">
   <a href="/admin" style="color:var(--text-muted);text-decoration:none;letter-spacing:.08em">⚙ admin</a>

@@ -1,0 +1,129 @@
+/* ══════════════════════════════════════════
+   SERENITY RADIO — moat2.css
+   Account section, upgrade banner, teacher callout
+   ══════════════════════════════════════════ */
+
+/* ── Account Section ── */
+#account-section { margin: 1.5rem 0; }
+
+/* Guest card */
+.account-guest-card {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 1rem; flex-wrap: wrap;
+  background: var(--bg2); border: 1px solid rgba(122,158,126,.25);
+  border-radius: 16px; padding: 1.25rem 1.5rem;
+  animation: fadeUp .5s .1s ease both;
+}
+.ag-left { display: flex; align-items: center; gap: 1rem; }
+.ag-icon {
+  width: 42px; height: 42px; border-radius: 50%;
+  background: linear-gradient(135deg, rgba(122,158,126,.3), rgba(107,127,168,.2));
+  display: flex; align-items: center; justify-content: center;
+  font-size: 1.2rem; flex-shrink: 0;
+}
+.ag-title { font-size: 15px; font-weight: 500; margin-bottom: 3px; }
+.ag-sub { font-size: 13px; color: var(--text-muted); }
+.ag-btn {
+  font-family: 'DM Sans', sans-serif; font-size: 14px; font-weight: 500;
+  padding: 10px 22px; border-radius: 50px;
+  background: var(--sage); color: #fff; border: none; cursor: pointer;
+  white-space: nowrap; transition: opacity .2s, transform .15s;
+  flex-shrink: 0;
+}
+.ag-btn:hover { opacity: .88; transform: translateY(-1px); }
+
+/* User card */
+.account-user-card {
+  background: var(--bg2); border: 1px solid rgba(122,158,126,.2);
+  border-radius: 16px; padding: 1.25rem 1.5rem;
+  animation: fadeUp .4s ease both;
+}
+.au-row { display: flex; align-items: center; gap: 12px; margin-bottom: 1rem; }
+.au-avatar {
+  width: 40px; height: 40px; border-radius: 50%;
+  background: var(--sage); color: #fff;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 16px; font-weight: 600; flex-shrink: 0;
+}
+.au-info { flex: 1; min-width: 0; }
+.au-name { font-size: 15px; font-weight: 500; }
+.au-email { font-size: 12px; color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.au-plan-badge {
+  padding: 3px 10px; border-radius: 20px; font-size: 11px; font-weight: 600;
+  letter-spacing: .04em; flex-shrink: 0;
+}
+.au-actions {
+  display: flex; gap: 8px; flex-wrap: wrap;
+}
+.au-action-btn {
+  font-family: 'DM Sans', sans-serif; font-size: 13px;
+  padding: 7px 14px; border-radius: 50px;
+  background: var(--bg3); border: 1px solid var(--border);
+  color: var(--text); cursor: pointer; transition: border-color .2s, background .2s;
+}
+.au-action-btn:hover { border-color: rgba(122,158,126,.4); background: rgba(122,158,126,.08); }
+.au-upgrade-btn { border-color: rgba(212,168,67,.3); color: #d4a843; }
+.au-upgrade-btn:hover { background: rgba(212,168,67,.1); border-color: #d4a843; }
+
+/* ── Upgrade Banner ── */
+.upgrade-banner {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 1rem; flex-wrap: wrap;
+  background: linear-gradient(135deg, rgba(212,168,67,.08), rgba(122,158,126,.08));
+  border: 1px solid rgba(212,168,67,.2);
+  border-radius: 16px; padding: 1.25rem 1.5rem; margin: 1.5rem 0;
+  animation: fadeUp .5s .15s ease both;
+}
+.ub-left { flex: 1; min-width: 200px; }
+.ub-title { font-size: 15px; font-weight: 500; color: #d4a843; margin-bottom: .5rem; }
+.ub-feats { display: flex; flex-wrap: wrap; gap: 8px; }
+.ub-feats span { font-size: 12px; color: var(--text-muted); background: rgba(255,255,255,.04); padding: 3px 10px; border-radius: 20px; }
+.ub-right { flex-shrink: 0; }
+.ub-prices { display: flex; gap: 8px; }
+.ub-plan-btn {
+  font-family: 'DM Sans', sans-serif; font-size: 13px; line-height: 1.4;
+  padding: 10px 16px; border-radius: 12px; text-align: center;
+  background: var(--bg3); border: 1px solid rgba(212,168,67,.3);
+  color: var(--text); cursor: pointer; transition: background .2s, border-color .2s;
+}
+.ub-plan-btn strong { font-size: 1.3rem; color: #d4a843; display: block; }
+.ub-plan-btn span { font-size: 11px; color: var(--text-muted); }
+.ub-plan-btn:hover { background: rgba(212,168,67,.1); border-color: #d4a843; }
+.ub-plan-btn.featured {
+  background: rgba(212,168,67,.1); border-color: rgba(212,168,67,.5);
+}
+.ub-plan-btn.featured strong { color: #e8c560; }
+
+/* ── Teacher Callout ── */
+.teacher-callout {
+  display: flex; align-items: center; gap: 1rem; flex-wrap: wrap;
+  background: var(--bg2);
+  border: 1px solid rgba(107,127,168,.2);
+  border-left: 3px solid var(--dusk, #6b7fa8);
+  border-radius: 0 16px 16px 0; padding: 1.25rem 1.5rem; margin: 1.5rem 0;
+  animation: fadeUp .5s .2s ease both;
+}
+.tc-emoji { font-size: 2rem; flex-shrink: 0; }
+.tc-body { flex: 1; min-width: 180px; }
+.tc-title { font-size: 15px; font-weight: 500; margin-bottom: 4px; }
+.tc-sub { font-size: 13px; color: var(--text-muted); line-height: 1.5; }
+.tc-btn {
+  display: inline-block; font-family: 'DM Sans', sans-serif;
+  font-size: 13px; font-weight: 500;
+  padding: 9px 20px; border-radius: 50px;
+  background: rgba(107,127,168,.15); border: 1px solid rgba(107,127,168,.3);
+  color: var(--dusk-light, #c2cde0); text-decoration: none;
+  white-space: nowrap; flex-shrink: 0;
+  transition: background .2s, border-color .2s;
+}
+.tc-btn:hover { background: rgba(107,127,168,.25); border-color: rgba(107,127,168,.6); }
+
+@media (max-width: 520px) {
+  .account-guest-card { flex-direction: column; align-items: flex-start; }
+  .ag-btn { width: 100%; text-align: center; }
+  .upgrade-banner { flex-direction: column; }
+  .ub-prices { width: 100%; }
+  .ub-plan-btn { flex: 1; }
+  .teacher-callout { flex-direction: column; }
+  .tc-btn { width: 100%; text-align: center; }
+}
