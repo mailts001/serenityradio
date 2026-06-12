@@ -224,3 +224,25 @@
   .dj-card { padding: 1rem; gap: .75rem; }
   .dj-avatar { width: 36px; height: 36px; font-size: 16px; }
 }
+
+/* Score row inside account card */
+.au-score-row {
+  align-items: center; gap: 12px;
+  background: rgba(122,158,126,.06); border-radius: 12px;
+  padding: .75rem 1rem; margin-bottom: .75rem;
+  flex-wrap: wrap;
+}
+.au-score-circle {
+  width: 44px; height: 44px; border-radius: 50%;
+  background: #555; color: #fff;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 16px; font-weight: 700; flex-shrink: 0;
+  transition: background .4s;
+}
+.au-score-label { font-size: 13px; font-weight: 500; }
+.au-score-sub   { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+.au-score-info  { flex: 1; min-width: 100px; }
+
+/* Schedule items now clickable */
+.schedule-item { cursor: pointer; }
+.schedule-item:hover { border-color: rgba(122,158,126,.4) !important; }

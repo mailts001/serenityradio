@@ -303,10 +303,19 @@
         </div>
         <span class="au-plan-badge" id="au-plan-badge">FREE</span>
       </div>
+      <div class="au-score-row" id="au-score-row" style="display:none">
+        <div class="au-score-circle" id="au-score-circle">—</div>
+        <div class="au-score-info">
+          <div class="au-score-label">Serenity Score™</div>
+          <div class="au-score-sub" id="au-score-sub">Complete today's check-in</div>
+        </div>
+        <button class="au-action-btn" onclick="typeof openCheckin==='function'&&openCheckin()" style="font-size:12px;padding:5px 12px">Check in</button>
+      </div>
       <div class="au-actions">
-        <button class="au-action-btn" onclick="Favorites&&Favorites.openPanel()">♡ My Favorites</button>
-        <button class="au-action-btn" onclick="typeof openModal==='function'&&openModal('modal-score')">📊 Serenity Score</button>
-        <button class="au-action-btn" id="au-teacher-btn" onclick="window.location='/teacher'" style="display:none">🧘 Teacher Portal</button>
+        <button class="au-action-btn" onclick="Favorites&&Favorites.openPanel()">♥ My Favorites</button>
+        <button class="au-action-btn" onclick="typeof openHistory==='function'&&openHistory()">📊 Score History</button>
+        <button class="au-action-btn" id="au-teacher-btn" onclick="window.location='/teacher'" style="display:none">🧘 My Portal</button>
+        <button class="au-action-btn" onclick="window.location='/teachers'">🌐 Find Teachers</button>
         <button class="au-action-btn au-upgrade-btn" id="au-upgrade-btn" onclick="Auth.openUpgrade()">★ Upgrade Pro</button>
       </div>
     </div>
@@ -526,18 +535,18 @@ function buildWaveform() {
 
 // ── SCHEDULE BUILDER ──
 const SCHEDULE = [
-  { time: '12:00 AM', type: 'music', name: 'Deep Sleep Frequencies' },
-  { time: '02:00 AM', type: 'meditation', name: 'Midnight Meditation Hour' },
-  { time: '04:00 AM', type: 'music', name: 'Dawn Ambient Session' },
-  { time: '06:00 AM', type: 'dj', name: 'Morning Affirmations with DJ Solace' },
-  { time: '08:00 AM', type: 'music', name: 'Gentle Mornings Playlist' },
-  { time: '10:00 AM', type: 'dj', name: 'Midday Mindfulness — Quotes & Calm' },
-  { time: '12:00 PM', type: 'music', name: 'Healing Harmonics' },
-  { time: '02:00 PM', type: 'meditation', name: 'Afternoon Stillness Session' },
-  { time: '04:00 PM', type: 'music', name: 'Nature Soundscapes' },
-  { time: '06:00 PM', type: 'dj', name: 'Evening Reflections with DJ Solace' },
-  { time: '08:00 PM', type: 'music', name: 'Twilight Piano Hour' },
-  { time: '10:00 PM', type: 'meditation', name: 'Night Wind-Down & Breathing' },
+  { time: '12:00 AM', type: 'music',      name: 'Deep Sleep Frequencies',            channel: 'sleep'   },
+  { time: '02:00 AM', type: 'meditation', name: 'Midnight Meditation Hour',           channel: 'sleep'   },
+  { time: '04:00 AM', type: 'music',      name: 'Dawn Ambient Session',              channel: 'nature'  },
+  { time: '06:00 AM', type: 'dj',         name: 'Morning Affirmations with DJ Solace', channel: 'yoga'  },
+  { time: '08:00 AM', type: 'music',      name: 'Gentle Mornings Playlist',          channel: 'yoga'    },
+  { time: '10:00 AM', type: 'dj',         name: 'Midday Mindfulness',                channel: 'focus'   },
+  { time: '12:00 PM', type: 'music',      name: 'Healing Harmonics',                 channel: 'focus'   },
+  { time: '02:00 PM', type: 'meditation', name: 'Afternoon Stillness Session',       channel: 'nature'  },
+  { time: '04:00 PM', type: 'music',      name: 'Nature Soundscapes',                channel: 'nature'  },
+  { time: '06:00 PM', type: 'dj',         name: 'Evening Reflections with DJ Solace', channel: 'default'},
+  { time: '08:00 PM', type: 'music',      name: 'Twilight Piano Hour',               channel: 'sleep'   },
+  { time: '10:00 PM', type: 'meditation', name: 'Night Wind-Down & Breathing',       channel: 'sleep'   },
 ];
 
 function getActiveIndex() {
@@ -557,15 +566,23 @@ function buildScheduleDisplay() {
     const div = document.createElement('div');
     div.className = 'schedule-item' + (i === active ? ' active' : '');
     div.style.animationDelay = (0.04 * i) + 's';
+    div.style.cursor = 'pointer';
+    div.title = 'Switch to ' + (s.channel === 'default' ? 'All' : s.channel) + ' channel';
+    div.onclick = () => {
+      if (typeof switchChannel === 'function') switchChannel(s.channel || 'default');
+      showToast('Switched to ' + s.name);
+    };
 
     const badgeClass = { music: 'badge-music', dj: 'badge-dj', meditation: 'badge-meditation' }[s.type];
-    const badgeText = { music: '♫ Music', dj: '🎙 DJ', meditation: '✦ Meditation' }[s.type];
+    const badgeText  = { music: '♫ Music', dj: '🎙 DJ', meditation: '✦ Meditation' }[s.type];
+    const chEmoji    = { sleep:'🌙', focus:'🎯', yoga:'🧘', nature:'🌿', default:'✦' }[s.channel] || '✦';
 
     div.innerHTML = `
       <span class="sched-time">${s.time}</span>
       <span class="sched-badge ${badgeClass}">${badgeText}</span>
       <span class="sched-name">${s.name}</span>
-      ${i === active ? '<span style="font-size:11px;color:var(--sage-light);white-space:nowrap">● LIVE</span>' : ''}
+      <span style="font-size:12px;color:var(--text-muted);margin-left:auto">${chEmoji}</span>
+      ${i === active ? '<span style="font-size:11px;color:var(--sage-light);white-space:nowrap;margin-left:4px">● LIVE</span>' : ''}
     `;
     el.appendChild(div);
   });
@@ -627,22 +644,44 @@ function renderTrackList(list) {
   const el = document.getElementById('tracklist');
   if (!el) return;
   if (!list || !list.length) {
-    el.innerHTML = '<p style="color:var(--text-muted);font-size:13px;grid-column:1/-1;padding:.5rem 0">No tracks in this channel yet.</p>';
+    el.innerHTML = '<p style="color:var(--text-muted);font-size:13px;padding:.5rem 0">No tracks in this channel yet.</p>';
     return;
   }
-  el.innerHTML = list.map((t, i) => {
-    const isCur = (i === currentTrack);
-    const dur   = t.duration ? Math.floor(t.duration/60)+':'+(String(t.duration%60).padStart(2,'0')) : '';
-    return `<div class="tl-row${isCur?' tl-active':''}" id="tl-${i}" onclick="jumpToTrack(${i})" title="Play: ${t.title}">
-      <div class="tl-num">${isCur ? '▶' : (i+1)}</div>
+  el.innerHTML = list.map((t) => {
+    // Always reference original index in `tracks` so jumpToTrack works correctly
+    const origIdx = tracks.indexOf(t);
+    const isCur   = (origIdx === currentTrack);
+    const dur     = t.duration ? Math.floor(t.duration/60)+':'+(String(t.duration%60).padStart(2,'0')) : '';
+    const isFav   = (typeof Favorites !== 'undefined') && Favorites.isFav(t.src||'');
+    return `<div class="tl-row${isCur?' tl-active':''}" id="tl-${origIdx}" onclick="jumpToTrack(${origIdx})">
+      <div class="tl-num">${isCur ? '▶' : (origIdx+1)}</div>
       <div class="tl-info">
         <div class="tl-title">${t.title}</div>
         <div class="tl-artist">${t.artist||'Serenity Radio'}</div>
       </div>
       ${dur ? `<div class="tl-dur">${dur}</div>` : ''}
-      <button class="tl-fav" title="Favorite" onclick="event.stopPropagation();typeof Favorites!=='undefined'&&Favorites.toggle('${t.src||''}','${t.title}','${t.artist||''}','${t.channel||'default'}')">♡</button>
+      <button class="tl-fav fav-btn${isFav?' active':''}"
+        data-src="${(t.src||'').replace(/"/g,'&quot;')}"
+        data-index="${origIdx}"
+        title="${isFav?'Remove from favorites':'Save to favorites'}"
+        onclick="event.stopPropagation();tlFav(this)">
+        ${isFav?'♥':'♡'}
+      </button>
     </div>`;
   }).join('');
+}
+
+// Heart button in tracklist — reads track from global array by index
+function tlFav(btn) {
+  const idx = parseInt(btn.dataset.index);
+  const t   = tracks[idx];
+  if (!t || typeof Favorites === 'undefined') return;
+  Favorites.toggle(t.src||'', t.title||'', t.artist||'Serenity Radio', t.channel||'default');
+  // Optimistic visual flip — Favorites.toggle will confirm async
+  const nowFav = !btn.classList.contains('active');
+  btn.classList.toggle('active', nowFav);
+  btn.textContent = nowFav ? '♥' : '♡';
+  btn.title = nowFav ? 'Remove from favorites' : 'Save to favorites';
 }
 
 function jumpToTrack(index) {
@@ -977,6 +1016,21 @@ document.addEventListener('auth:changed', function(e) {
   if (isTeacher) document.getElementById('au-teacher-btn').style.display = '';
   if (isPro) document.getElementById('au-upgrade-btn').style.display = 'none';
   if (isPro) banner.style.display = 'none';
+
+  // Show score row
+  document.getElementById('au-score-row').style.display = 'flex';
+  const saved = localStorage.getItem('sr_last_score');
+  if (saved) {
+    try {
+      const s = JSON.parse(saved);
+      const circle = document.getElementById('au-score-circle');
+      const sub    = document.getElementById('au-score-sub');
+      circle.textContent = s.score;
+      circle.style.background = s.score >= 70 ? '#2e7d32' : s.score >= 45 ? '#e65100' : '#c62828';
+      sub.textContent = s.date === new Date().toISOString().split('T')[0]
+        ? 'Today\'s score ✓' : 'Last check-in: ' + s.date;
+    } catch {}
+  }
 });
 </script>
 <!-- subtle admin link — visible only if you know to look -->

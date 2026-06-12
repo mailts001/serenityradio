@@ -77,6 +77,14 @@ async function submitCheckin() {
 
     showCheckinResult(data);
     updateScoreBadge(data.score);
+    // Refresh account card score circle
+    const circle = document.getElementById('au-score-circle');
+    const sub    = document.getElementById('au-score-sub');
+    if (circle) {
+      circle.textContent = data.score;
+      circle.style.background = data.score >= 70 ? '#2e7d32' : data.score >= 45 ? '#e65100' : '#c62828';
+    }
+    if (sub) sub.textContent = "Today's score ✓";
 
     // Auto-switch channel based on recommendation
     if (data.channel_rec && typeof switchChannel === 'function') {
