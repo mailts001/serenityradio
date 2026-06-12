@@ -24,10 +24,25 @@ const CanvasScenes = (() => {
     _canvas.height = window.innerHeight;
   }
 
+  // Map hour-of-day → channel scene (mirrors SCHEDULE in index.html)
+  function _sceneForHour(h) {
+    if (h >= 0  && h < 4)  return 'sleep';    // 12AM–4AM  Deep Sleep
+    if (h >= 4  && h < 8)  return 'nature';   // 4AM–8AM   Dawn / Morning
+    if (h >= 8  && h < 12) return 'yoga';     // 8AM–12PM  Morning calm
+    if (h >= 12 && h < 16) return 'focus';    // 12PM–4PM  Midday focus
+    if (h >= 16 && h < 20) return 'nature';   // 4PM–8PM   Afternoon ease
+    if (h >= 20 && h < 22) return 'sleep';    // 8PM–10PM  Twilight wind-down
+    return 'sleep';                             // 10PM–12AM Night
+  }
+
   function setScene(channel) {
     cancelAnimationFrame(_raf);
     _current = channel;
-    switch (channel) {
+    // 'default' / 'auto' → time-based scene, transitions every hour
+    const scene = (channel === 'default' || channel === 'auto')
+      ? _sceneForHour(new Date().getHours())
+      : channel;
+    switch (scene) {
       case 'sleep':   _sceneSleep();   break;
       case 'focus':   _sceneFocus();   break;
       case 'yoga':    _sceneYoga();    break;
@@ -145,133 +160,159 @@ const CanvasScenes = (() => {
     frame();
   }
 
-  // ── YOGA: sunrise gradient + floating orbs ─────────────
+  // ── YOGA: soft blush aurora — gentle breath-pulsing orbs ─
   function _sceneYoga() {
     const W = () => _canvas.width, H = () => _canvas.height;
     let t = 0;
-    const orbs = Array.from({length: 12}, (_, i) => ({
-      x: Math.random(), y: Math.random(),
-      r: 40 + Math.random() * 80,
-      vx: (Math.random() - 0.5) * 0.0003,
-      vy: (Math.random() - 0.5) * 0.0003,
-      hue: 20 + i * 12,
+    // Soft pastel palette: blush, rose-gold, lavender, warm sand
+    const palette = [
+      { h: 340, s: 45, l: 62 },   // blush rose
+      { h: 28,  s: 55, l: 68 },   // warm peach
+      { h: 270, s: 30, l: 58 },   // soft lavender
+      { h: 350, s: 38, l: 70 },   // petal pink
+      { h: 45,  s: 50, l: 72 },   // golden sand
+    ];
+    const orbs = Array.from({length: 8}, (_, i) => ({
+      x: 0.1 + Math.random() * 0.8, y: 0.1 + Math.random() * 0.8,
+      r: 0.18 + Math.random() * 0.22,   // fraction of min(w,h)
+      vx: (Math.random() - 0.5) * 0.00015,
+      vy: (Math.random() - 0.5) * 0.00015,
+      phaseOff: Math.random() * Math.PI * 2,
+      col: palette[i % palette.length],
     }));
+
     function frame() {
       _raf = requestAnimationFrame(frame);
-      t += 1;
+      t += 0.6;
       const w = W(), h = H();
+      const R = Math.min(w, h);
 
-      // Sunrise gradient — slowly shifts
-      const sunAngle = (t * 0.002) % 1;
-      const bg = _ctx.createLinearGradient(0, 0, 0, h);
-      bg.addColorStop(0, `hsl(${10 + sunAngle * 30},60%,${8 + sunAngle * 10}%)`);
-      bg.addColorStop(0.4, `hsl(${25 + sunAngle * 20},70%,${12 + sunAngle * 8}%)`);
-      bg.addColorStop(1, `hsl(${35 + sunAngle * 10},50%,${6 + sunAngle * 5}%)`);
+      // Deep dusky background — warm very dark mauve
+      const bg = _ctx.createLinearGradient(0, 0, w * 0.4, h);
+      bg.addColorStop(0,   '#120a10');
+      bg.addColorStop(0.5, '#16090e');
+      bg.addColorStop(1,   '#0e0b14');
       _ctx.fillStyle = bg;
       _ctx.fillRect(0, 0, w, h);
 
-      // Floating orbs
+      // Slow breath cycle (~4 s inhale, 4 s exhale at 60fps)
+      const breath = (Math.sin(t * 0.012) + 1) / 2; // 0→1→0
+
       orbs.forEach(o => {
         o.x += o.vx; o.y += o.vy;
-        if (o.x < -0.1) o.x = 1.1;
-        if (o.x > 1.1)  o.x = -0.1;
-        if (o.y < -0.1) o.y = 1.1;
-        if (o.y > 1.1)  o.y = -0.1;
-        const pulse = Math.sin(t * 0.015 + o.hue);
-        const gr = _ctx.createRadialGradient(o.x*w, o.y*h, 0, o.x*w, o.y*h, o.r*(1+0.3*pulse));
-        gr.addColorStop(0, `hsla(${o.hue},80%,60%,0.12)`);
-        gr.addColorStop(1, `hsla(${o.hue},80%,60%,0)`);
+        if (o.x < 0.05) { o.x = 0.05; o.vx *= -1; }
+        if (o.x > 0.95) { o.x = 0.95; o.vx *= -1; }
+        if (o.y < 0.05) { o.y = 0.05; o.vy *= -1; }
+        if (o.y > 0.95) { o.y = 0.95; o.vy *= -1; }
+
+        const bPulse = Math.sin(t * 0.012 + o.phaseOff);
+        const radius  = o.r * R * (0.9 + 0.2 * bPulse);
+        const alpha   = 0.10 + 0.06 * bPulse;
+        const { h: hue, s: sat, l: lig } = o.col;
+        const gr = _ctx.createRadialGradient(o.x*w, o.y*h, 0, o.x*w, o.y*h, radius);
+        gr.addColorStop(0, `hsla(${hue},${sat}%,${lig}%,${alpha + 0.04})`);
+        gr.addColorStop(0.5, `hsla(${hue},${sat}%,${lig}%,${alpha * 0.5})`);
+        gr.addColorStop(1, `hsla(${hue},${sat}%,${lig}%,0)`);
         _ctx.fillStyle = gr;
         _ctx.fillRect(0, 0, w, h);
       });
 
-      // Horizon glow
-      const gy = _ctx.createLinearGradient(0, h * 0.5, 0, h * 0.7);
-      gy.addColorStop(0, 'rgba(255,140,60,0.15)');
-      gy.addColorStop(1, 'rgba(255,100,40,0)');
-      _ctx.fillStyle = gy;
-      _ctx.fillRect(0, h * 0.5, w, h * 0.2);
+      // Central soft golden glow that pulses with breath
+      const cx = w * 0.5, cy = h * 0.52;
+      const cg = _ctx.createRadialGradient(cx, cy, 0, cx, cy, R * 0.35);
+      cg.addColorStop(0, `rgba(255,210,140,${0.07 + 0.05 * breath})`);
+      cg.addColorStop(1, 'rgba(255,180,100,0)');
+      _ctx.fillStyle = cg;
+      _ctx.fillRect(0, 0, w, h);
     }
     frame();
   }
 
-  // ── NATURE: falling leaves + mist ──────────────────────
+  // ── NATURE: soft meadow light + petal drift ────────────
   function _sceneNature() {
     const W = () => _canvas.width, H = () => _canvas.height;
     let t = 0;
-    const leaves = Array.from({length: 30}, () => _newLeaf(W, H, true));
-    function _newLeaf(W, H, init) {
+    // Petals: softer, lighter than dark forest leaves
+    function _newPetal(W, H, init) {
       return {
         x: Math.random() * (W() || 800),
         y: init ? Math.random() * (H() || 600) : -20,
-        size: 6 + Math.random() * 10,
-        speed: 0.4 + Math.random() * 0.6,
-        drift: (Math.random() - 0.5) * 0.5,
+        size: 5 + Math.random() * 8,
+        speed: 0.25 + Math.random() * 0.35,  // very slow drift
+        drift: (Math.random() - 0.5) * 0.35,
         rot: Math.random() * Math.PI * 2,
-        rotSpeed: (Math.random() - 0.5) * 0.04,
-        hue: 80 + Math.random() * 60,
-        alpha: 0.4 + Math.random() * 0.5,
+        rotSpeed: (Math.random() - 0.5) * 0.025,
+        hue: 90 + Math.random() * 80,         // greens + sage + lime
+        sat: 28 + Math.random() * 20,          // desaturated — not vivid
+        lig: 55 + Math.random() * 20,          // mid-bright, airy
+        alpha: 0.22 + Math.random() * 0.28,
       };
     }
-    function _drawLeaf(l) {
+    const petals = Array.from({length: 28}, () => _newPetal(W, H, true));
+
+    function _drawPetal(p) {
       _ctx.save();
-      _ctx.translate(l.x, l.y);
-      _ctx.rotate(l.rot);
+      _ctx.translate(p.x, p.y);
+      _ctx.rotate(p.rot);
       _ctx.beginPath();
-      _ctx.ellipse(0, 0, l.size, l.size * 0.5, 0, 0, Math.PI * 2);
-      _ctx.fillStyle = `hsla(${l.hue},60%,40%,${l.alpha})`;
+      _ctx.ellipse(0, 0, p.size, p.size * 0.45, 0, 0, Math.PI * 2);
+      _ctx.fillStyle = `hsla(${p.hue},${p.sat}%,${p.lig}%,${p.alpha})`;
       _ctx.fill();
       _ctx.restore();
     }
+
     function frame() {
       _raf = requestAnimationFrame(frame);
-      t += 1;
+      t += 0.7;
       const w = W(), h = H();
 
-      // Deep forest gradient
+      // Soft dusk-meadow — muted sage/teal gradient, not pitch black
       const bg = _ctx.createLinearGradient(0, 0, 0, h);
-      bg.addColorStop(0, '#08150a');
-      bg.addColorStop(0.5, '#0d2010');
-      bg.addColorStop(1, '#0a1808');
+      bg.addColorStop(0,   '#0a1510');
+      bg.addColorStop(0.4, '#0f1e14');
+      bg.addColorStop(1,   '#111a0e');
       _ctx.fillStyle = bg;
       _ctx.fillRect(0, 0, w, h);
 
-      // Mist layers
+      // Ambient ground glow — warm sage
+      const gg = _ctx.createRadialGradient(w * 0.5, h * 0.85, 0, w * 0.5, h * 0.85, w * 0.6);
+      gg.addColorStop(0, `rgba(140,200,120,${0.05 + 0.02 * Math.sin(t * 0.008)})`);
+      gg.addColorStop(1, 'rgba(140,200,120,0)');
+      _ctx.fillStyle = gg;
+      _ctx.fillRect(0, 0, w, h);
+
+      // Soft diffused light shafts — barely visible, creamy
       for (let i = 0; i < 3; i++) {
-        const my = h * (0.3 + i * 0.2);
-        const mg = _ctx.createLinearGradient(0, my - 60, 0, my + 60);
-        mg.addColorStop(0, 'rgba(200,220,200,0)');
-        mg.addColorStop(0.5, `rgba(200,220,200,${0.04 + 0.02 * Math.sin(t * 0.01 + i)})`);
-        mg.addColorStop(1, 'rgba(200,220,200,0)');
-        _ctx.fillStyle = mg;
-        _ctx.fillRect(0, my - 60, w, 120);
-      }
-
-      // Leaves
-      leaves.forEach((l, i) => {
-        l.y     += l.speed;
-        l.x     += l.drift + Math.sin(t * 0.02 + i) * 0.3;
-        l.rot   += l.rotSpeed;
-        if (l.y > h + 30) leaves[i] = _newLeaf(W, H, false);
-        _drawLeaf(l);
-      });
-
-      // Light rays from top
-      for (let i = 0; i < 4; i++) {
-        const rx   = w * (0.2 + i * 0.2);
-        const angle = 0.1 * Math.sin(t * 0.005 + i);
-        const rg   = _ctx.createLinearGradient(rx, 0, rx + Math.sin(angle) * h, h);
-        rg.addColorStop(0, `rgba(180,255,120,${0.04 + 0.02 * Math.sin(t * 0.01 + i)})`);
-        rg.addColorStop(1, 'rgba(180,255,120,0)');
+        const rx     = w * (0.25 + i * 0.25);
+        const sway   = Math.sin(t * 0.004 + i * 1.4) * 0.06;
+        const shimmer = 0.018 + 0.008 * Math.sin(t * 0.009 + i);
+        const rg = _ctx.createLinearGradient(rx, 0, rx + sway * h, h);
+        rg.addColorStop(0,   `rgba(210,240,180,${shimmer})`);
+        rg.addColorStop(0.6, `rgba(210,240,180,${shimmer * 0.3})`);
+        rg.addColorStop(1,   'rgba(210,240,180,0)');
         _ctx.fillStyle = rg;
         _ctx.beginPath();
-        _ctx.moveTo(rx - 20, 0);
-        _ctx.lineTo(rx + 20, 0);
-        _ctx.lineTo(rx + Math.sin(angle) * h + 80, h);
-        _ctx.lineTo(rx + Math.sin(angle) * h - 80, h);
-        _ctx.closePath();
-        _ctx.fill();
+        _ctx.moveTo(rx - 15, 0); _ctx.lineTo(rx + 15, 0);
+        _ctx.lineTo(rx + sway * h + 60, h); _ctx.lineTo(rx + sway * h - 60, h);
+        _ctx.closePath(); _ctx.fill();
       }
+
+      // Soft mist — just a gentle horizon haze
+      const mg = _ctx.createLinearGradient(0, h * 0.55, 0, h * 0.75);
+      mg.addColorStop(0, 'rgba(180,220,170,0)');
+      mg.addColorStop(0.5, `rgba(180,220,170,${0.04 + 0.015 * Math.sin(t * 0.006)})`);
+      mg.addColorStop(1, 'rgba(180,220,170,0)');
+      _ctx.fillStyle = mg;
+      _ctx.fillRect(0, h * 0.55, w, h * 0.2);
+
+      // Petals
+      petals.forEach((p, i) => {
+        p.y   += p.speed;
+        p.x   += p.drift + Math.sin(t * 0.015 + i * 0.7) * 0.25;
+        p.rot += p.rotSpeed;
+        if (p.y > h + 20) petals[i] = _newPetal(W, H, false);
+        _drawPetal(p);
+      });
     }
     frame();
   }
@@ -306,15 +347,25 @@ const CanvasScenes = (() => {
     frame();
   }
 
-  return { init, setScene };
+  function current() { return _current; }
+
+  return { init, setScene, current };
 })();
 
 // Auto-init if canvas#bg exists
 document.addEventListener('DOMContentLoaded', () => {
   const c = document.getElementById('bg') || document.querySelector('canvas');
   if (c) CanvasScenes.init(c);
+
   // Wire to channel system
   document.addEventListener('channel:changed', e => {
     CanvasScenes.setScene(e.detail || 'default');
   });
+
+  // Hourly refresh for 'default' (time-based) mode — scene follows the clock
+  setInterval(() => {
+    if (CanvasScenes.current() === 'default' || CanvasScenes.current() === 'auto') {
+      CanvasScenes.setScene('default');
+    }
+  }, 60 * 60 * 1000);
 });

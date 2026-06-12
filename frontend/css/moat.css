@@ -247,10 +247,44 @@
 /* ══════════════════════════════════════════
    FAVORITES
    ══════════════════════════════════════════ */
-.fav-btn { color: rgba(255,255,255,.3); transition: color .2s, transform .15s; }
+/* Heart buttons — fully transparent, no box */
+.fav-btn {
+  background: none; border: none; cursor: pointer; padding: 4px 6px;
+  color: rgba(255,255,255,.28); transition: color .2s, transform .15s;
+  line-height: 1; font-size: 16px;
+}
 .fav-btn.active { color: #c96a6a; }
-.fav-btn:hover { color: #e89a9a; transform: scale(1.15); }
-.fav-btn svg { pointer-events: none; }
+.fav-btn:hover  { color: #e89a9a; transform: scale(1.2); }
+.fav-btn svg    { pointer-events: none; }
+
+/* Schedule heart — smaller, sits flush in row */
+.sched-fav-btn {
+  background: none !important; border: none !important;
+  padding: 2px 5px; font-size: 15px; flex-shrink: 0;
+}
+
+/* Favorites panel queue buttons */
+.fav-queue-btns {
+  display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 1rem;
+}
+.fav-q-btn {
+  flex: 1; min-width: 90px;
+  background: rgba(255,255,255,.07); border: 1px solid rgba(255,255,255,.12);
+  color: #d4cfc9; border-radius: 20px; padding: 7px 12px;
+  font-size: 13px; cursor: pointer; transition: background .2s, color .2s;
+}
+.fav-q-btn:hover:not(:disabled) {
+  background: rgba(122,158,126,.25); border-color: rgba(122,158,126,.4); color: #b8d4bb;
+}
+.fav-q-btn:disabled, .fav-q-disabled {
+  opacity: .35; cursor: default;
+}
+
+/* Row checkboxes */
+.fav-check {
+  accent-color: #7a9e7e; width: 15px; height: 15px;
+  cursor: pointer; flex-shrink: 0;
+}
 
 #fav-panel {
   position: fixed; inset: 0; z-index: 300;
