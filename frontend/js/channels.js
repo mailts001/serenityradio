@@ -39,7 +39,9 @@ async function switchChannel(channelId) {
   );
 
   // Update canvas background scene
-  if (typeof setCanvasScene === 'function') setCanvasScene(channelId);
+  if (typeof _activeScene !== 'undefined') _activeScene = channelId;
+  if (typeof CanvasScenes !== 'undefined') CanvasScenes.setScene(channelId);
+  document.dispatchEvent(new CustomEvent('channel:changed', { detail: channelId }));
 
   // Load channel tracks from API
   try {

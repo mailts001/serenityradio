@@ -39,6 +39,18 @@ from backend.api.admin import (
     admin_delete_track, admin_list_submissions,
     admin_approve_submission, admin_reject_submission,
 )
+from backend.api.auth import (
+    init_auth_tables, handle_request_login, handle_verify_token,
+    handle_me, handle_logout,
+)
+from backend.api.favorites import init_favorites_table, handle_add_favorite, handle_remove_favorite, handle_list_favorites
+from backend.api.teacher import (
+    init_teacher_tables, handle_list_teachers, handle_get_teacher,
+    handle_upsert_profile, handle_my_profile,
+    handle_create_playlist, handle_add_to_playlist,
+    handle_follow, handle_unfollow, handle_embed,
+)
+from backend.api.billing import handle_create_checkout, handle_portal, handle_webhook, handle_plans
 
 load_dotenv()
 
@@ -188,6 +200,9 @@ scanner_thread.start()
 
 # ── Initialise database ──
 init_db()
+init_auth_tables()
+init_favorites_table()
+init_teacher_tables()
 
 # ════════════════════════════════════
 #  Page routes
@@ -360,6 +375,107 @@ def api_admin_approve(sub_id): return admin_approve_submission(sub_id)
 @app.route('/api/admin/submissions/<int:sub_id>/reject', methods=['POST'])
 @require_admin
 def api_admin_reject(sub_id): return admin_reject_submission(sub_id)
+
+# ════════════════════════════════════
+#  Auth routes
+# ════════════════════════════════════
+@app.route('/api/auth/login', methods=['POST'])
+def api_auth_login(): return handle_request_login()
+
+@app.route('/auth/verify')
+def auth_verify(): return handle_verify_token()
+
+@app.route('/api/auth/me')
+def api_auth_me(): return handle_me()
+
+@app.route('/api/auth/logout', methods=['POST'])
+def api_auth_logout(): return handle_logout()
+
+# ════════════════════════════════════
+#  Favorites routes
+# ════════════════════════════════════
+@app.route('/api/favorites', methods=['GET'])
+def api_favorites_list(): return handle_list_favorites()
+
+@app.route('/api/favorites', methods=['POST'])
+def api_favorites_add(): return handle_add_favorite()
+
+@app.route('/api/favorites', methods=['DELETE'])
+def api_favorites_remove(): return handle_remove_favorite()
+
+# ════════════════════════════════════
+#  Teacher routes
+# ════════════════════════════════════
+@app.route('/teacher')
+def teacher_page():
+    return send_from_directory(os.path.join(FRONTEND_DIR, 'pages'), 'teacher.html')
+
+@app.route('/api/teachers', methods=['GET'])
+def api_teachers(): return handle_list_teachers()
+
+@app.route('/api/teachers/<int:user_id>', methods=['GET'])
+def api_teacher(user_id): return handle_get_teacher(user_id)
+
+@app.route('/api/teacher/profile', methods=['GET'])
+def api_teacher_profile_get(): return handle_my_profile()
+
+@app.route('/api/teacher/profile', methods=['POST'])
+def api_teacher_profile_post(): return handle_upsert_profile()
+
+@app.route('/api/teacher/playlists', methods=['POST'])
+def api_teacher_create_pl(): return handle_create_playlist()
+
+@app.route('/api/teacher/playlists/<int:playlist_id>/tracks', methods=['POST'])
+def api_teacher_pl_tracks(playlist_id): return handle_add_to_playlist(playlist_id)
+
+@app.route('/api/teachers/<int:teacher_id>/follow', methods=['POST'])
+def api_teacher_follow(teacher_id): return handle_follow(teacher_id)
+
+@app.route('/api/teachers/<int:teacher_id>/follow', methods=['DELETE'])
+def api_teacher_unfollow(teacher_id): return handle_unfollow(teacher_id)
+
+@app.route('/api/teachers/<int:teacher_id>/embed', methods=['GET'])
+def api_teacher_embed(teacher_id): return handle_embed(teacher_id)
+
+@app.route('/widget/teacher/<int:teacher_id>')
+def teacher_widget(teacher_id):
+    """Lightweight embeddable player for teacher playlists"""
+    return f'''<!DOCTYPE html>
+<html><head><meta charset="UTF-8">
+<style>
+body{{margin:0;font-family:system-ui,sans-serif;background:#0d1117;color:#e8e0d5;padding:1rem;}}
+h4{{font-size:.9rem;color:#b8d4bb;margin-bottom:.5rem;}}
+.tr{{font-size:12px;padding:4px 0;cursor:pointer;color:#9a9590;border-bottom:1px solid rgba(255,255,255,.05);}}
+.tr:hover{{color:#e8e0d5;}}
+.powered{{font-size:10px;color:#555;margin-top:.5rem;text-align:right;}}
+</style></head>
+<body>
+<h4 id="name">Loading...</h4>
+<div id="tracks"></div>
+<div class="powered">powered by <a href="https://serenityradio.duckdns.org" style="color:#7a9e7e">Serenity Radio</a></div>
+<script>
+fetch("/api/teachers/{teacher_id}/embed").then(r=>r.json()).then(d=>{{
+  document.getElementById("name").textContent = d.display_name || "Teacher Playlist";
+  const tl = (d.playlists||[]).flatMap(p=>p.tracks||[]).slice(0,8);
+  document.getElementById("tracks").innerHTML = tl.map(t=>`<div class="tr" onclick="new Audio('${{t.src}}').play()">▶ ${{t.title}}</div>`).join("");
+}});
+</script>
+</body></html>'''
+
+# ════════════════════════════════════
+#  Billing routes
+# ════════════════════════════════════
+@app.route('/api/billing/plans', methods=['GET'])
+def api_billing_plans(): return handle_plans()
+
+@app.route('/api/billing/checkout', methods=['POST'])
+def api_billing_checkout(): return handle_create_checkout()
+
+@app.route('/api/billing/portal', methods=['POST'])
+def api_billing_portal(): return handle_portal()
+
+@app.route('/api/billing/webhook', methods=['POST'])
+def api_billing_webhook(): return handle_webhook()
 
 @app.errorhandler(404)
 def not_found(e):
