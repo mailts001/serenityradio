@@ -127,3 +127,100 @@
   .teacher-callout { flex-direction: column; }
   .tc-btn { width: 100%; text-align: center; }
 }
+
+/* ══════════════════════════════════════════
+   TRACKLIST
+   ══════════════════════════════════════════ */
+.tracklist-grid {
+  display: flex; flex-direction: column; gap: 2px;
+  margin-bottom: 1.5rem;
+}
+.tl-row {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 14px; border-radius: 12px;
+  cursor: pointer; transition: background .15s;
+  border: 1px solid transparent;
+}
+.tl-row:hover { background: var(--bg2); border-color: var(--border); }
+.tl-active {
+  background: rgba(122,158,126,.1) !important;
+  border-color: rgba(122,158,126,.3) !important;
+}
+.tl-num {
+  width: 24px; text-align: center; font-size: 12px;
+  color: var(--text-muted); flex-shrink: 0;
+}
+.tl-active .tl-num { color: var(--sage-l); font-weight: 700; }
+.tl-info { flex: 1; min-width: 0; }
+.tl-title {
+  font-size: 14px; white-space: nowrap;
+  overflow: hidden; text-overflow: ellipsis;
+}
+.tl-active .tl-title { color: var(--sage-l); }
+.tl-artist { font-size: 12px; color: var(--text-muted); }
+.tl-dur { font-size: 12px; color: var(--text-muted); min-width: 36px; text-align: right; }
+.tl-fav {
+  background: none; border: none; cursor: pointer;
+  color: var(--text-muted); font-size: 16px; padding: 4px 6px;
+  border-radius: 6px; line-height: 1; transition: color .2s;
+  flex-shrink: 0; opacity: 0;
+}
+.tl-row:hover .tl-fav { opacity: 1; }
+.tl-fav:hover { color: #c96a6a; }
+
+/* ══════════════════════════════════════════
+   SCORE HISTORY CHART BUTTON
+   ══════════════════════════════════════════ */
+.score-history-btn {
+  display: block; width: 100%; margin-top: .75rem;
+  padding: 8px; border-radius: 8px; border: 1px solid var(--border);
+  background: transparent; color: var(--text-muted);
+  font-size: 12px; cursor: pointer; font-family: inherit;
+  transition: border-color .2s, color .2s;
+}
+.score-history-btn:hover { border-color: var(--sage); color: var(--sage-l); }
+
+/* ══════════════════════════════════════════
+   MOBILE — global fixes
+   ══════════════════════════════════════════ */
+@media (max-width: 480px) {
+  /* Header */
+  .header-actions { gap: 6px; }
+  .header-actions .btn { font-size: 11px; padding: 6px 10px; }
+  #auth-area .auth-user { padding: 4px 8px; }
+  #auth-area .auth-name { display: none; }
+
+  /* Player card */
+  .player-card { padding: 1.25rem 1rem; }
+  .controls { gap: .6rem; }
+  .play-btn { width: 46px; height: 46px; }
+
+  /* Channel tabs */
+  .ch-tab { font-size: 12px; padding: 6px 10px; }
+
+  /* Account + upgrade */
+  .account-guest-card { flex-direction: column; gap: .75rem; }
+  .ag-left { gap: .75rem; }
+  .ag-btn { width: 100%; text-align: center; }
+  .upgrade-banner { flex-direction: column; }
+  .ub-prices { flex-direction: column; }
+  .ub-plan-btn { width: 100%; }
+  .teacher-callout { flex-direction: column; gap: .75rem; }
+  .tc-btn { width: 100%; text-align: center; padding: 10px; }
+
+  /* Tracklist */
+  .tl-fav { opacity: 1; } /* always show on mobile */
+  .tl-dur { display: none; }
+  #track-search { width: 110px; font-size: 12px; }
+
+  /* Section title with search */
+  .section-title { font-size: 1.1rem; gap: 6px; flex-wrap: wrap; }
+
+  /* Stats strip */
+  .stats-strip { grid-template-columns: repeat(2, 1fr); gap: 8px; }
+  .stat-value { font-size: 1.4rem; }
+
+  /* DJ card */
+  .dj-card { padding: 1rem; gap: .75rem; }
+  .dj-avatar { width: 36px; height: 36px; font-size: 16px; }
+}

@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Find a Teacher — Serenity Radio</title>
+<style>
+:root{--sage:#7a9e7e;--sage-l:#b8d4bb;--dusk:#6b7fa8;--dusk-l:#c2cde0;
+  --bg:#0d1117;--bg2:#161b27;--bg3:#1e2538;--text:#e8e0d5;--muted:#9a9590;--border:rgba(255,255,255,0.08);}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:system-ui,sans-serif;background:var(--bg);color:var(--text);min-height:100vh;}
+a{color:var(--sage-l);text-decoration:none;}
+.nav{display:flex;align-items:center;gap:1rem;padding:1rem 1.5rem;border-bottom:1px solid var(--border);position:sticky;top:0;background:var(--bg);z-index:10;}
+.nav-logo{font-size:1.1rem;color:var(--sage-l);flex:1;}
+.nav-back{font-size:13px;color:var(--muted);}
+.hero{text-align:center;padding:3rem 1.5rem 2rem;background:linear-gradient(135deg,#0d1117,#1a2438);}
+.hero h1{font-family:Georgia,serif;font-size:clamp(1.6rem,5vw,2.4rem);font-weight:400;margin-bottom:.5rem;}
+.hero p{color:var(--muted);font-size:15px;max-width:500px;margin:.75rem auto 1.5rem;line-height:1.6;}
+.search-bar{display:flex;gap:8px;max-width:440px;margin:0 auto;}
+.search-bar input{flex:1;padding:11px 16px;border-radius:50px;border:1px solid var(--border);background:var(--bg3);color:var(--text);font-size:14px;font-family:inherit;outline:none;}
+.search-bar input:focus{border-color:var(--sage);}
+.filter-row{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin:1rem 0;}
+.filter-btn{padding:6px 16px;border-radius:20px;border:1px solid var(--border);background:var(--bg3);color:var(--muted);font-size:12px;cursor:pointer;font-family:inherit;transition:all .2s;}
+.filter-btn.active{background:var(--sage);color:#fff;border-color:var(--sage);}
+.main{max-width:900px;margin:0 auto;padding:1.5rem;}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:1rem;}
+.card{background:var(--bg2);border:1px solid var(--border);border-radius:16px;padding:1.5rem;
+  transition:border-color .2s,transform .2s;cursor:pointer;}
+.card:hover{border-color:rgba(122,158,126,.4);transform:translateY(-2px);}
+.card-header{display:flex;align-items:center;gap:12px;margin-bottom:1rem;}
+.avatar{width:48px;height:48px;border-radius:50%;background:linear-gradient(135deg,var(--sage),var(--dusk));
+  display:flex;align-items:center;justify-content:center;font-size:1.3rem;font-weight:600;color:#fff;flex-shrink:0;}
+.teacher-name{font-size:15px;font-weight:500;}
+.specialty{font-size:12px;color:var(--muted);margin-top:2px;}
+.bio{font-size:13px;color:var(--muted);line-height:1.5;margin-bottom:1rem;
+  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}
+.card-footer{display:flex;align-items:center;justify-content:space-between;}
+.followers{font-size:12px;color:var(--muted);}
+.follow-btn{padding:6px 16px;border-radius:20px;border:1px solid rgba(122,158,126,.4);
+  background:transparent;color:var(--sage-l);font-size:12px;cursor:pointer;font-family:inherit;
+  transition:background .2s,border-color .2s;}
+.follow-btn:hover,.follow-btn.following{background:var(--sage);color:#fff;border-color:var(--sage);}
+.pl-count{font-size:11px;background:var(--bg3);padding:2px 8px;border-radius:10px;color:var(--muted);}
+.empty{text-align:center;padding:4rem 1rem;color:var(--muted);}
+.empty p{font-size:15px;margin-bottom:1rem;}
+.become-btn{display:inline-block;padding:10px 24px;border-radius:50px;background:var(--sage);
+  color:#fff;font-size:14px;font-weight:500;text-decoration:none;}
+.modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:100;display:flex;
+  align-items:center;justify-content:center;padding:1rem;opacity:0;pointer-events:none;transition:opacity .25s;}
+.modal-bg.open{opacity:1;pointer-events:all;}
+.modal-box{background:#fff;color:#1a1e2e;border-radius:20px;padding:2rem;width:100%;
+  max-width:480px;max-height:90vh;overflow-y:auto;position:relative;
+  transform:translateY(20px);transition:transform .3s;}
+.modal-bg.open .modal-box{transform:translateY(0);}
+.modal-close{position:absolute;top:1rem;right:1rem;background:none;border:none;font-size:20px;cursor:pointer;color:#666;}
+.pl-row{padding:10px 0;border-bottom:1px solid #eee;cursor:pointer;}
+.pl-row:last-child{border-bottom:none;}
+.pl-name{font-size:14px;font-weight:500;color:#1a1e2e;}
+.pl-meta{font-size:12px;color:#888;margin-top:2px;}
+.track-mini{font-size:12px;padding:4px 0;color:#444;cursor:pointer;}
+.track-mini:hover{color:var(--sage);}
+@media(max-width:500px){.grid{grid-template-columns:1fr;}}
+</style>
+</head>
+<body>
+<nav class="nav">
+  <div class="nav-logo">✦ Serenity Radio</div>
+  <a href="/" class="nav-back">← Back to Radio</a>
+  <a href="/teacher" style="font-size:13px;background:var(--sage);color:#fff;padding:6px 14px;border-radius:20px">Join as Teacher</a>
+</nav>
+
+<div class="hero">
+  <h1>Find Your Wellness Teacher</h1>
+  <p>Discover curated playlists from yoga teachers, meditation guides, and sound healers.</p>
+  <div class="search-bar">
+    <input id="search" placeholder="Search teachers…" oninput="filterTeachers(this.value)">
+  </div>
+  <div class="filter-row" id="filters">
+    <button class="filter-btn active" onclick="setFilter('',this)">All</button>
+    <button class="filter-btn" onclick="setFilter('Hatha Yoga',this)">Hatha</button>
+    <button class="filter-btn" onclick="setFilter('Vinyasa',this)">Vinyasa</button>
+    <button class="filter-btn" onclick="setFilter('Meditation',this)">Meditation</button>
+    <button class="filter-btn" onclick="setFilter('Breathwork',this)">Breathwork</button>
+    <button class="filter-btn" onclick="setFilter('Sound Healing',this)">Sound Healing</button>
+    <button class="filter-btn" onclick="setFilter('Yin Yoga',this)">Yin</button>
+  </div>
+</div>
+
+<div class="main">
+  <div class="grid" id="grid"><p style="color:var(--muted);padding:2rem;text-align:center">Loading teachers…</p></div>
+</div>
+
+<!-- Teacher detail modal -->
+<div class="modal-bg" id="detail-modal">
+  <div class="modal-box">
+    <button class="modal-close" onclick="closeDetail()">✕</button>
+    <div id="detail-content"></div>
+  </div>
+</div>
+
+<script>
+let _all = [], _filter = '', _search = '';
+
+async function load() {
+  try {
+    const r = await fetch('/api/teachers');
+    const d = await r.json();
+    _all = d.teachers || [];
+  } catch { _all = []; }
+  render();
+}
+
+function setFilter(f, btn) {
+  _filter = f;
+  document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  render();
+}
+
+function filterTeachers(q) { _search = q.toLowerCase(); render(); }
+
+function render() {
+  const grid = document.getElementById('grid');
+  let list = _all;
+  if (_filter) list = list.filter(t => t.specialty === _filter);
+  if (_search) list = list.filter(t =>
+    (t.display_name||'').toLowerCase().includes(_search) ||
+    (t.bio||'').toLowerCase().includes(_search) ||
+    (t.specialty||'').toLowerCase().includes(_search)
+  );
+
+  if (!list.length) {
+    grid.innerHTML = `<div class="empty" style="grid-column:1/-1">
+      <p>No teachers found. Be the first!</p>
+      <a href="/teacher" class="become-btn">Become a Teacher →</a>
+    </div>`;
+    return;
+  }
+
+  grid.innerHTML = list.map(t => `
+    <div class="card" onclick="openDetail(${t.user_id})">
+      <div class="card-header">
+        <div class="avatar">${(t.display_name||'?')[0].toUpperCase()}</div>
+        <div>
+          <div class="teacher-name">${t.display_name||'Teacher'}</div>
+          <div class="specialty">${t.specialty||'Wellness'}</div>
+        </div>
+      </div>
+      ${t.bio ? `<div class="bio">${t.bio}</div>` : ''}
+      <div class="card-footer">
+        <span class="followers">👥 ${t.followers||0} followers</span>
+        <button class="follow-btn" id="follow-${t.user_id}"
+          onclick="event.stopPropagation();toggleFollow(${t.user_id},this)">+ Follow</button>
+      </div>
+    </div>`).join('');
+}
+
+async function openDetail(id) {
+  document.getElementById('detail-modal').classList.add('open');
+  document.getElementById('detail-content').innerHTML = '<p style="color:#888;text-align:center;padding:2rem">Loading…</p>';
+  try {
+    const r = await fetch('/api/teachers/'+id);
+    const t = await r.json();
+    document.getElementById('detail-content').innerHTML = `
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:1rem">
+        <div style="width:52px;height:52px;border-radius:50%;background:#7a9e7e;display:flex;align-items:center;justify-content:center;font-size:1.4rem;font-weight:600;color:#fff;flex-shrink:0">${(t.display_name||'?')[0].toUpperCase()}</div>
+        <div>
+          <div style="font-size:1.1rem;font-weight:600;color:#1a1e2e">${t.display_name||'Teacher'}</div>
+          <div style="font-size:13px;color:#888">${t.specialty||''}</div>
+        </div>
+      </div>
+      ${t.bio ? `<p style="font-size:14px;color:#444;line-height:1.6;margin-bottom:1rem">${t.bio}</p>` : ''}
+      ${t.website ? `<p style="margin-bottom:1rem"><a href="${t.website}" target="_blank" style="color:#7a9e7e;font-size:13px">🔗 ${t.website}</a></p>` : ''}
+      <div style="font-size:.85rem;color:#888;font-weight:600;text-transform:uppercase;letter-spacing:.06em;margin-bottom:.75rem">Playlists</div>
+      ${(t.playlists||[]).length ? t.playlists.map(pl => `
+        <div class="pl-row" onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display==='none'?'block':'none'">
+          <div class="pl-name">🎵 ${pl.name}</div>
+          <div class="pl-meta">${pl.tracks?.length||0} tracks · ${pl.description||''}</div>
+        </div>
+        <div style="display:none;padding:.5rem 0 .5rem 1rem">
+          ${(pl.tracks||[]).map(tr => `<div class="track-mini" onclick="playExternal('${tr.src}','${tr.title}')">▶ ${tr.title}</div>`).join('')}
+        </div>`).join('') : '<p style="color:#888;font-size:13px">No playlists yet.</p>'}
+      <button style="margin-top:1.5rem;width:100%;padding:11px;border-radius:50px;background:#7a9e7e;color:#fff;border:none;font-size:14px;font-weight:500;cursor:pointer;font-family:inherit" onclick="toggleFollow(${t.user_id},this)">+ Follow ${t.display_name||'Teacher'}</button>`;
+  } catch { document.getElementById('detail-content').innerHTML = '<p style="color:#c00;text-align:center;padding:2rem">Could not load teacher.</p>'; }
+}
+function closeDetail() { document.getElementById('detail-modal').classList.remove('open'); }
+document.getElementById('detail-modal').addEventListener('click', e => { if(e.target===e.currentTarget) closeDetail(); });
+
+async function toggleFollow(id, btn) {
+  const token = localStorage.getItem('sr_session_token');
+  if (!token) { window.location = '/'; return; }
+  const following = btn.classList.contains('following');
+  const method = following ? 'DELETE' : 'POST';
+  try {
+    const r = await fetch('/api/teachers/'+id+'/follow', {
+      method, headers: {'X-Session-Token': token}
+    });
+    const d = await r.json();
+    btn.classList.toggle('following', !following);
+    btn.textContent = following ? '+ Follow' : '✓ Following';
+    // Update follower count in grid
+    const fEl = document.querySelector(`#follow-${id}`)?.closest('.card')?.querySelector('.followers');
+    if (fEl) fEl.textContent = '👥 ' + (d.followers||0) + ' followers';
+  } catch {}
+}
+
+function playExternal(src, title) {
+  closeDetail();
+  window.opener ? null : (window.location = '/?play='+encodeURIComponent(src));
+}
+
+load();
+</script>
+</body>
+</html>

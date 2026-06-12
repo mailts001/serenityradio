@@ -51,6 +51,7 @@ async function switchChannel(channelId) {
       tracks       = data.tracks;
       currentTrack = 0;
       loadTrack(isPlaying);
+      if (typeof renderTrackList === 'function') renderTrackList(tracks);
     }
   } catch(e) { console.warn('Channel load failed:', e); }
 

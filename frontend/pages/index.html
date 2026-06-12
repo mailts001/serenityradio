@@ -342,10 +342,20 @@
       <div class="tc-title">Are you a yoga teacher or wellness guide?</div>
       <div class="tc-sub">Share your playlists, build a following, embed a player on your site. Serenity Radio is your stage.</div>
     </div>
-    <a href="/teacher" class="tc-btn">Open Teacher Portal →</a>
+    <a href="/teachers" class="tc-btn">Browse Teachers →</a>
+    <a href="/teacher" class="tc-btn" style="margin-left:6px;background:rgba(107,127,168,.25)">Join as Teacher →</a>
   </div>
 
-  <div class="section-title">Today's Schedule</div>
+  <!-- ══ TRACK LIST ══ -->
+  <div class="section-title" style="margin-top:2rem">
+    🎵 Now in Playlist
+    <input id="track-search" placeholder="Search…" oninput="filterTracks(this.value)"
+      style="font-size:13px;padding:5px 12px;border-radius:20px;border:1px solid var(--border);
+             background:var(--bg3);color:var(--text);outline:none;margin-left:auto;width:140px;font-family:inherit">
+  </div>
+  <div id="tracklist" class="tracklist-grid"></div>
+
+  <div class="section-title" style="margin-top:2rem">Today's Schedule</div>
   <div class="schedule-list" id="schedule"></div>
 </div>
 
@@ -597,6 +607,11 @@ function loadTrack(index) {
   document.getElementById('track-count').textContent = tracks.length;
   // Notify favorites module of current track
   if (typeof Favorites !== 'undefined') Favorites.bindCurrentTrack(track);
+  // Re-highlight current row in tracklist
+  document.querySelectorAll('.tl-row').forEach((r,i) => {
+    r.classList.toggle('tl-active', i === index);
+    r.querySelector('.tl-num').textContent = i === index ? '▶' : (i+1);
+  });
 }
 
 // Allow favorites panel to inject and play a track
@@ -605,6 +620,45 @@ function loadFavoriteTrack(track) {
   currentTrack = 0;
   loadTrack(0);
   if (!isPlaying) togglePlay();
+}
+
+// ── Track List ──────────────────────────────
+function renderTrackList(list) {
+  const el = document.getElementById('tracklist');
+  if (!el) return;
+  if (!list || !list.length) {
+    el.innerHTML = '<p style="color:var(--text-muted);font-size:13px;grid-column:1/-1;padding:.5rem 0">No tracks in this channel yet.</p>';
+    return;
+  }
+  el.innerHTML = list.map((t, i) => {
+    const isCur = (i === currentTrack);
+    const dur   = t.duration ? Math.floor(t.duration/60)+':'+(String(t.duration%60).padStart(2,'0')) : '';
+    return `<div class="tl-row${isCur?' tl-active':''}" id="tl-${i}" onclick="jumpToTrack(${i})" title="Play: ${t.title}">
+      <div class="tl-num">${isCur ? '▶' : (i+1)}</div>
+      <div class="tl-info">
+        <div class="tl-title">${t.title}</div>
+        <div class="tl-artist">${t.artist||'Serenity Radio'}</div>
+      </div>
+      ${dur ? `<div class="tl-dur">${dur}</div>` : ''}
+      <button class="tl-fav" title="Favorite" onclick="event.stopPropagation();typeof Favorites!=='undefined'&&Favorites.toggle('${t.src||''}','${t.title}','${t.artist||''}','${t.channel||'default'}')">♡</button>
+    </div>`;
+  }).join('');
+}
+
+function jumpToTrack(index) {
+  currentTrack = index;
+  loadTrack(index);
+  if (!isPlaying) togglePlay();
+  renderTrackList(tracks);
+  document.getElementById('tl-'+index)?.scrollIntoView({behavior:'smooth',block:'nearest'});
+}
+
+function filterTracks(q) {
+  if (!q) { renderTrackList(tracks); return; }
+  const f = q.toLowerCase();
+  renderTrackList(tracks.filter(t =>
+    (t.title||'').toLowerCase().includes(f) || (t.artist||'').toLowerCase().includes(f)
+  ));
 }
 
 function updateProgressFromAudio() {
@@ -747,6 +801,7 @@ async function loadPlaylist() {
     if (tracks.length > 0) {
       currentTrack = 0;
       loadTrack(0);
+      renderTrackList(tracks);
       document.getElementById('track-count').textContent = tracks.length;
     } else {
       trackTitleEl.textContent = "No tracks available";

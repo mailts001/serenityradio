@@ -410,6 +410,10 @@ def api_favorites_remove(): return handle_remove_favorite()
 def teacher_page():
     return send_from_directory(os.path.join(FRONTEND_DIR, 'pages'), 'teacher.html')
 
+@app.route('/teachers')
+def teachers_directory():
+    return send_from_directory(os.path.join(FRONTEND_DIR, 'pages'), 'teachers.html')
+
 @app.route('/api/teachers', methods=['GET'])
 def api_teachers(): return handle_list_teachers()
 
