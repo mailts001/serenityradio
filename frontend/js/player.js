@@ -27,8 +27,10 @@ async function loadTrackList() {
   try {
     const res  = await fetch('/api/tracks');
     const data = await res.json();
-    if (data.tracks && data.tracks.length > 0) {
-      tracks = data.tracks;
+    // API returns plain array; guard against {tracks:[]} wrapper too
+    const list = Array.isArray(data) ? data : (data.tracks || []);
+    if (list.length > 0) {
+      tracks = list;
       document.getElementById('stat-tracks').textContent = tracks.length;
     } else {
       document.getElementById('stat-tracks').textContent = tracks.length;
