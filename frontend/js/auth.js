@@ -52,22 +52,34 @@ const Auth = (() => {
     const m = document.createElement('div');
     m.id = 'auth-modal';
     m.innerHTML = `
-      <div class="modal-backdrop" onclick="Auth.closeModal()"></div>
-      <div class="modal-box">
-        <button class="modal-close" onclick="Auth.closeModal()">✕</button>
-        <div class="modal-icon">✦</div>
-        <h2>Welcome to Serenity</h2>
-        <p class="modal-sub">Enter your email — we'll send a magic link. No password needed.</p>
-        <input type="email" id="auth-email" placeholder="you@example.com" autocomplete="email">
-        <button class="modal-btn" id="auth-send-btn" onclick="Auth.sendLink()">Send Magic Link</button>
-        <div id="auth-msg" class="modal-msg"></div>
+      <div class="auth-overlay-bg" onclick="Auth.closeModal()"></div>
+      <div class="auth-dialog">
+        <button class="auth-dialog-close" onclick="Auth.closeModal()">✕</button>
+        <div style="font-size:2rem;margin-bottom:.75rem">✦</div>
+        <h2 style="font-family:'Playfair Display',serif;font-size:1.5rem;font-weight:400;margin-bottom:.4rem">Welcome to Serenity</h2>
+        <p style="font-size:14px;color:#888;margin-bottom:1.5rem;line-height:1.6">Enter your email — we'll send a magic link.<br>No password needed.</p>
+        <input type="email" id="auth-email" placeholder="you@example.com" autocomplete="email"
+          style="width:100%;padding:12px 16px;border-radius:10px;border:1px solid #444;
+                 background:#1e2538;color:#e8e0d5;font-size:15px;font-family:inherit;
+                 outline:none;margin-bottom:1rem;box-sizing:border-box;">
+        <button id="auth-send-btn" onclick="Auth.sendLink()"
+          style="width:100%;padding:13px;border-radius:50px;background:#7a9e7e;
+                 color:#fff;border:none;font-size:15px;font-weight:500;
+                 cursor:pointer;font-family:inherit;transition:opacity .2s">
+          Send Magic Link
+        </button>
+        <div id="auth-msg" style="font-size:13px;margin-top:.75rem;min-height:1.2em;text-align:center"></div>
       </div>`;
     document.body.appendChild(m);
-    requestAnimationFrame(() => m.classList.add('visible'));
-    document.getElementById('auth-email').focus();
-    document.getElementById('auth-email').addEventListener('keydown', e => {
-      if (e.key === 'Enter') Auth.sendLink();
-    });
+    // Two rAF frames to guarantee paint before transition
+    requestAnimationFrame(() => requestAnimationFrame(() => m.classList.add('visible')));
+    setTimeout(() => {
+      const inp = document.getElementById('auth-email');
+      if (inp) {
+        inp.focus();
+        inp.addEventListener('keydown', e => { if (e.key === 'Enter') Auth.sendLink(); });
+      }
+    }, 50);
   }
 
   async function sendLink() {
@@ -126,10 +138,10 @@ const Auth = (() => {
     const m = document.createElement('div');
     m.id = 'auth-modal';
     m.innerHTML = `
-      <div class="modal-backdrop" onclick="Auth.closeModal()"></div>
-      <div class="modal-box upgrade-box">
-        <button class="modal-close" onclick="Auth.closeModal()">✕</button>
-        <h2>Upgrade Serenity</h2>
+      <div class="auth-overlay-bg" onclick="Auth.closeModal()"></div>
+      <div class="auth-dialog upgrade-box">
+        <button class="auth-dialog-close" onclick="Auth.closeModal()">✕</button>
+        <h2 style="font-family:'Playfair Display',serif;font-size:1.5rem;font-weight:400;margin-bottom:1rem">Upgrade Serenity</h2>
         <div class="upgrade-plans">
           <div class="upgrade-plan">
             <div class="plan-name">Listener Pro</div>
@@ -158,7 +170,7 @@ const Auth = (() => {
         </div>
       </div>`;
     document.body.appendChild(m);
-    requestAnimationFrame(() => m.classList.add('visible'));
+    requestAnimationFrame(() => requestAnimationFrame(() => m.classList.add('visible')));
   }
 
   async function checkout(plan) {
@@ -197,7 +209,9 @@ const Auth = (() => {
   }
   function _setMsg(html, type) {
     const el = document.getElementById('auth-msg');
-    if (el) { el.innerHTML = html; el.className = 'modal-msg ' + (type || ''); }
+    if (!el) return;
+    el.innerHTML = html;
+    el.style.color = type === 'error' ? '#c62828' : type === 'ok' ? '#2e7d32' : '#555';
   }
 
   // Check for ?upgraded=1 on load
