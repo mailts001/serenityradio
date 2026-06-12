@@ -134,3 +134,15 @@ def check_and_alert():
 
 # Start background thread on import
 threading.Thread(target=check_and_alert, daemon=True).start()
+
+
+# ── Flask route handlers (imported by server.py) ──
+from flask import request, jsonify
+
+def handle_heartbeat():
+    data = request.get_json() or {}
+    heartbeat(data.get('session_id', request.remote_addr))
+    return jsonify({'ok': True})
+
+def handle_stats():
+    return jsonify(get_stats())
