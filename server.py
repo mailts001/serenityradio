@@ -89,15 +89,20 @@ def scan_music_folder():
         print(f"❌ Music directory not found: {MUSIC_DIR}")
         return tracks
     
-    # Get ALL MP3 files (case insensitive)
-    mp3_files = [f for f in os.listdir(MUSIC_DIR) if f.lower().endswith('.mp3')]
-    mp3_files.sort()
-    
-    print(f"📁 Found {len(mp3_files)} MP3 files in music folder")
-    
-    for idx, mp3_file in enumerate(mp3_files):
-        filepath = os.path.join(MUSIC_DIR, mp3_file)
-        
+    # Get ALL MP3 files recursively (root + channel subfolders)
+    all_mp3s = []
+    CHANNELS = ['', 'sleep', 'focus', 'yoga', 'nature']
+    for ch in CHANNELS:
+        d = os.path.join(MUSIC_DIR, ch) if ch else MUSIC_DIR
+        if not os.path.isdir(d):
+            continue
+        for f in sorted(os.listdir(d)):
+            if f.lower().endswith('.mp3'):
+                all_mp3s.append((ch, f, os.path.join(d, f)))
+
+    print(f"📁 Found {len(all_mp3s)} MP3 files across all channels")
+
+    for idx, (ch, mp3_file, filepath) in enumerate(all_mp3s):
         # Try to get duration from MP3
         duration = 180  # Default 3 minutes
         if MUTAGEN_AVAILABLE:
@@ -106,18 +111,20 @@ def scan_music_folder():
                 duration = int(audio.info.length)
             except Exception as e:
                 print(f"  ⚠️ Could not read duration for {mp3_file}: {e}")
-        
-        # Get title from filename (remove .mp3 and clean up)
+
         title = mp3_file.replace('.mp3', '').replace('-', ' ').replace('_', ' ').title()
-        
+        src   = f'/assets/music/{ch}/{mp3_file}' if ch else f'/assets/music/{mp3_file}'
+
         tracks.append({
-            'id': idx,
-            'file': mp3_file,
-            'title': title,
-            'artist': 'Serenity Radio',
-            'duration': duration
+            'id':      idx,
+            'file':    mp3_file,
+            'title':   title,
+            'artist':  'Serenity Radio',
+            'duration': duration,
+            'channel': ch or 'default',
+            'src':     src,
         })
-        print(f"  ✅ Added: {title} ({duration} sec) - {mp3_file}")
+        print(f"  ✅ [{ch or 'default'}] {title} ({duration}s)")
     
     playlist_cache = tracks
     last_scan_time = time.time()
