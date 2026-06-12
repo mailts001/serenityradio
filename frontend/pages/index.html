@@ -570,7 +570,11 @@ function buildScheduleDisplay() {
     div.title = 'Switch to ' + (s.channel === 'default' ? 'All' : s.channel) + ' channel';
     div.onclick = () => {
       if (typeof switchChannel === 'function') switchChannel(s.channel || 'default');
-      showToast('Switched to ' + s.name);
+      showToast('Switched to ' + s.name + ' — scroll down to see & save songs ↓');
+      // Smooth scroll to tracklist so user can see and save songs
+      setTimeout(() => {
+        document.getElementById('tracklist')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }, 600);
     };
 
     const badgeClass = { music: 'badge-music', dj: 'badge-dj', meditation: 'badge-meditation' }[s.type];
@@ -581,8 +585,14 @@ function buildScheduleDisplay() {
       <span class="sched-time">${s.time}</span>
       <span class="sched-badge ${badgeClass}">${badgeText}</span>
       <span class="sched-name">${s.name}</span>
-      <span style="font-size:12px;color:var(--text-muted);margin-left:auto">${chEmoji}</span>
-      ${i === active ? '<span style="font-size:11px;color:var(--sage-light);white-space:nowrap;margin-left:4px">● LIVE</span>' : ''}
+      <span style="font-size:12px;color:var(--text-muted);margin-left:auto;padding-right:4px">${chEmoji}</span>
+      ${i === active ? '<span style="font-size:11px;color:var(--sage-light);white-space:nowrap">● LIVE</span>' : ''}
+      <button class="sched-fav-btn fav-btn"
+        data-src="/channel/${s.channel||'default'}"
+        data-sched-channel="${s.channel||'default'}"
+        data-sched-name="${s.name}"
+        title="Save this station to favorites"
+        onclick="event.stopPropagation();schedFav(this)">♡</button>
     `;
     el.appendChild(div);
   });
@@ -669,6 +679,22 @@ function renderTrackList(list) {
       </button>
     </div>`;
   }).join('');
+}
+
+// Heart on schedule slot — saves a "station" to favorites
+// When played, it switches to that channel and queues its tracks
+function schedFav(btn) {
+  if (typeof Favorites === 'undefined') return;
+  if (!Auth.isLoggedIn()) { Auth.openLogin(); return; }
+  const ch   = btn.dataset.schedChannel || 'default';
+  const name = btn.dataset.schedName   || ch;
+  const src  = '/channel/' + ch;   // pseudo-src key for this station
+  Favorites.toggle(src, '📻 ' + name, 'Serenity Radio · ' + ch + ' channel', ch);
+  const nowFav = Favorites.isFav(src);
+  btn.textContent = nowFav ? '♥' : '♡';
+  btn.classList.toggle('active', nowFav);
+  btn.title = nowFav ? 'Remove from favorites' : 'Save this station';
+  showToast(nowFav ? '♥ Station saved to favorites' : 'Removed from favorites');
 }
 
 // Heart button in tracklist — reads track from global array by index
