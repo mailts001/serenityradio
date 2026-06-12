@@ -172,9 +172,11 @@ const Favorites = (() => {
 
   function _playOne(src, title, artist, channel) {
     _closePanel();
-    // Station favorite (whole channel) — switch channel instead of playing file
-    if (src.startsWith('/channel/')) {
-      const ch = src.replace('/channel/', '');
+    // Station/schedule favorite — switch to its channel
+    if (src.startsWith('/channel/') || src.startsWith('/sched/')) {
+      // channel is stored in the artist field as "Serenity Radio · <ch> channel"
+      const chMatch = (artist || '').match(/· (\w+) channel/);
+      const ch = chMatch ? chMatch[1] : 'default';
       if (typeof switchChannel === 'function') switchChannel(ch);
       return;
     }

@@ -588,7 +588,7 @@ function buildScheduleDisplay() {
       <span style="font-size:12px;color:var(--text-muted);margin-left:auto;padding-right:4px">${chEmoji}</span>
       ${i === active ? '<span style="font-size:11px;color:var(--sage-light);white-space:nowrap">● LIVE</span>' : ''}
       <button class="sched-fav-btn fav-btn"
-        data-src="/channel/${s.channel||'default'}"
+        data-src="/sched/${encodeURIComponent(s.name)}"
         data-sched-channel="${s.channel||'default'}"
         data-sched-name="${s.name}"
         title="Save this station to favorites"
@@ -688,7 +688,7 @@ function schedFav(btn) {
   if (!Auth.isLoggedIn()) { Auth.openLogin(); return; }
   const ch   = btn.dataset.schedChannel || 'default';
   const name = btn.dataset.schedName   || ch;
-  const src  = '/channel/' + ch;   // pseudo-src key for this station
+  const src  = btn.dataset.src;    // unique per slot: /sched/<encoded-name>
   Favorites.toggle(src, '📻 ' + name, 'Serenity Radio · ' + ch + ' channel', ch);
   const nowFav = Favorites.isFav(src);
   btn.textContent = nowFav ? '♥' : '♡';
