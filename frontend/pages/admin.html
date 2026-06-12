@@ -125,7 +125,7 @@ function doLogin(){
 document.getElementById('pwd').addEventListener('keydown',e=>{if(e.key==='Enter')doLogin();});
 window.addEventListener('load',()=>{const t=sessionStorage.getItem('at');if(t){document.getElementById('pwd').value=t;doLogin();}});
 function logout(){sessionStorage.removeItem('at');location.reload();}
-function api(path,opts={}){opts.headers={...(opts.headers||{}),{'X-Admin-Token':T}};return fetch(path,opts);}
+function api(path,opts={}){opts.headers=Object.assign({},opts.headers||{},{'X-Admin-Token':T});return fetch(path,opts);}
 function show(name,el){
   document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
   el.classList.add('active');
