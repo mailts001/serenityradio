@@ -115,14 +115,14 @@ const CanvasScenes = (() => {
       _ctx.fillStyle = hg;
       _ctx.fillRect(0, h * 0.42, w, h * 0.3);
     } else if (hr >= 8 && hr < 17) {
-      // Bright tropical day haze — strictly clipped to sky (above horizon = h*0.65)
-      const peak = 0.16 + 0.07 * Math.sin(((hr - 8) / 9) * Math.PI);
-      const hg = _ctx.createLinearGradient(0, h * 0.40, 0, h * 0.65);
-      hg.addColorStop(0,   `rgba(220,240,255,0)`);
-      hg.addColorStop(0.5, `rgba(210,232,255,${peak})`);
-      hg.addColorStop(1,   'rgba(200,225,255,0)');  // fades to zero AT horizon
+      // Daytime atmospheric haze — very faint, entirely within sky, fades to 0 at horizon
+      const peak = 0.06 + 0.03 * Math.sin(((hr - 8) / 9) * Math.PI);  // max ~0.09 opacity
+      const hg = _ctx.createLinearGradient(0, h * 0.35, 0, h * 0.63);
+      hg.addColorStop(0,   'rgba(210,232,255,0)');
+      hg.addColorStop(0.4, `rgba(210,232,255,${peak})`);
+      hg.addColorStop(1,   'rgba(210,232,255,0)');   // gone before horizon
       _ctx.fillStyle = hg;
-      _ctx.fillRect(0, h * 0.40, w, h * 0.25);     // ends exactly at h*0.65
+      _ctx.fillRect(0, h * 0.35, w, h * 0.28);
     } else if (hr >= 17 && hr <= 20) {
       // Sunset warm band
       const i = Math.sin(((hr - 17) / 3) * Math.PI) * 0.38;
@@ -349,18 +349,17 @@ const CanvasScenes = (() => {
       const p   = (i / N) ** 1.6;         // perspective fraction 0→1
       const y   = hy + wH * p;            // Y position of this crest
 
-      // Amplitude: almost zero at horizon, grows smoothly to foreground
-      const amp  = p * p * 24 * mA;
+      // Amplitude: tiny near horizon, very gentle even at foreground
+      const amp  = p * p * 12 * mA;   // halved — calm, not choppy
 
-      // Frequency: compressed at horizon, longer swells near viewer
-      const freq = 0.014 * (1 - p * 0.87) + 0.0008;
+      // Frequency: long lazy swells
+      const freq = 0.008 * (1 - p * 0.82) + 0.0006;
 
-      // Speed: faster toward viewer (perspective gives this illusion)
-      const spd  = 0.005 + p * 0.022;
+      // Speed: slow — open ocean calm, not rushing shore
+      const spd  = 0.0018 + p * 0.008;   // ~3× slower than before
 
-      // Two harmonics — prevents rigid single-period look
       const ph1  = i * 0.58 + t * spd;
-      const ph2  = i * 1.05 + t * spd * 0.62 + 2.0;
+      const ph2  = i * 1.05 + t * spd * 0.55 + 2.0;
 
       function wy(x) {
         return y + amp * (
@@ -623,157 +622,148 @@ const CanvasScenes = (() => {
     };
   });
 
+  // Draw a soft radial gradient blob — the primitive used by ALL cloud types.
+  // Pure radial gradients have zero hard edges; overlapping blobs = natural cloud mass.
+  function _blob(x, y, rx, ry, colStop0, colStop1, a) {
+    _ctx.save();
+    _ctx.scale(1, ry / rx);   // squash to ellipse without clipping
+    const g = _ctx.createRadialGradient(x, y * rx/ry, 0, x, y * rx/ry, rx);
+    g.addColorStop(0,   colStop0.replace('A', String(a)));
+    g.addColorStop(0.45,colStop1.replace('A', String(a * 0.55)));
+    g.addColorStop(1,   colStop0.replace(/,[^,)]+\)/, ',0)'));  // same colour, alpha=0
+    _ctx.fillStyle = g;
+    _ctx.fillRect(x - rx, (y - ry) * rx/ry, rx * 2, ry * 2);
+    _ctx.restore();
+  }
+
   function _drawCloud(c, w, h, alpha) {
     const cx = c.x * w, cy = c.y * h;
     const cw = c.w * w, ch = c.h * h;
     const type = c.type || 'cumulus';
+    const hy   = h * 0.65;
+    if (cy > hy) return;  // never render into water
 
     if (type === 'wispy') {
-      // ── Cirrus: elongated horizontal smear — sometimes slight diagonal ──
-      // Natural diagonal tilt ±8° makes overlapping wisps look organic
-      const tilt = (c.seed - 0.5) * 0.28;  // slight diagonal variation
+      // Cirrus: 2-3 overlapping elongated gradient blobs, slight tilt each
+      // No filled path at all — pure gradient rectangles fade to 0 at edges
+      const tilt = (c.seed - 0.5) * 0.22;
       _ctx.save();
       _ctx.translate(cx, cy);
       _ctx.rotate(tilt);
-      const g = _ctx.createLinearGradient(-cw*0.55, 0, cw*0.55, 0);
-      g.addColorStop(0,    'rgba(255,255,255,0)');
-      g.addColorStop(0.2,  `rgba(255,255,255,${alpha*0.22})`);
-      g.addColorStop(0.5,  `rgba(255,255,255,${alpha*0.30})`);
-      g.addColorStop(0.8,  `rgba(255,255,255,${alpha*0.22})`);
-      g.addColorStop(1,    'rgba(255,255,255,0)');
-      _ctx.fillStyle = g;
-      _ctx.beginPath();
-      _ctx.ellipse(0, 0, cw * 0.55, ch * 0.16, 0, 0, Math.PI * 2);
-      _ctx.fill();
-      // Secondary streamer — offset, different tilt — gives layered depth
-      _ctx.beginPath();
-      _ctx.ellipse(cw*0.18, -ch*0.15, cw*0.32, ch*0.09, 0.15, 0, Math.PI * 2);
-      _ctx.fillStyle = `rgba(255,255,255,${alpha*0.14})`;
-      _ctx.fill();
+      const g1 = _ctx.createLinearGradient(-cw*0.52, 0, cw*0.52, 0);
+      g1.addColorStop(0,    'rgba(255,255,255,0)');
+      g1.addColorStop(0.22, `rgba(255,255,255,${alpha*0.18})`);
+      g1.addColorStop(0.5,  `rgba(255,255,255,${alpha*0.26})`);
+      g1.addColorStop(0.78, `rgba(255,255,255,${alpha*0.18})`);
+      g1.addColorStop(1,    'rgba(255,255,255,0)');
+      const vg1 = _ctx.createLinearGradient(0, -ch*0.12, 0, ch*0.12);
+      vg1.addColorStop(0, 'rgba(0,0,0,0)');
+      vg1.addColorStop(0.5,`rgba(255,255,255,1)`);
+      vg1.addColorStop(1, 'rgba(0,0,0,0)');
+      // Use composite: draw horizontal gradient masked by vertical gradient
+      _ctx.globalAlpha = 1;
+      _ctx.fillStyle = g1;
+      _ctx.fillRect(-cw*0.52, -ch*0.12, cw*1.04, ch*0.24);
+      // Second thinner streamer slightly offset
+      _ctx.rotate(0.06);
+      const g2 = _ctx.createLinearGradient(-cw*0.35, 0, cw*0.35, 0);
+      g2.addColorStop(0,   'rgba(255,255,255,0)');
+      g2.addColorStop(0.5, `rgba(255,255,255,${alpha*0.14})`);
+      g2.addColorStop(1,   'rgba(255,255,255,0)');
+      _ctx.fillStyle = g2;
+      _ctx.fillRect(-cw*0.35, ch*0.04, cw*0.70, ch*0.14);
       _ctx.restore();
 
     } else if (type === 'cumulus') {
-      // ── Fair-weather cumulus: flat base, fluffy rounded top ──
-      const left   = cx - cw * 0.46;
-      const bumpR  = ch * 0.42;
-      const nBump  = Math.max(3, Math.round(cw / (bumpR * 1.55)));
-      const bStep  = (cw * 0.92) / nBump;
-
-      // Flat body
-      _ctx.beginPath();
-      _ctx.ellipse(cx, cy + bumpR * 0.52, cw * 0.46, bumpR * 0.52, 0, 0, Math.PI * 2);
-      _ctx.fillStyle = `rgba(238,244,255,${alpha * 0.46})`;
-      _ctx.fill();
-
-      // Bumps — semicircles along top
-      for (let b = 0; b < nBump; b++) {
-        const bx = left + bumpR * 0.48 + b * bStep;
-        const br = bumpR * (0.82 + Math.sin(bx * 0.025 + c.seed * 8) * 0.20);
-        _ctx.beginPath();
-        _ctx.arc(bx, cy + bumpR * 0.12, br, Math.PI, 0, false);
-        _ctx.closePath();
-        _ctx.fillStyle = `rgba(252,254,255,${alpha * 0.60})`;
-        _ctx.fill();
+      // Cumulus: cluster of overlapping soft radial blobs — no hard outlines.
+      // 4-6 blobs arranged in a low wide arc; each blob is a radial gradient.
+      const nBlob = 4 + Math.round(c.seed * 2);
+      const bRx   = cw * 0.30;   // blob x-radius
+      const bRy   = ch * 0.80;   // blob y-radius (taller than wide for puffiness)
+      for (let b = 0; b < nBlob; b++) {
+        const t   = b / (nBlob - 1);                          // 0→1 left to right
+        const bx  = cx + (t - 0.5) * cw * 0.88;
+        const by  = cy - bRy * 0.15 * Math.sin(t * Math.PI); // gentle arc top
+        const br  = bRx * (0.75 + Math.sin(b * 1.8 + c.seed * 5) * 0.25);
+        const lum = b === 0 || b === nBlob-1 ? 235 : 252;    // edge blobs slightly darker
+        const gr  = _ctx.createRadialGradient(bx, by, 0, bx, by, br * 2.2);
+        gr.addColorStop(0,   `rgba(${lum},${lum+2},255,${alpha * 0.62})`);
+        gr.addColorStop(0.5, `rgba(${lum},${lum},252,${alpha * 0.28})`);
+        gr.addColorStop(1,   'rgba(240,244,255,0)');
+        _ctx.fillStyle = gr;
+        _ctx.fillRect(bx - br*2.2, by - bRy*1.1, br*4.4, bRy*2.2);
       }
-      // Bright highlight (sun catch, upper-left of cloud mass)
-      _ctx.beginPath();
-      _ctx.ellipse(cx - cw*0.10, cy - bumpR*0.10, cw*0.20, bumpR*0.28, -0.25, 0, Math.PI*2);
-      _ctx.fillStyle = `rgba(255,255,255,${alpha * 0.30})`;
-      _ctx.fill();
-      // Grey-blue flat underside shadow
-      _ctx.beginPath();
-      _ctx.ellipse(cx, cy + bumpR * 0.90, cw * 0.42, bumpR * 0.16, 0, 0, Math.PI * 2);
-      _ctx.fillStyle = `rgba(165,180,210,${alpha * 0.30})`;
-      _ctx.fill();
+      // Subtle shadow underside — wide flat radial blob shifted down
+      const sg = _ctx.createRadialGradient(cx, cy + ch*0.6, 0, cx, cy + ch*0.6, cw*0.45);
+      sg.addColorStop(0,   `rgba(160,175,210,${alpha * 0.22})`);
+      sg.addColorStop(1,   'rgba(160,175,210,0)');
+      _ctx.fillStyle = sg;
+      _ctx.fillRect(cx - cw*0.45, cy, cw*0.9, ch*1.2);
 
     } else if (type === 'backlit') {
-      // ── "Sculpted in florets of cream and pearl, backlit lavender shadows" ──
-      // Each floret: lavender shadow offset behind, cream pearl face, bright edge glow
-      const nFlorets = 4 + Math.round(c.seed * 3);
-      const fr0 = ch * 0.62;
-
-      for (let fi = 0; fi < nFlorets; fi++) {
-        const t  = fi / (nFlorets - 1);
-        const fx = cx + (t - 0.5) * cw * 0.82;
-        const fy = cy + Math.sin(fi * 1.5 + c.seed * 3) * ch * 0.22 - ch * 0.10;
-        const fr = fr0 * (0.72 + Math.sin(fi * 0.88 + c.seed * 5) * 0.28);
-
-        // Lavender shadow (slightly behind and below — like backlit depth)
-        _ctx.beginPath();
-        _ctx.arc(fx + fr*0.14, fy + fr*0.14, fr, 0, Math.PI * 2);
-        _ctx.fillStyle = `rgba(175,155,220,${alpha * 0.40})`;
-        _ctx.fill();
-
-        // Cream-pearl main body
-        _ctx.beginPath();
-        _ctx.arc(fx, fy, fr * 0.88, 0, Math.PI * 2);
-        _ctx.fillStyle = `rgba(252,248,255,${alpha * 0.62})`;
-        _ctx.fill();
-
-        // Luminous backlit edge — brighter upper-left rim
-        const eg = _ctx.createRadialGradient(fx - fr*0.25, fy - fr*0.25, fr*0.1, fx, fy, fr);
-        eg.addColorStop(0,   `rgba(255,255,255,${alpha * 0.50})`);
-        eg.addColorStop(0.55,`rgba(255,252,255,${alpha * 0.12})`);
-        eg.addColorStop(1,   'rgba(255,255,255,0)');
-        _ctx.fillStyle = eg;
-        _ctx.beginPath();
-        _ctx.arc(fx, fy, fr, 0, Math.PI * 2);
-        _ctx.fill();
+      // Backlit: 3-5 overlapping radial blobs. Warm cream cores, lavender halos.
+      // Each blob offset slightly — looks like light punching through cloud mass.
+      const nBlob = 3 + Math.round(c.seed * 2);
+      const bR    = Math.min(cw * 0.38, ch * 1.4);
+      for (let b = 0; b < nBlob; b++) {
+        const t   = b / (nBlob - 1);
+        const bx  = cx + (t - 0.5) * cw * 0.72;
+        const by  = cy + Math.sin(t * Math.PI + c.seed) * ch * 0.3;
+        // Lavender halo
+        const lg  = _ctx.createRadialGradient(bx + bR*0.1, by + bR*0.1, 0, bx, by, bR * 2.0);
+        lg.addColorStop(0,   `rgba(185,165,230,${alpha * 0.38})`);
+        lg.addColorStop(0.6, `rgba(175,155,225,${alpha * 0.12})`);
+        lg.addColorStop(1,   'rgba(180,160,228,0)');
+        _ctx.fillStyle = lg;
+        _ctx.fillRect(bx - bR*2, by - bR*2, bR*4, bR*4);
+        // Cream pearl core
+        const cg  = _ctx.createRadialGradient(bx, by, 0, bx, by, bR * 1.1);
+        cg.addColorStop(0,   `rgba(255,252,248,${alpha * 0.65})`);
+        cg.addColorStop(0.4, `rgba(250,248,255,${alpha * 0.30})`);
+        cg.addColorStop(1,   'rgba(248,246,255,0)');
+        _ctx.fillStyle = cg;
+        _ctx.fillRect(bx - bR*1.1, by - bR*1.1, bR*2.2, bR*2.2);
       }
-      // Flat shadow underside across whole cloud mass
-      _ctx.beginPath();
-      _ctx.ellipse(cx, cy + fr0*0.7, cw*0.44, fr0*0.14, 0, 0, Math.PI*2);
-      _ctx.fillStyle = `rgba(140,120,190,${alpha * 0.22})`;
-      _ctx.fill();
 
     } else if (type === 'cumulonimbus') {
-      // ── Thunderhead: "white-hot mountains on the horizon" ──
-      // Towering vertical column with anvil top; dark base; lavender mid-shadow
-      const base  = cy + ch * 0.55;
-      const tower = ch * 3.8;   // tall — extends well above nominal cloud y
-      const towerW = cw * 0.38;
+      // Thunderhead — all radial gradients, no filled paths, no hard edges.
+      // Dark base blob → stacked lighter tower blobs → wide anvil blob at top.
+      const base  = cy + ch * 0.5;
+      const tower = ch * 3.6;
+      const tW    = cw * 0.35;
 
-      // Dark rain-bearing base — heavy, anvil-flat
-      const baseG = _ctx.createRadialGradient(cx, base, 0, cx, base, cw * 0.5);
-      baseG.addColorStop(0,   `rgba(55,62,88,${alpha * 0.88})`);
-      baseG.addColorStop(0.6, `rgba(38,44,68,${alpha * 0.70})`);
-      baseG.addColorStop(1,   'rgba(30,38,60,0)');
-      _ctx.fillStyle = baseG;
-      _ctx.beginPath();
-      _ctx.ellipse(cx, base, cw * 0.50, ch * 0.28, 0, 0, Math.PI * 2);
-      _ctx.fill();
+      // Dark base: wide flat radial blob
+      const bg = _ctx.createRadialGradient(cx, base, 0, cx, base, cw * 0.55);
+      bg.addColorStop(0,   `rgba(48,55,80,${alpha * 0.82})`);
+      bg.addColorStop(0.5, `rgba(35,42,65,${alpha * 0.45})`);
+      bg.addColorStop(1,   'rgba(30,38,60,0)');
+      _ctx.fillStyle = bg; _ctx.fillRect(cx - cw*0.55, base - ch*0.4, cw*1.1, ch*0.8);
 
-      // Tower — stacked cauliflower tiers, each slightly offset
-      const nTier = 6;
-      for (let ti = 0; ti < nTier; ti++) {
-        const p   = ti / (nTier - 1);
-        const ty  = base - tower * (p * 0.75 + 0.08);
-        const tr  = towerW * (1.0 - p * 0.32) * (0.80 + Math.sin(ti * 1.4 + c.seed * 4) * 0.20);
-        // Darker at base, brilliant white at crown
-        const lum = Math.round(160 + p * 90);
-        const blu = Math.round(lum + p * 10);
-        _ctx.beginPath();
-        _ctx.ellipse(cx + (c.seed - 0.5) * 8 * p, ty, tr, tr * 0.58, 0, 0, Math.PI * 2);
-        _ctx.fillStyle = `rgba(${lum},${lum},${blu},${alpha * (0.45 + p * 0.30)})`;
-        _ctx.fill();
+      // Tower: 6 stacked radial blobs, narrowing and brightening upward
+      for (let ti = 0; ti < 6; ti++) {
+        const p  = ti / 5;
+        const ty = base - tower * (p * 0.78 + 0.06);
+        const tr = tW * (1 - p * 0.28) * (0.78 + Math.sin(ti * 1.6 + c.seed * 4) * 0.22);
+        const lum = Math.round(145 + p * 100);
+        const tg = _ctx.createRadialGradient(cx + (c.seed-0.5)*6*p, ty, 0, cx, ty, tr * 2.0);
+        tg.addColorStop(0,   `rgba(${lum},${lum},${lum+8},${alpha*(0.48+p*0.28)})`);
+        tg.addColorStop(0.55,`rgba(${lum},${lum},${lum+5},${alpha*(0.18+p*0.12)})`);
+        tg.addColorStop(1,   `rgba(${lum},${lum},${lum},0)`);
+        _ctx.fillStyle = tg; _ctx.fillRect(cx - tr*2, ty - tr*1.2, tr*4, tr*2.4);
       }
 
-      // Lavender mid-shadow — "a labyrinth of vapor and shadow"
-      _ctx.beginPath();
-      _ctx.ellipse(cx, base - tower * 0.45, towerW * 0.55, tower * 0.30, 0, 0, Math.PI * 2);
-      _ctx.fillStyle = `rgba(155,135,200,${alpha * 0.20})`;
-      _ctx.fill();
+      // Lavender mid-shadow blob
+      const lv = _ctx.createRadialGradient(cx, base - tower*0.44, 0, cx, base - tower*0.44, tW*1.2);
+      lv.addColorStop(0,  `rgba(148,128,195,${alpha * 0.22})`);
+      lv.addColorStop(1,  'rgba(148,128,195,0)');
+      _ctx.fillStyle = lv; _ctx.fillRect(cx - tW*1.2, base - tower*0.44 - tW, tW*2.4, tW*2);
 
-      // Anvil top — flat stratospheric spread, backlit bright
-      _ctx.beginPath();
-      _ctx.ellipse(cx, base - tower * 0.78, cw * 0.62, ch * 0.22, 0, 0, Math.PI * 2);
-      _ctx.fillStyle = `rgba(248,250,255,${alpha * 0.58})`;
-      _ctx.fill();
-      // Anvil bright highlight
-      _ctx.beginPath();
-      _ctx.ellipse(cx - cw*0.08, base - tower*0.80, cw*0.30, ch*0.08, 0, 0, Math.PI*2);
-      _ctx.fillStyle = `rgba(255,255,255,${alpha * 0.36})`;
-      _ctx.fill();
+      // Anvil top: wide flat blob
+      const av = _ctx.createRadialGradient(cx, base - tower*0.80, 0, cx, base - tower*0.80, cw*0.65);
+      av.addColorStop(0,   `rgba(248,250,255,${alpha*0.55})`);
+      av.addColorStop(0.4, `rgba(240,245,255,${alpha*0.22})`);
+      av.addColorStop(1,   'rgba(240,244,255,0)');
+      _ctx.fillStyle = av; _ctx.fillRect(cx - cw*0.65, base - tower*0.80 - ch*0.3, cw*1.3, ch*0.6);
     }
   }
 
@@ -936,21 +926,31 @@ const CanvasScenes = (() => {
   let _panDragX = null;  // drag state
 
   function _initPan() {
-    const el = _canvas;
-    function onDown(e) { _panDragX = (e.touches ? e.touches[0].clientX : e.clientX); }
+    // Listen on document — canvas has pointer-events:none so it can't receive events
+    function onDown(e) {
+      // Ignore clicks on UI elements (buttons, inputs, etc.)
+      if (e.target && e.target !== document.body && e.target.tagName !== 'CANVAS') return;
+      _panDragX = (e.touches ? e.touches[0].clientX : e.clientX);
+    }
     function onMove(e) {
       if (_panDragX === null) return;
       const cx = (e.touches ? e.touches[0].clientX : e.clientX);
-      _panAz = (_panAz - (cx - _panDragX) * 0.15 + 360) % 360;
+      const delta = cx - _panDragX;
+      _panAz = (_panAz - delta * 0.12 + 360) % 360;
+      // Shift cloud/aurora x positions with pan (pixel offset mapped to fraction)
+      const frac = delta / (window.innerWidth || 1200) * 0.08;
+      _auroraClusters.forEach(cl => { cl.x = ((cl.x + frac) % 1.4 + 1.4) % 1.4 - 0.1; });
+      _clouds.forEach(c => { c.x = ((c.x + frac) % 1.6 + 1.6) % 1.6 - 0.15; });
       _panDragX = cx;
+      _starPositions = null;  // force star reproject on next frame
     }
     function onUp() { _panDragX = null; }
-    el.addEventListener('mousedown',  onDown);
-    el.addEventListener('mousemove',  onMove);
-    el.addEventListener('mouseup',    onUp);
-    el.addEventListener('touchstart', onDown, { passive: true });
-    el.addEventListener('touchmove',  onMove, { passive: true });
-    el.addEventListener('touchend',   onUp);
+    document.addEventListener('mousedown',  onDown);
+    document.addEventListener('mousemove',  onMove);
+    document.addEventListener('mouseup',    onUp);
+    document.addEventListener('touchstart', onDown, { passive: true });
+    document.addEventListener('touchmove',  onMove, { passive: true });
+    document.addEventListener('touchend',   onUp);
   }
 
   // Cache star positions — recompute every 60 s (stars move slowly)

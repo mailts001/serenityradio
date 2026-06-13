@@ -83,12 +83,12 @@ const AmbientAudio = (() => {
     src.start();
     _waveSource = src;
 
-    // Animate swell with recursive ramps (~7 s per cycle)
+    // Gentle swell — 12 s inhale, 10 s exhale (open ocean, not surf)
     function swell(phase) {
       if (!_ac) return;
-      const peak = phase === 0 ? 1.0 : 0.35;
-      const dur  = phase === 0 ? 3.5 : 3.5;
-      swellGain.gain.setTargetAtTime(peak, _ac.currentTime, dur * 0.5);
+      const peak = phase === 0 ? 1.0 : 0.28;
+      const dur  = phase === 0 ? 12  : 10;
+      swellGain.gain.setTargetAtTime(peak, _ac.currentTime, dur * 0.38);
       setTimeout(() => swell(1 - phase), dur * 1000);
     }
     swell(0);
