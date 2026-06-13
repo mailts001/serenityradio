@@ -111,49 +111,49 @@ const AmbientAudio = (() => {
     _windSource = src;
   }
 
-  // ── Night forest hum — replaces sharp cricket tones ─────────
-  // Uses bandpass-filtered noise modulated at a slow rate, giving
-  // the sense of distant night insects without any piercing frequency.
+  // ── Night depth — deep low-frequency breath, no tonal ringing ──
+  // Rule: nothing above 300 Hz, Q always < 1 (broad = no resonant peak).
+  // The layer sounds like the quiet hum of the earth at night —
+  // felt more than heard, like standing outside under stars.
   function _startCrickets() {
-    // Filtered noise base — warm low-mid band (not high-pitched)
-    const buf = _ac.createBuffer(1, _ac.sampleRate * 4, _ac.sampleRate);
-    const d   = buf.getChannelData(0);
-    for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+    // Two independent noise buffers (different lengths = no loop artefact)
+    function _noiseBuf(secs) {
+      const b = _ac.createBuffer(1, _ac.sampleRate * secs, _ac.sampleRate);
+      const d = b.getChannelData(0);
+      for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+      return b;
+    }
 
-    const src = _ac.createBufferSource();
-    src.buffer = buf; src.loop = true;
+    // Layer A — very deep rumble: lowpass at 80 Hz, Q=0.5 (wide, not tonal)
+    const srcA = _ac.createBufferSource();
+    srcA.buffer = _noiseBuf(5); srcA.loop = true;
+    const lpA = _ac.createBiquadFilter();
+    lpA.type = 'lowpass'; lpA.frequency.value = 80; lpA.Q.value = 0.5;
 
-    // Bandpass centred at 800 Hz — warm, not sharp; Q=4 keeps it narrow/organic
-    const bpf = _ac.createBiquadFilter();
-    bpf.type = 'bandpass'; bpf.frequency.value = 800; bpf.Q.value = 4;
+    // Layer B — gentle low breath: lowpass at 220 Hz, Q=0.7
+    const srcB = _ac.createBufferSource();
+    srcB.buffer = _noiseBuf(7); srcB.loop = true;
+    const lpB = _ac.createBiquadFilter();
+    lpB.type = 'lowpass'; lpB.frequency.value = 220; lpB.Q.value = 0.7;
 
-    // Second, softer layer at 1200 Hz for texture
-    const bpf2 = _ac.createBiquadFilter();
-    bpf2.type = 'bandpass'; bpf2.frequency.value = 1200; bpf2.Q.value = 6;
-
-    // Slow swell LFO — 0.8 Hz — gives the "pulse" of a summer night
-    const lfo    = _ac.createOscillator();
-    const lfoGain = _makeGain(0.45);
-    const dcBias  = _makeGain(0.55);   // keeps gain always positive
-    lfo.frequency.value = 0.8;
-    lfo.type = 'sine';
-
+    const gA = _makeGain(0.55);
+    const gB = _makeGain(0.30);
     const out = _makeGain(1);
     out.connect(_gCrickets);
 
-    const g1 = _makeGain(0.5);
-    const g2 = _makeGain(0.28);
+    srcA.connect(lpA); lpA.connect(gA); gA.connect(out);
+    srcB.connect(lpB); lpB.connect(gB); gB.connect(out);
 
-    src.connect(bpf);  bpf.connect(g1);  g1.connect(out);
-    src.connect(bpf2); bpf2.connect(g2); g2.connect(out);
+    // Very slow swell on layer B: 0.05 Hz = 20-second breath cycle
+    // Implemented with setTargetAtTime ping-pong (no oscillator = no tone)
+    function _breathe(hi) {
+      const target = hi ? 0.38 : 0.12;
+      gB.gain.setTargetAtTime(target, _ac.currentTime, 8);
+      setTimeout(() => _breathe(!hi), 10000);
+    }
+    _breathe(true);
 
-    // LFO modulates g1 gain for the night-pulse feel
-    lfo.connect(lfoGain); lfoGain.connect(g1.gain);
-    // dcBias keeps a constant floor so it never goes silent
-    const dc = _ac.createConstantSource(); dc.offset.value = 0.55;
-    dc.connect(g1.gain);
-    dc.start(); lfo.start(); src.start();
-
+    srcA.start(); srcB.start();
     _cricketOsc = out;
   }
 
@@ -232,20 +232,26 @@ const AmbientAudio = (() => {
     const night = hr < 6 || hr >= 20;
     const dusk = hr >= 18 && hr < 21;
 
-    // Waves: always present; stronger at sleep
-    const waveBase = _mode === 'sleep' ? 0.7 : _mode === 'focus' ? 0.15 : 0.3;
+    // Waves: primary sound at night — ocean carries the night
+    const waveBase = _mode === 'sleep'  ? 0.80
+                   : night              ? 0.65
+                   : _mode === 'focus'  ? 0.15
+                   :                     0.32;
     _ramp(_gWaves, waveBase);
 
-    // Birds: daytime, not sleep mode
-    const birdBase = (_mode === 'sleep' || !day) ? 0 : _mode === 'nature' ? 0.8 : 0.45;
+    // Birds: daytime only, off at night & sleep
+    const birdBase = (_mode === 'sleep' || !day) ? 0
+                   : _mode === 'nature'           ? 0.75
+                   :                               0.42;
     _ramp(_gBirds, birdBase);
 
-    // Crickets: night & dusk
-    const cricketBase = night || dusk ? (_mode === 'nature' ? 0.5 : 0.28) : 0;
-    _ramp(_gCrickets, cricketBase);
+    // Night depth: dusk onward — very subtle, well below waves
+    // Q<1 broad filters = no ringing possible
+    const nightBase = (night || dusk) ? (_mode === 'nature' ? 0.28 : 0.16) : 0;
+    _ramp(_gCrickets, nightBase);
 
-    // Wind: subtle always
-    const windBase = _mode === 'focus' ? 0.08 : 0.12;
+    // Wind: barely there
+    const windBase = _mode === 'focus' ? 0.06 : 0.09;
     _ramp(_gWind, windBase);
   }
 

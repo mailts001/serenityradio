@@ -231,5 +231,10 @@ const Auth = (() => {
            openMenu, openUpgrade, checkout, logout, closeModal, headers };
 })();
 
-// Auto-init
-document.addEventListener('DOMContentLoaded', () => Auth.init());
+// Auto-init — handle both early and late script loading
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', () => Auth.init());
+} else {
+  // DOM already parsed (script is at bottom of body) — init immediately
+  Auth.init();
+}

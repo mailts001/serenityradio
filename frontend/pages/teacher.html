@@ -167,13 +167,13 @@ h2{font-size:1.3rem;margin-bottom:1rem;color:var(--sage-l);}
 <script>
 let _userId = null, _playlists = [], _editPlaylistId = null, _editTracks = [];
 
-document.addEventListener('auth:changed', async e => {
-  if (!e.detail) {
+function _applyAuthState(user) {
+  if (!user) {
     document.getElementById('hero-section').style.display = 'block';
     document.getElementById('app-section').style.display  = 'none';
     return;
   }
-  _userId = e.detail.id;
+  _userId = user.id;
   document.getElementById('hero-section').style.display = 'none';
   document.getElementById('app-section').style.display  = 'block';
   if (!Auth.isTeacher()) {
@@ -183,7 +183,12 @@ document.addEventListener('auth:changed', async e => {
   loadPlaylists();
   loadStats();
   loadEmbedCode();
-});
+}
+
+document.addEventListener('auth:changed', e => _applyAuthState(e.detail));
+
+// Fallback: if auth already resolved before this script ran, apply immediately
+if (Auth.user() !== undefined) _applyAuthState(Auth.user());
 
 function showTab(name, el) {
   document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
