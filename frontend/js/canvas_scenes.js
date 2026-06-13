@@ -91,10 +91,12 @@ const CanvasScenes = (() => {
   function _drawSky(hr, mode) {
     const w = _canvas.width, h = _canvas.height;
     const p = _skyPalette(hr, mode);
+    // Sky gradient fills entire canvas — water is drawn ON TOP, not adjacent
     const g = _ctx.createLinearGradient(0, 0, 0, h);
-    g.addColorStop(0,   p.top);
-    g.addColorStop(0.45, p.mid);
-    g.addColorStop(1,   p.bot);
+    g.addColorStop(0,    p.top);
+    g.addColorStop(0.42, p.mid);
+    g.addColorStop(0.75, p.bot);
+    g.addColorStop(1,    p.bot);   // hold horizon colour to very bottom
     _ctx.fillStyle = g;
     _ctx.fillRect(0, 0, w, h);
 
@@ -281,65 +283,149 @@ const CanvasScenes = (() => {
     const layers = mode === 'nature' ? 5 : mode === 'sleep' ? 4 : 3;
     const baseDensity = mode === 'nature' ? 0.055 : mode === 'sleep' ? 0.05 : 0.032;
 
+    // Each mist layer is a sinuous blob path — not a rectangle
     for (let i = 0; i < layers; i++) {
-      const yFrac = 0.45 + i * 0.12;
-      const drift  = Math.sin(t * 0.003 + i * 1.8) * 0.012;
-      const alpha  = baseDensity * (0.7 + 0.3 * Math.sin(t * 0.005 + i * 2.1));
-      const mg = _ctx.createLinearGradient(0, h * (yFrac - 0.06), 0, h * (yFrac + 0.06));
-      mg.addColorStop(0,   'rgba(180,210,195,0)');
-      mg.addColorStop(0.4, `rgba(180,210,195,${alpha})`);
-      mg.addColorStop(0.6, `rgba(180,210,195,${alpha * 0.8})`);
-      mg.addColorStop(1,   'rgba(180,210,195,0)');
-      _ctx.fillStyle = mg;
-      // Slight horizontal pan
+      const cy    = h * (0.52 + i * 0.10);
+      const drift = Math.sin(t * 0.003 + i * 1.8) * w * 0.015;
+      const alpha = baseDensity * (0.6 + 0.4 * Math.sin(t * 0.004 + i * 2.1));
+      const spread = h * (0.055 + i * 0.01);
+
       _ctx.save();
-      _ctx.translate(drift * w, 0);
-      _ctx.fillRect(-w * 0.1, h * (yFrac - 0.06), w * 1.2, h * 0.12);
+      _ctx.translate(drift, 0);
+      // Build a wavy top and bottom edge for the mist ribbon
+      _ctx.beginPath();
+      const step = 18;
+      // Top edge — gentle undulation
+      _ctx.moveTo(-w * 0.05, cy - spread + Math.sin(0 * 0.012 + t * 0.004 + i) * 8);
+      for (let x = step; x <= w * 1.1; x += step) {
+        const yt = cy - spread + Math.sin(x * 0.009 + t * 0.004 + i * 1.3) * 10;
+        _ctx.lineTo(x, yt);
+      }
+      // Bottom edge — different undulation, close path
+      for (let x = w * 1.1; x >= -w * 0.05; x -= step) {
+        const yb = cy + spread + Math.sin(x * 0.011 + t * 0.003 + i * 0.9) * 8;
+        _ctx.lineTo(x, yb);
+      }
+      _ctx.closePath();
+
+      // Radial-ish gradient across the blob height
+      const mg = _ctx.createLinearGradient(0, cy - spread, 0, cy + spread);
+      mg.addColorStop(0,    'rgba(190,215,200,0)');
+      mg.addColorStop(0.35, `rgba(190,215,200,${alpha})`);
+      mg.addColorStop(0.65, `rgba(190,215,200,${alpha * 0.7})`);
+      mg.addColorStop(1,    'rgba(190,215,200,0)');
+      _ctx.fillStyle = mg;
+      _ctx.fill();
       _ctx.restore();
     }
   }
 
   // ── Water shimmer ──────────────────────────────────────────
+  // Pre-computed wave parameters — stable across frames, organic variety
+  const _waveParams = Array.from({length: 7}, (_, i) => ({
+    freq:      0.0028 + i * 0.0007 + Math.random() * 0.0004,
+    freq2:     0.0051 + i * 0.0005 + Math.random() * 0.0003, // second harmonic
+    speed:     0.008  + i * 0.0018 + Math.random() * 0.001,
+    speed2:    0.013  + i * 0.0012 + Math.random() * 0.0008,
+    phase:     Math.random() * Math.PI * 2,
+    phase2:    Math.random() * Math.PI * 2,
+    depthFrac: 0.04   + i * 0.055,   // distance below horizon (fraction of water height)
+    amp:       2.5    + i * 1.8,     // base amplitude px
+  }));
+
+  function _waveY(p, x, t, waterH) {
+    // Two superimposed sine waves per layer — breaks single-frequency rigidity
+    return p.amp * (
+      Math.sin(x * p.freq  + t * p.speed  + p.phase)  * 0.65 +
+      Math.sin(x * p.freq2 + t * p.speed2 + p.phase2) * 0.35
+    );
+  }
+
   function _drawWater(t, hr, mode) {
     const w = _canvas.width, h = _canvas.height;
-    const waterTop = h * (mode === 'sleep' ? 0.72 : 0.80);
-    const waveCount = mode === 'sleep' ? 6 : 4;
-    const waveAlpha = mode === 'sleep' ? 0.10 : 0.055;
 
-    // Dark water base
-    const wg = _ctx.createLinearGradient(0, waterTop, 0, h);
-    wg.addColorStop(0, 'rgba(10,20,40,0)');
-    wg.addColorStop(0.3, `rgba(8,16,35,0.5)`);
-    wg.addColorStop(1, 'rgba(4,8,20,0.85)');
-    _ctx.fillStyle = wg;
-    _ctx.fillRect(0, waterTop, w, h - waterTop);
+    // Horizon sits at ~78% down; sleep pushes it to ~68%
+    const horizonY = h * (mode === 'sleep' ? 0.68 : 0.78);
+    const waterH   = h - horizonY;
+    const sleepAmp = mode === 'sleep' ? 2.2 : 1.0;
 
-    // Wave ripples
-    for (let i = 0; i < waveCount; i++) {
-      const amp   = (mode === 'sleep' ? 10 : 4) + i * 3;
-      const freq  = 0.006 - i * 0.0005;
-      const phase = t * (0.012 - i * 0.002) + i * 1.4;
-      const yBase = waterTop + (h - waterTop) * (i * 0.15);
+    // ── Surface: organic wave edge blended into sky, NO hard line ──
+    // Draw from bottom up through wave layers.
+    // Each layer's top edge is a sine curve — they overlap softly.
+
+    // Sky reflection colour (mirrors sky bottom)
+    const p = _skyPalette(hr, mode);
+    const skyBot = p.bot; // hex like #5a90cc
+
+    // Dark deep-water fill — starts transparent at horizon, opaque at base
+    const depthGrad = _ctx.createLinearGradient(0, horizonY - 30, 0, h);
+    depthGrad.addColorStop(0,    'rgba(8,16,36,0)');      // invisible at horizon — sky bleeds through
+    depthGrad.addColorStop(0.12, 'rgba(8,16,36,0.35)');
+    depthGrad.addColorStop(0.5,  'rgba(6,12,28,0.72)');
+    depthGrad.addColorStop(1,    'rgba(3,7,18,0.92)');
+    _ctx.fillStyle = depthGrad;
+    _ctx.fillRect(0, horizonY - 30, w, h - horizonY + 30);
+
+    // Wave layers — painted back-to-front, each slightly darker/more opaque
+    const layers = mode === 'sleep' ? 7 : 5;
+    for (let i = 0; i < layers; i++) {
+      const wp    = _waveParams[i];
+      const baseY = horizonY + waterH * wp.depthFrac;
+      const amp   = wp.amp * sleepAmp * (1 - i * 0.06); // gentle decrease with depth
+      const alpha = 0.06 + i * 0.04;
+
       _ctx.beginPath();
-      _ctx.moveTo(0, yBase);
-      for (let x = 0; x <= w; x += 4) {
-        _ctx.lineTo(x, yBase + Math.sin(x * freq + phase) * amp);
+      _ctx.moveTo(0, baseY + _waveY(wp, 0, t, waterH) * sleepAmp);
+      for (let x = 3; x <= w; x += 3) {
+        _ctx.lineTo(x, baseY + _waveY(wp, x, t, waterH) * sleepAmp);
       }
       _ctx.lineTo(w, h); _ctx.lineTo(0, h); _ctx.closePath();
-      _ctx.fillStyle = `rgba(20,50,100,${waveAlpha - i * 0.008})`;
+
+      // Colour shifts from sky-tinted near surface → deeper blue below
+      const surfaceTint = i < 2 ? 0.18 - i * 0.06 : 0;
+      _ctx.fillStyle = `rgba(${12 + i*4},${28 + i*8},${55 + i*6},${alpha})`;
       _ctx.fill();
+
+      // First (topmost) layer gets a sky-coloured sheen — blends horizon in
+      if (i === 0) {
+        _ctx.beginPath();
+        _ctx.moveTo(0, baseY + _waveY(wp, 0, t, waterH) * sleepAmp);
+        for (let x = 3; x <= w; x += 3) {
+          _ctx.lineTo(x, baseY + _waveY(wp, x, t, waterH) * sleepAmp);
+        }
+        _ctx.lineTo(w, baseY + 3); _ctx.lineTo(0, baseY + 3); _ctx.closePath();
+        // Thin luminous crest — catches light like real water
+        _ctx.fillStyle = `rgba(160,200,240,0.07)`;
+        _ctx.fill();
+      }
     }
 
-    // Light reflection on water surface
-    if (hr >= 5.5 && hr <= 19.5 || mode === 'sleep') {
-      const reflAlpha = mode === 'sleep'
-        ? 0.04
-        : Math.sin(((hr - 5.5) / 14) * Math.PI) * 0.06;
-      const rg = _ctx.createLinearGradient(0, waterTop, 0, waterTop + 40);
-      rg.addColorStop(0, `rgba(160,190,220,${reflAlpha})`);
-      rg.addColorStop(1, 'rgba(160,190,220,0)');
-      _ctx.fillStyle = rg;
-      _ctx.fillRect(0, waterTop, w, 40);
+    // ── Horizon softener — melts sky into water, eliminates hard edge ──
+    const blend = _ctx.createLinearGradient(0, horizonY - h * 0.06, 0, horizonY + h * 0.06);
+    blend.addColorStop(0,   'rgba(0,0,0,0)');           // pure sky above
+    blend.addColorStop(0.38,'rgba(8,18,42,0)');
+    blend.addColorStop(0.55,'rgba(8,18,42,0.18)');      // gentle darkening
+    blend.addColorStop(1,   'rgba(6,14,32,0.55)');
+    _ctx.fillStyle = blend;
+    _ctx.fillRect(0, horizonY - h * 0.06, w, h * 0.12);
+
+    // ── Sun / moon sparkle path on water ──
+    if (hr >= 5.5 && hr < 19.5) {
+      const dayAlpha = Math.sin(((hr - 5.5) / 14) * Math.PI) * 0.10;
+      const sparkGrad = _ctx.createLinearGradient(0, horizonY, 0, horizonY + waterH * 0.4);
+      sparkGrad.addColorStop(0,   `rgba(220,235,255,${dayAlpha})`);
+      sparkGrad.addColorStop(0.5, `rgba(200,220,255,${dayAlpha * 0.3})`);
+      sparkGrad.addColorStop(1,   'rgba(200,220,255,0)');
+      _ctx.fillStyle = sparkGrad;
+      _ctx.fillRect(0, horizonY, w, waterH * 0.4);
+    } else if (hr < 5.5 || hr >= 19) {
+      // Moonlit shimmer
+      const moonAlpha = 0.035;
+      const mg = _ctx.createLinearGradient(0, horizonY, 0, horizonY + waterH * 0.3);
+      mg.addColorStop(0,   `rgba(180,200,240,${moonAlpha})`);
+      mg.addColorStop(1,   'rgba(180,200,240,0)');
+      _ctx.fillStyle = mg;
+      _ctx.fillRect(0, horizonY, w, waterH * 0.3);
     }
   }
 
