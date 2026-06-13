@@ -26,6 +26,7 @@ const CanvasScenes = (() => {
     _resize();
     window.addEventListener('resize', _resize);
     _initPools();
+    _initPan();
   }
 
   function _resize() {
@@ -114,20 +115,14 @@ const CanvasScenes = (() => {
       _ctx.fillStyle = hg;
       _ctx.fillRect(0, h * 0.42, w, h * 0.3);
     } else if (hr >= 8 && hr < 17) {
-      // Bright tropical day — strong light haze band at horizon
-      const peak = 0.22 + 0.10 * Math.sin(((hr - 8) / 9) * Math.PI);
-      const hg = _ctx.createLinearGradient(0, h * 0.48, 0, h * 0.80);
-      hg.addColorStop(0,   `rgba(220,240,255,${peak})`);
-      hg.addColorStop(0.4, `rgba(200,225,255,${peak * 0.55})`);
-      hg.addColorStop(1,   'rgba(180,210,245,0)');
+      // Bright tropical day haze — strictly clipped to sky (above horizon = h*0.65)
+      const peak = 0.16 + 0.07 * Math.sin(((hr - 8) / 9) * Math.PI);
+      const hg = _ctx.createLinearGradient(0, h * 0.40, 0, h * 0.65);
+      hg.addColorStop(0,   `rgba(220,240,255,0)`);
+      hg.addColorStop(0.5, `rgba(210,232,255,${peak})`);
+      hg.addColorStop(1,   'rgba(200,225,255,0)');  // fades to zero AT horizon
       _ctx.fillStyle = hg;
-      _ctx.fillRect(0, h * 0.48, w, h * 0.32);
-      // Extra sun-scattering brightness just above waterline
-      const sg = _ctx.createLinearGradient(0, h * 0.70, 0, h * 0.85);
-      sg.addColorStop(0, `rgba(255,248,230,${peak * 0.35})`);
-      sg.addColorStop(1, 'rgba(255,240,200,0)');
-      _ctx.fillStyle = sg;
-      _ctx.fillRect(0, h * 0.70, w, h * 0.15);
+      _ctx.fillRect(0, h * 0.40, w, h * 0.25);     // ends exactly at h*0.65
     } else if (hr >= 17 && hr <= 20) {
       // Sunset warm band
       const i = Math.sin(((hr - 17) / 3) * Math.PI) * 0.38;
@@ -218,21 +213,7 @@ const CanvasScenes = (() => {
     const starAlpha = Math.min(1, nightness + (mode === 'sleep' ? 0.4 : 0));
 
     if (starAlpha > 0.02) {
-      if (!_stars) {
-        _stars = Array.from({length: 160}, () => ({
-          x: Math.random(), y: Math.random() * 0.6,
-          r: 0.4 + Math.random() * 1.1,
-          phase: Math.random() * Math.PI * 2,
-          speed: 0.008 + Math.random() * 0.012,
-        }));
-      }
-      _stars.forEach(s => {
-        const a = starAlpha * (0.45 + 0.45 * Math.sin(t * s.speed + s.phase));
-        _ctx.beginPath();
-        _ctx.arc(s.x * w, s.y * h, s.r, 0, Math.PI * 2);
-        _ctx.fillStyle = `rgba(220,225,255,${a})`;
-        _ctx.fill();
-      });
+      _drawRealStars(t, hr, mode, nightness);
     }
 
     // Moon arc — rises right ~20h, peaks ~1am, sets left ~6am
@@ -286,8 +267,10 @@ const CanvasScenes = (() => {
     const baseDensity = mode === 'nature' ? 0.055 : mode === 'sleep' ? 0.05 : 0.032;
 
     // Each mist layer is a sinuous blob path — not a rectangle
+    const horizonY = h * 0.65;  // hard ceiling — mist never crosses into water
     for (let i = 0; i < layers; i++) {
-      const cy    = h * (0.52 + i * 0.10);
+      const cy    = h * (0.36 + i * 0.07);  // stays in upper sky, well above horizon
+      if (cy > horizonY * 0.90) continue;   // skip any layer that would bleed over
       const drift = Math.sin(t * 0.003 + i * 1.8) * w * 0.015;
       const alpha = baseDensity * (0.6 + 0.4 * Math.sin(t * 0.004 + i * 2.1));
       const spread = h * (0.055 + i * 0.01);
@@ -893,63 +876,187 @@ const CanvasScenes = (() => {
   // ── Surreal sky lights — subtle, otherworldly, calming ───────
   // A few slow-breathing luminous forms drifting through the sky.
   // No hard edges, no animals — just light and atmosphere.
-  const _skyLights = Array.from({length: 5}, (_, i) => ({
-    x:      0.1 + i * 0.20 + Math.random() * 0.10,   // spread across sky
-    y:      0.06 + Math.random() * 0.36,              // upper 40% of canvas (sky only)
-    vx:     (Math.random() > 0.5 ? 1 : -1) * (0.000025 + Math.random() * 0.000020),
-    phase:  Math.random() * Math.PI * 2,
-    pulse:  0.008 + Math.random() * 0.006,
-    rBase:  Math.min(window.innerWidth, window.innerHeight) * (0.08 + Math.random() * 0.10),
-    // Colour family — rotate between soft aurora tones
-    hue:    [200, 230, 180, 260, 210][i],   // sky-blue, periwinkle, sage, lavender, cyan
-    sat:    55 + Math.random() * 25,
+  // ── Real star catalog (J2000) — [RA°, Dec°, magnitude, name] ──
+  const _starCat = [
+    [101.29, -16.72, -1.46,'Sirius'],   [95.99, -52.70, -0.72,'Canopus'],
+    [213.92,  19.18, -0.05,'Arcturus'], [279.23,  38.78,  0.03,'Vega'],
+    [79.17,   45.99,  0.08,'Capella'],  [78.63,   -8.20,  0.12,'Rigel'],
+    [114.83,   5.22,  0.34,'Procyon'],  [88.79,    7.41,  0.42,'Betelgeuse'],
+    [24.43,  -57.24,  0.46,'Achernar'],[210.96, -60.37,  0.61,'Hadar'],
+    [297.70,   8.87,  0.76,'Altair'],   [186.65, -63.10,  0.77,'Acrux'],
+    [68.98,   16.51,  0.85,'Aldebaran'],[201.30, -11.16,  0.97,'Spica'],
+    [247.35, -26.43,  1.06,'Antares'], [116.33,  28.03,  1.14,'Pollux'],
+    [344.41, -29.62,  1.16,'Fomalhaut'],[310.36,  45.28,  1.25,'Deneb'],
+    [152.09,  11.97,  1.35,'Regulus'], [104.66, -28.97,  1.50,'Adhara'],
+    [81.28,    6.35,  1.64,'Bellatrix'],[84.05,  -1.20,  1.70,'Alnilam'],
+    [85.19,   -1.94,  1.74,'Alnitak'], [276.04, -34.38,  1.85,'Kaus Aust'],
+    [263.40, -37.10,  1.62,'Shaula'],  [141.90,  -8.66,  1.99,'Alphard'],
+    [283.82, -26.30,  2.02,'Nunki'],   [187.79, -57.11,  1.59,'Gacrux'],
+    [191.93, -59.69,  1.25,'Mimosa'],  [193.51,  55.96,  1.76,'Alioth'],
+    [206.89,  49.31,  1.85,'Alkaid'],  [165.93,  61.75,  1.79,'Dubhe'],
+    [252.17, -69.03,  1.91,'Atria'],   [306.41, -56.74,  1.94,'Peacock'],
+    [37.95,   89.26,  1.97,'Polaris'], [31.79,   23.46,  2.00,'Hamal'],
+    [10.90,  -17.99,  2.02,'Diphda'],  [200.98,  54.93,  2.04,'Mizar'],
+    [154.99,  19.84,  2.01,'Algieba'], [65.74,   16.51,  2.87,'Alcyone'],
+    [113.65,  31.89,  1.57,'Castor'],  [131.18, -54.71,  1.96,'Alsephina'],
+  ];
+  // Singapore: lat 1.352°N, lon 103.820°E
+  const _LAT = 1.352 * Math.PI / 180;
+  const _LON = 103.820;
+
+  function _lst() {
+    const jd  = Date.now() / 86400000 + 2440587.5;
+    const T   = (jd - 2451545) / 36525;
+    const g   = (280.46061837 + 360.98564736629 * (jd - 2451545) + 0.000387933 * T * T);
+    return ((g % 360 + 360) % 360 + _LON + 360) % 360;   // LST in degrees
+  }
+
+  // Convert RA/Dec → screen x,y. Returns null if below horizon or off-screen.
+  // panAz: azimuth center of view in degrees (180 = looking south)
+  function _starScreen(ra, dec, panAz, w, h) {
+    const ha   = (_lst() - ra + 360) % 360;
+    const haR  = ha  * Math.PI / 180;
+    const decR = dec * Math.PI / 180;
+    const alt  = Math.asin(Math.sin(decR)*Math.sin(_LAT) + Math.cos(decR)*Math.cos(_LAT)*Math.cos(haR));
+    if (alt < 0) return null;   // below horizon
+    const az   = Math.atan2(Math.sin(haR), Math.cos(haR)*Math.sin(_LAT) - Math.tan(decR)*Math.cos(_LAT));
+    const azDeg = ((az * 180 / Math.PI) + 180 + 360) % 360;
+    // Relative azimuth from view centre, wrapped to -180..180
+    let relAz = ((azDeg - panAz + 540) % 360) - 180;
+    // Field of view ±90°; beyond ±100° is off-screen
+    if (Math.abs(relAz) > 100) return null;
+    const altFrac = alt / (Math.PI / 2);           // 0 (horizon) → 1 (zenith)
+    const hy  = h * 0.65;
+    const sx  = w * 0.5 + (relAz / 90) * w * 0.5;
+    const sy  = hy * (1 - altFrac);                 // zenith at top, horizon at hy
+    return { sx, sy };
+  }
+
+  let _panAz    = 180;   // view azimuth (degrees); 180 = looking south
+  let _panDragX = null;  // drag state
+
+  function _initPan() {
+    const el = _canvas;
+    function onDown(e) { _panDragX = (e.touches ? e.touches[0].clientX : e.clientX); }
+    function onMove(e) {
+      if (_panDragX === null) return;
+      const cx = (e.touches ? e.touches[0].clientX : e.clientX);
+      _panAz = (_panAz - (cx - _panDragX) * 0.15 + 360) % 360;
+      _panDragX = cx;
+    }
+    function onUp() { _panDragX = null; }
+    el.addEventListener('mousedown',  onDown);
+    el.addEventListener('mousemove',  onMove);
+    el.addEventListener('mouseup',    onUp);
+    el.addEventListener('touchstart', onDown, { passive: true });
+    el.addEventListener('touchmove',  onMove, { passive: true });
+    el.addEventListener('touchend',   onUp);
+  }
+
+  // Cache star positions — recompute every 60 s (stars move slowly)
+  let _starPositions = null, _starPosTime = 0;
+  function _getStarPositions(w, h) {
+    if (Date.now() - _starPosTime > 60000) {
+      _starPositions = _starCat.map(([ra, dec, mag, name]) => {
+        const pos = _starScreen(ra, dec, _panAz, w, h);
+        return pos ? { sx: pos.sx, sy: pos.sy, mag, name } : null;
+      }).filter(Boolean);
+      _starPosTime = Date.now();
+    }
+    // Re-apply pan to cached positions cheaply (pan changes sx only)
+    return _starPositions;
+  }
+
+  // ── Draw real stars (night / sleep mode) ─────────────────────
+  function _drawRealStars(t, hr, mode, nightness) {
+    if (nightness < 0.05 && mode !== 'sleep') return;
+    const w = _canvas.width, h = _canvas.height;
+    // Invalidate cache on pan change so stars re-project immediately
+    _starPositions = null;
+    const stars = _getStarPositions(w, h);
+    const alpha = Math.min(0.98, nightness * 1.1 + (mode === 'sleep' ? 0.3 : 0));
+
+    stars.forEach(s => {
+      const twinkle = 0.75 + 0.25 * Math.sin(t * 0.015 + s.mag * 3.7);
+      const a = alpha * twinkle;
+      const r = Math.max(0.5, 2.8 - s.mag * 0.85);   // bright star = larger dot
+      // Soft glow for very bright stars (mag < 1)
+      if (s.mag < 1.0) {
+        const glow = _ctx.createRadialGradient(s.sx, s.sy, 0, s.sx, s.sy, r * 5);
+        glow.addColorStop(0, `rgba(230,240,255,${a * 0.35})`);
+        glow.addColorStop(1, 'rgba(200,220,255,0)');
+        _ctx.fillStyle = glow;
+        _ctx.fillRect(s.sx - r*5, s.sy - r*5, r*10, r*10);
+      }
+      _ctx.beginPath();
+      _ctx.arc(s.sx, s.sy, r, 0, Math.PI * 2);
+      // Colour tint: blue-white for hot stars, warm yellow for cool (rough)
+      const starHue = s.mag < 0.5 ? '220,235,255' : s.mag < 1.5 ? '230,240,255' : '255,248,230';
+      _ctx.fillStyle = `rgba(${starHue},${a})`;
+      _ctx.fill();
+    });
+  }
+
+  // ── Aurora wisps — horizontal curtains, grouped, not circles ──
+  // 3 clusters of 2-3 overlapping elongated wisps per cluster.
+  const _auroraClusters = Array.from({length: 3}, (_, ci) => ({
+    x:    0.15 + ci * 0.34,
+    y:    0.06 + ci * 0.04 + Math.random() * 0.10,
+    vx:   (ci % 2 ? 1 : -1) * (0.000012 + Math.random() * 0.000010),
+    hues: [[195,220],[250,195],[175,205]][ci],  // two hues per cluster for shimmer
+    wisps: Array.from({length: 2 + (ci === 1 ? 1 : 0)}, (_, wi) => ({
+      dxF:  (wi - 0.5) * 0.14,       // x offset as fraction of w
+      dyF:   wi        * 0.018,
+      wF:   0.28 + wi  * 0.08,        // width fraction of w
+      hF:   0.022 + wi * 0.006,       // height fraction of h
+      phase: Math.random() * Math.PI * 2,
+      pulse: 0.005 + Math.random() * 0.004,
+    })),
   }));
 
   function _drawSkyLights(t, hr, mode) {
+    if (mode === 'focus') return;
     const w = _canvas.width, h = _canvas.height;
-    const hy = h * (mode === 'sleep' ? 0.60 : 0.65);
+    const hy = h * 0.65;
 
-    // Only draw within the sky region (above horizon)
-    // Brightness: very subtle during full daylight, more visible at dusk/dawn/night
-    const isFullDay = hr >= 9 && hr < 16;
-    const baseAlpha = isFullDay ? 0.028 : (hr >= 5.5 && hr < 9) || (hr >= 16 && hr < 20)
-      ? 0.065   // dawn/dusk — dreamy pastel glow
-      : 0.090;  // night/sleep — quiet aurora shimmer
+    const isDay = hr >= 9 && hr < 16;
+    const baseAlpha = isDay ? 0.020
+                    : (hr >= 6 && hr < 9) || (hr >= 16 && hr < 20) ? 0.055
+                    : 0.080;
 
-    if (mode === 'focus') return; // focus = clean sky
+    _auroraClusters.forEach(cl => {
+      cl.x += cl.vx;
+      if (cl.x < -0.2) cl.x = 1.2;
+      if (cl.x >  1.2) cl.x = -0.2;
 
-    _skyLights.forEach(sl => {
-      // Drift slowly across sky
-      sl.x += sl.vx;
-      if (sl.x < -0.15) sl.x = 1.15;
-      if (sl.x >  1.15) sl.x = -0.15;
+      cl.wisps.forEach(ws => {
+        const cy = (cl.y + ws.dyF) * h;
+        if (cy > hy * 0.88) return;   // never cross into water
 
-      const cx = sl.x * w;
-      const cy = sl.y * h;
+        const breath = (Math.sin(t * ws.pulse + ws.phase) + 1) / 2;
+        const alpha  = baseAlpha * (0.35 + 0.65 * breath);
+        if (alpha < 0.005) return;
 
-      // Only render if above horizon
-      if (cy > hy * 0.92) return;
+        const cx  = (cl.x + ws.dxF) * w;
+        const rw  = ws.wF * w;    // wide
+        const rh  = ws.hF * h;    // tall (small) — elongated horizontal wisp
 
-      // Breathing pulse — slow sine, each light independent
-      const breath = (Math.sin(t * sl.pulse + sl.phase) + 1) / 2;  // 0→1
-      const alpha  = baseAlpha * (0.4 + 0.6 * breath);
-      const r      = sl.rBase * (0.75 + 0.25 * breath);
+        // Gradient fades to zero at both ends (horizontal) and top/bottom (vertical)
+        // Use ellipse clipping so it's a proper soft-edged oval, not a rectangle band
+        _ctx.save();
+        _ctx.beginPath();
+        _ctx.ellipse(cx, cy, rw, rh, 0, 0, Math.PI * 2);
+        _ctx.clip();
 
-      // Outer glow — very large, near-invisible radial wash
-      const outer = _ctx.createRadialGradient(cx, cy, 0, cx, cy, r * 2.8);
-      outer.addColorStop(0,   `hsla(${sl.hue},${sl.sat}%,80%,${alpha * 0.55})`);
-      outer.addColorStop(0.4, `hsla(${sl.hue},${sl.sat}%,75%,${alpha * 0.22})`);
-      outer.addColorStop(1,   `hsla(${sl.hue},${sl.sat}%,70%,0)`);
-      _ctx.fillStyle = outer;
-      _ctx.fillRect(cx - r*2.8, cy - r*2.8, r*5.6, r*5.6);
-
-      // Inner core — a soft luminous heart
-      const inner = _ctx.createRadialGradient(cx, cy, 0, cx, cy, r * 0.6);
-      inner.addColorStop(0,   `hsla(${sl.hue},${sl.sat+10}%,95%,${alpha * 0.70})`);
-      inner.addColorStop(0.5, `hsla(${sl.hue},${sl.sat}%,82%,${alpha * 0.30})`);
-      inner.addColorStop(1,   `hsla(${sl.hue},${sl.sat}%,75%,0)`);
-      _ctx.fillStyle = inner;
-      _ctx.fillRect(cx - r*0.6, cy - r*0.6, r*1.2, r*1.2);
+        const g = _ctx.createRadialGradient(cx, cy, 0, cx, cy, rw);
+        g.addColorStop(0,    `hsla(${cl.hues[0]},70%,88%,${alpha})`);
+        g.addColorStop(0.35, `hsla(${cl.hues[1]},60%,80%,${alpha * 0.55})`);
+        g.addColorStop(0.70, `hsla(${cl.hues[0]},55%,78%,${alpha * 0.18})`);
+        g.addColorStop(1,    `hsla(${cl.hues[1]},50%,75%,0)`);
+        _ctx.fillStyle = g;
+        _ctx.fillRect(cx - rw, cy - rh, rw * 2, rh * 2);
+        _ctx.restore();
+      });
     });
   }
 
