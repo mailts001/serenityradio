@@ -171,6 +171,41 @@
 
   @media(max-width:600px){.header-actions{position:static;justify-content:center;margin-top:1rem;}.controls{gap:.75rem;}}
   @media(prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms !important;transition-duration:.01ms !important;}}
+
+  /* ── Cinema mode ── */
+  body.cinema-mode > *:not(#cinema-overlay):not(#bg-canvas) { display: none !important; }
+  #bg-canvas { z-index: 0; }
+  #cinema-overlay {
+    display: none;
+    position: fixed; inset: 0; z-index: 10;
+    flex-direction: column; align-items: center; justify-content: flex-end;
+    padding-bottom: 2.5rem;
+    background: linear-gradient(to top, rgba(0,0,0,0.45) 0%, transparent 35%);
+  }
+  body.cinema-mode #cinema-overlay { display: flex; }
+  .cinema-pill {
+    display: flex; align-items: center; gap: 16px;
+    background: rgba(10,15,30,0.65); backdrop-filter: blur(14px);
+    border: 1px solid rgba(255,255,255,0.12);
+    border-radius: 50px; padding: 12px 24px;
+    color: #e8e0d5; font-size: 14px;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+  }
+  .cinema-pill button {
+    background: none; border: none; cursor: pointer;
+    color: rgba(255,255,255,0.7); font-size: 20px; padding: 2px 4px;
+    transition: color .2s;
+  }
+  .cinema-pill button:hover { color: #fff; }
+  .cinema-track { max-width: 220px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; opacity: .85; }
+  .cinema-exit {
+    position: fixed; top: 1.2rem; right: 1.5rem; z-index: 11;
+    background: rgba(10,15,30,0.55); backdrop-filter: blur(8px);
+    border: 1px solid rgba(255,255,255,0.15); border-radius: 20px;
+    color: rgba(255,255,255,0.6); font-size: 12px; padding: 6px 14px;
+    cursor: pointer; transition: color .2s;
+  }
+  .cinema-exit:hover { color: #fff; }
 </style>
 <link rel="stylesheet" href="/css/moat.css">
 <link rel="stylesheet" href="/css/moat2.css">
@@ -178,6 +213,18 @@
 </head>
 <body>
 <canvas id="bg-canvas"></canvas>
+
+<!-- Cinema mode overlay — floating mini-player shown when UI is hidden -->
+<div id="cinema-overlay">
+  <button class="cinema-exit" onclick="toggleCinema()">✕ Exit Cinema</button>
+  <div class="cinema-pill">
+    <button onclick="prevTrack()" title="Previous">⏮</button>
+    <button onclick="togglePlay()" id="cinema-play-btn" title="Play/Pause">▶</button>
+    <button onclick="nextTrack()" title="Next">⏭</button>
+    <span class="cinema-track" id="cinema-track-name">Serenity Radio</span>
+    <button onclick="toggleCinema()" title="Exit cinema" style="font-size:15px;opacity:.6">⛶</button>
+  </div>
+</div>
 <div class="breath-orb"></div>
 
 <div class="page">
@@ -234,6 +281,7 @@
       <button class="ctrl-btn" onclick="prevTrack()"><svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path d="M6 6h2v12H6zm3.5 6 8.5 6V6z"/></svg></button>
       <button class="play-btn" id="play-btn" onclick="togglePlay()"><svg id="play-icon" width="24" height="24" viewBox="0 0 24 24" fill="white"><path d="M8 5v14l11-7z"/></svg></button>
       <button class="ctrl-btn" onclick="nextTrack()"><svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path d="M6 18l8.5-6L6 6v12zm2-8.14L11.03 12 8 14.14V9.86zM16 6h2v12h-2z"/></svg></button>
+      <button class="ctrl-btn" id="cinema-btn" onclick="toggleCinema()" title="Cinema mode — hide UI, enjoy the scenery">⛶</button>
       <button class="fav-btn ctrl-btn" id="fav-current-btn" title="Add to favorites"
         onclick="typeof Favorites!=='undefined'&&Favorites.toggle(this.dataset.src,this.dataset.title,this.dataset.artist,this.dataset.channel)">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>
@@ -1070,6 +1118,34 @@ document.addEventListener('auth:changed', function(e) {
 });
 </script>
 <script>
+// ── Cinema mode ──────────────────────────────────────────────
+function toggleCinema() {
+  const on = document.body.classList.toggle('cinema-mode');
+  const btn = document.getElementById('cinema-btn');
+  if (btn) btn.style.color = on ? 'var(--sage-light)' : '';
+  // Sync mini-player play button state
+  const cp = document.getElementById('cinema-play-btn');
+  if (cp) cp.textContent = isPlaying ? '⏸' : '▶';
+  // Sync track name
+  _cinemaSync();
+  // Esc exits
+  if (on) {
+    document.addEventListener('keydown', _cinemaEsc);
+  } else {
+    document.removeEventListener('keydown', _cinemaEsc);
+  }
+}
+function _cinemaEsc(e) { if (e.key === 'Escape') toggleCinema(); }
+function _cinemaSync() {
+  const t = document.getElementById('now-title')?.textContent || 'Serenity Radio';
+  const el = document.getElementById('cinema-track-name');
+  if (el) el.textContent = t;
+  const cp = document.getElementById('cinema-play-btn');
+  if (cp) cp.textContent = (typeof isPlaying !== 'undefined' && isPlaying) ? '⏸' : '▶';
+}
+// Keep mini-player in sync when track changes
+setInterval(_cinemaSync, 2000);
+
 function toggleAmbient(btn) {
   if (typeof AmbientAudio === 'undefined') return;
   const on = AmbientAudio.toggle();
