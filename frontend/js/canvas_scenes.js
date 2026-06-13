@@ -96,9 +96,9 @@ const CanvasScenes = (() => {
     // Sky gradient fills entire canvas — water is drawn ON TOP, not adjacent
     const g = _ctx.createLinearGradient(0, 0, 0, h);
     g.addColorStop(0,    p.top);
-    g.addColorStop(0.42, p.mid);
-    g.addColorStop(0.75, p.bot);
-    g.addColorStop(1,    p.bot);   // hold horizon colour to very bottom
+    g.addColorStop(0.36, p.mid);
+    g.addColorStop(0.65, p.bot);   // horizon at 65% — more sky, less mid-screen seam
+    g.addColorStop(1,    p.bot);   // hold colour to bottom (water covers this)
     _ctx.fillStyle = g;
     _ctx.fillRect(0, 0, w, h);
 
@@ -328,23 +328,27 @@ const CanvasScenes = (() => {
   // No fills between waves = no banding, continuous coverage.
   function _drawWater(t, hr, mode) {
     const w  = _canvas.width, h = _canvas.height;
-    const hy = h * (mode === 'sleep' ? 0.68 : 0.75);
+    // Horizon at 65% — matches where sky gradient ends; sleep shifts slightly lower
+    const hy = h * (mode === 'sleep' ? 0.60 : 0.65);
     const wH = h - hy;
     const mA = mode === 'sleep' ? 1.6 : 1.0;
 
     const isDawn = hr >= 5.5 && hr < 8;
     const isDusk = hr >= 17  && hr < 20;
     const isDay  = hr >= 8   && hr < 17;
-    const sR = isDawn||isDusk ? 190 : isDay ? 70  : 22;
-    const sG = isDawn||isDusk ? 130 : isDay ? 160 : 52;
-    const sB = isDawn||isDusk ?  70 : isDay ? 225 : 130;
+    // Sky-reflection tint at horizon matches sky bot palette
+    const sR = isDawn||isDusk ? 200 : isDay ? 80  : 22;
+    const sG = isDawn||isDusk ? 120 : isDay ? 155 : 48;
+    const sB = isDawn||isDusk ?  55 : isDay ? 220 : 125;
 
-    // ── 1. One solid gradient fills the whole water region ───
+    // ── 1. One solid gradient — no hard-edge seam at horizon ─
+    // Top is nearly transparent (sky shows through), darkens smoothly downward.
     const wg = _ctx.createLinearGradient(0, hy, 0, h);
-    wg.addColorStop(0,    `rgba(${sR},${sG},${sB},0.42)`); // sky mirror
-    wg.addColorStop(0.06, 'rgba(14,42,95,0.75)');
-    wg.addColorStop(0.28, 'rgba(7,22,62,0.90)');
-    wg.addColorStop(1,    'rgba(2,7,24,0.97)');
+    wg.addColorStop(0,    `rgba(${sR},${sG},${sB},0.06)`);  // almost invisible at seam
+    wg.addColorStop(0.05, `rgba(${sR},${sG},${sB},0.30)`);  // gentle sky-color tint
+    wg.addColorStop(0.18, `rgba(${Math.round(sR*0.45)},${Math.round(sG*0.40)},${Math.round(sB*0.60)},0.82)`);
+    wg.addColorStop(0.45, 'rgba(5,18,58,0.94)');
+    wg.addColorStop(1,    'rgba(2,6,20,0.98)');
     _ctx.fillStyle = wg;
     _ctx.fillRect(0, hy, w, wH);
 
@@ -398,13 +402,15 @@ const CanvasScenes = (() => {
       }
     }
 
-    // ── 3. Horizon feather — melts sky into sea ───────────────
-    const melt = _ctx.createLinearGradient(0, hy - h*0.025, 0, hy + h*0.045);
-    melt.addColorStop(0,   'rgba(0,0,0,0)');
-    melt.addColorStop(0.5, 'rgba(5,15,45,0.10)');
-    melt.addColorStop(1,   'rgba(5,15,45,0.32)');
+    // ── 3. Horizon feather — sky bleeds gently into sea ─────
+    // Span 4% above and 6% below the horizon line
+    const melt = _ctx.createLinearGradient(0, hy - h*0.04, 0, hy + h*0.06);
+    melt.addColorStop(0,    'rgba(0,0,0,0)');
+    melt.addColorStop(0.42, `rgba(${sR},${sG},${sB},0.06)`);
+    melt.addColorStop(0.60, `rgba(${sR},${sG},${sB},0.04)`);
+    melt.addColorStop(1,    'rgba(0,0,0,0)');
     _ctx.fillStyle = melt;
-    _ctx.fillRect(0, hy - h*0.025, w, h*0.07);
+    _ctx.fillRect(0, hy - h*0.04, w, h*0.10);
   }
 
   // ── Birds ──────────────────────────────────────────────────
@@ -619,72 +625,173 @@ const CanvasScenes = (() => {
   }
 
   // Cloud pool — reused across frames
-  const _clouds = Array.from({length: 12}, (_, i) => ({
-    x:     (i / 12) * 1.4 - 0.1,          // 0..1.3 as fraction of w
-    y:     0.05 + Math.random() * 0.28,    // fraction of h, stays in sky
-    w:     0.18 + Math.random() * 0.25,    // fraction of w
-    h:     0.04 + Math.random() * 0.06,    // fraction of h
-    speed: 0.000025 + Math.random() * 0.00003,
-    puffs: Math.floor(3 + Math.random() * 4),
-    alpha: 0.35 + Math.random() * 0.30,
-    type:  Math.random() > 0.5 ? 'cumulus' : 'wispy',
-  }));
+  // Types: wispy | cumulus | backlit | cumulonimbus
+  // 'backlit' and 'cumulonimbus' appear on dramatic/shower days; others daily.
+  const _cloudTypes = ['wispy','wispy','cumulus','cumulus','cumulus','backlit','cumulonimbus'];
+  const _clouds = Array.from({length: 14}, (_, i) => {
+    const t = _cloudTypes[i % _cloudTypes.length];
+    return {
+      x:     (i / 14) * 1.6 - 0.15,
+      y:     0.04 + Math.random() * (t === 'cumulonimbus' ? 0.12 : 0.26),
+      w:     (t === 'cumulonimbus' ? 0.10 : 0.16) + Math.random() * 0.18,
+      h:     (t === 'cumulonimbus' ? 0.10 : 0.04) + Math.random() * 0.05,
+      speed: 0.000018 + Math.random() * 0.000025,
+      alpha: (t === 'backlit' ? 0.45 : 0.32) + Math.random() * 0.28,
+      type:  t,
+      seed:  Math.random(),  // per-cloud random seed for shape variation
+    };
+  });
 
   function _drawCloud(c, w, h, alpha) {
     const cx = c.x * w, cy = c.y * h;
     const cw = c.w * w, ch = c.h * h;
+    const type = c.type || 'cumulus';
 
-    if (c.type === 'wispy') {
-      // Cirrus: soft elongated horizontal smear, tapered at both ends
-      const g = _ctx.createLinearGradient(cx - cw*0.55, cy, cx + cw*0.55, cy);
+    if (type === 'wispy') {
+      // ── Cirrus: elongated horizontal smear — sometimes slight diagonal ──
+      // Natural diagonal tilt ±8° makes overlapping wisps look organic
+      const tilt = (c.seed - 0.5) * 0.28;  // slight diagonal variation
+      _ctx.save();
+      _ctx.translate(cx, cy);
+      _ctx.rotate(tilt);
+      const g = _ctx.createLinearGradient(-cw*0.55, 0, cw*0.55, 0);
       g.addColorStop(0,    'rgba(255,255,255,0)');
-      g.addColorStop(0.25, `rgba(255,255,255,${alpha*0.25})`);
-      g.addColorStop(0.75, `rgba(255,255,255,${alpha*0.25})`);
+      g.addColorStop(0.2,  `rgba(255,255,255,${alpha*0.22})`);
+      g.addColorStop(0.5,  `rgba(255,255,255,${alpha*0.30})`);
+      g.addColorStop(0.8,  `rgba(255,255,255,${alpha*0.22})`);
       g.addColorStop(1,    'rgba(255,255,255,0)');
       _ctx.fillStyle = g;
       _ctx.beginPath();
-      _ctx.ellipse(cx, cy, cw * 0.55, ch * 0.18, 0, 0, Math.PI * 2);
+      _ctx.ellipse(0, 0, cw * 0.55, ch * 0.16, 0, 0, Math.PI * 2);
       _ctx.fill();
-      // Faint secondary wisp offset
+      // Secondary streamer — offset, different tilt — gives layered depth
       _ctx.beginPath();
-      _ctx.ellipse(cx + cw*0.15, cy - ch*0.12, cw * 0.3, ch * 0.10, 0.1, 0, Math.PI * 2);
-      _ctx.fillStyle = `rgba(255,255,255,${alpha*0.12})`;
+      _ctx.ellipse(cw*0.18, -ch*0.15, cw*0.32, ch*0.09, 0.15, 0, Math.PI * 2);
+      _ctx.fillStyle = `rgba(255,255,255,${alpha*0.14})`;
       _ctx.fill();
+      _ctx.restore();
 
-    } else {
-      // Cumulus: flat base + rounded bumps along the TOP edge only
-      const left  = cx - cw * 0.48;
-      const bumpR = ch * 0.38;                         // bump radius
-      const nBump = Math.max(3, Math.round(cw / (bumpR * 1.6)));
-      const bStep = (cw * 0.96) / nBump;
+    } else if (type === 'cumulus') {
+      // ── Fair-weather cumulus: flat base, fluffy rounded top ──
+      const left   = cx - cw * 0.46;
+      const bumpR  = ch * 0.42;
+      const nBump  = Math.max(3, Math.round(cw / (bumpR * 1.55)));
+      const bStep  = (cw * 0.92) / nBump;
 
-      // 1. Flat body — wide horizontal ellipse
+      // Flat body
       _ctx.beginPath();
-      _ctx.ellipse(cx, cy + bumpR * 0.55, cw * 0.48, bumpR * 0.55, 0, 0, Math.PI * 2);
-      _ctx.fillStyle = `rgba(240,245,255,${alpha * 0.48})`;
+      _ctx.ellipse(cx, cy + bumpR * 0.52, cw * 0.46, bumpR * 0.52, 0, 0, Math.PI * 2);
+      _ctx.fillStyle = `rgba(238,244,255,${alpha * 0.46})`;
       _ctx.fill();
 
-      // 2. Bumps — semicircles along top, heavily overlapping so no gaps
+      // Bumps — semicircles along top
       for (let b = 0; b < nBump; b++) {
-        const bx = left + bumpR * 0.5 + b * bStep;
-        const br = bumpR * (0.85 + Math.sin(bx * 0.03 + c.y * 10) * 0.18);
+        const bx = left + bumpR * 0.48 + b * bStep;
+        const br = bumpR * (0.82 + Math.sin(bx * 0.025 + c.seed * 8) * 0.20);
         _ctx.beginPath();
-        _ctx.arc(bx, cy + bumpR * 0.15, br, Math.PI, 0, false);
+        _ctx.arc(bx, cy + bumpR * 0.12, br, Math.PI, 0, false);
         _ctx.closePath();
-        _ctx.fillStyle = `rgba(250,252,255,${alpha * 0.58})`;
+        _ctx.fillStyle = `rgba(252,254,255,${alpha * 0.60})`;
+        _ctx.fill();
+      }
+      // Bright highlight (sun catch, upper-left of cloud mass)
+      _ctx.beginPath();
+      _ctx.ellipse(cx - cw*0.10, cy - bumpR*0.10, cw*0.20, bumpR*0.28, -0.25, 0, Math.PI*2);
+      _ctx.fillStyle = `rgba(255,255,255,${alpha * 0.30})`;
+      _ctx.fill();
+      // Grey-blue flat underside shadow
+      _ctx.beginPath();
+      _ctx.ellipse(cx, cy + bumpR * 0.90, cw * 0.42, bumpR * 0.16, 0, 0, Math.PI * 2);
+      _ctx.fillStyle = `rgba(165,180,210,${alpha * 0.30})`;
+      _ctx.fill();
+
+    } else if (type === 'backlit') {
+      // ── "Sculpted in florets of cream and pearl, backlit lavender shadows" ──
+      // Each floret: lavender shadow offset behind, cream pearl face, bright edge glow
+      const nFlorets = 4 + Math.round(c.seed * 3);
+      const fr0 = ch * 0.62;
+
+      for (let fi = 0; fi < nFlorets; fi++) {
+        const t  = fi / (nFlorets - 1);
+        const fx = cx + (t - 0.5) * cw * 0.82;
+        const fy = cy + Math.sin(fi * 1.5 + c.seed * 3) * ch * 0.22 - ch * 0.10;
+        const fr = fr0 * (0.72 + Math.sin(fi * 0.88 + c.seed * 5) * 0.28);
+
+        // Lavender shadow (slightly behind and below — like backlit depth)
+        _ctx.beginPath();
+        _ctx.arc(fx + fr*0.14, fy + fr*0.14, fr, 0, Math.PI * 2);
+        _ctx.fillStyle = `rgba(175,155,220,${alpha * 0.40})`;
+        _ctx.fill();
+
+        // Cream-pearl main body
+        _ctx.beginPath();
+        _ctx.arc(fx, fy, fr * 0.88, 0, Math.PI * 2);
+        _ctx.fillStyle = `rgba(252,248,255,${alpha * 0.62})`;
+        _ctx.fill();
+
+        // Luminous backlit edge — brighter upper-left rim
+        const eg = _ctx.createRadialGradient(fx - fr*0.25, fy - fr*0.25, fr*0.1, fx, fy, fr);
+        eg.addColorStop(0,   `rgba(255,255,255,${alpha * 0.50})`);
+        eg.addColorStop(0.55,`rgba(255,252,255,${alpha * 0.12})`);
+        eg.addColorStop(1,   'rgba(255,255,255,0)');
+        _ctx.fillStyle = eg;
+        _ctx.beginPath();
+        _ctx.arc(fx, fy, fr, 0, Math.PI * 2);
+        _ctx.fill();
+      }
+      // Flat shadow underside across whole cloud mass
+      _ctx.beginPath();
+      _ctx.ellipse(cx, cy + fr0*0.7, cw*0.44, fr0*0.14, 0, 0, Math.PI*2);
+      _ctx.fillStyle = `rgba(140,120,190,${alpha * 0.22})`;
+      _ctx.fill();
+
+    } else if (type === 'cumulonimbus') {
+      // ── Thunderhead: "white-hot mountains on the horizon" ──
+      // Towering vertical column with anvil top; dark base; lavender mid-shadow
+      const base  = cy + ch * 0.55;
+      const tower = ch * 3.8;   // tall — extends well above nominal cloud y
+      const towerW = cw * 0.38;
+
+      // Dark rain-bearing base — heavy, anvil-flat
+      const baseG = _ctx.createRadialGradient(cx, base, 0, cx, base, cw * 0.5);
+      baseG.addColorStop(0,   `rgba(55,62,88,${alpha * 0.88})`);
+      baseG.addColorStop(0.6, `rgba(38,44,68,${alpha * 0.70})`);
+      baseG.addColorStop(1,   'rgba(30,38,60,0)');
+      _ctx.fillStyle = baseG;
+      _ctx.beginPath();
+      _ctx.ellipse(cx, base, cw * 0.50, ch * 0.28, 0, 0, Math.PI * 2);
+      _ctx.fill();
+
+      // Tower — stacked cauliflower tiers, each slightly offset
+      const nTier = 6;
+      for (let ti = 0; ti < nTier; ti++) {
+        const p   = ti / (nTier - 1);
+        const ty  = base - tower * (p * 0.75 + 0.08);
+        const tr  = towerW * (1.0 - p * 0.32) * (0.80 + Math.sin(ti * 1.4 + c.seed * 4) * 0.20);
+        // Darker at base, brilliant white at crown
+        const lum = Math.round(160 + p * 90);
+        const blu = Math.round(lum + p * 10);
+        _ctx.beginPath();
+        _ctx.ellipse(cx + (c.seed - 0.5) * 8 * p, ty, tr, tr * 0.58, 0, 0, Math.PI * 2);
+        _ctx.fillStyle = `rgba(${lum},${lum},${blu},${alpha * (0.45 + p * 0.30)})`;
         _ctx.fill();
       }
 
-      // 3. Bright inner highlight (sun catch on upper-left)
+      // Lavender mid-shadow — "a labyrinth of vapor and shadow"
       _ctx.beginPath();
-      _ctx.ellipse(cx - cw*0.08, cy - bumpR*0.08, cw*0.22, bumpR*0.3, -0.3, 0, Math.PI*2);
-      _ctx.fillStyle = `rgba(255,255,255,${alpha * 0.28})`;
+      _ctx.ellipse(cx, base - tower * 0.45, towerW * 0.55, tower * 0.30, 0, 0, Math.PI * 2);
+      _ctx.fillStyle = `rgba(155,135,200,${alpha * 0.20})`;
       _ctx.fill();
 
-      // 4. Flat grey-blue underside (shadow)
+      // Anvil top — flat stratospheric spread, backlit bright
       _ctx.beginPath();
-      _ctx.ellipse(cx, cy + bumpR * 0.95, cw * 0.44, bumpR * 0.18, 0, 0, Math.PI * 2);
-      _ctx.fillStyle = `rgba(170,185,215,${alpha * 0.32})`;
+      _ctx.ellipse(cx, base - tower * 0.78, cw * 0.62, ch * 0.22, 0, 0, Math.PI * 2);
+      _ctx.fillStyle = `rgba(248,250,255,${alpha * 0.58})`;
+      _ctx.fill();
+      // Anvil bright highlight
+      _ctx.beginPath();
+      _ctx.ellipse(cx - cw*0.08, base - tower*0.80, cw*0.30, ch*0.08, 0, 0, Math.PI*2);
+      _ctx.fillStyle = `rgba(255,255,255,${alpha * 0.36})`;
       _ctx.fill();
     }
   }
@@ -700,58 +807,88 @@ const CanvasScenes = (() => {
     });
 
     if (type === 'haze') {
-      // Morning haze — white-ish veil over lower sky
+      // Morning haze — soft veil + gentle wisps
       const fade = hr < 6.5 ? 1 : Math.max(0, 1 - (hr - 6.5) / 1.5);
-      const hg = _ctx.createLinearGradient(0, h * 0.35, 0, h * 0.80);
+      const hg = _ctx.createLinearGradient(0, h * 0.32, 0, h * 0.72);
       hg.addColorStop(0,   'rgba(220,230,240,0)');
-      hg.addColorStop(0.4, `rgba(220,230,240,${fade * 0.22})`);
+      hg.addColorStop(0.38,`rgba(220,230,240,${fade * 0.18})`);
       hg.addColorStop(1,   'rgba(220,230,240,0)');
       _ctx.fillStyle = hg;
-      _ctx.fillRect(0, h * 0.35, w, h * 0.45);
-      // Draw a few wispy clouds
-      _clouds.slice(0, 5).forEach(c => _drawCloud({...c, type:'wispy'}, w, h, fade * 0.5));
+      _ctx.fillRect(0, h * 0.32, w, h * 0.40);
+      // Backlit wisps — dawn light gives pearl-lavender tones
+      _clouds.slice(0, 4).forEach(c => _drawCloud({...c, type:'wispy'}, w, h, fade * 0.40));
+      _clouds.slice(4, 6).forEach(c => _drawCloud({...c, type:'backlit'}, w, h, fade * 0.28));
 
     } else if (type === 'shower') {
-      // Afternoon tropical shower — dark clouds + rain streaks
-      const hy = h * 0.72;
-      // Overcast base
+      // Afternoon tropical shower — "advancing like a slow-motion avalanche"
+      // Dark overcast veil + towering cumulonimbus + backlit drama + rain
+      const hy = h * 0.65;
       const cg = _ctx.createLinearGradient(0, 0, 0, hy);
-      cg.addColorStop(0,   'rgba(60,70,90,0.45)');
-      cg.addColorStop(1,   'rgba(30,40,60,0.20)');
-      _ctx.fillStyle = cg; _ctx.fillRect(0, 0, w, hy);
-      // Storm clouds
-      _clouds.slice(0, 8).forEach(c => _drawCloud({...c, type:'cumulus', alpha:0.65}, w, h, 0.7));
-      // Rain streaks
+      cg.addColorStop(0,   'rgba(50,58,82,0.52)');
+      cg.addColorStop(0.7, 'rgba(28,36,58,0.25)');
+      cg.addColorStop(1,   'rgba(20,28,50,0.08)');
+      _ctx.fillStyle = cg;
+      _ctx.fillRect(0, 0, w, hy);
+
+      // Cumulonimbus thunderheads — the "white-hot mountains"
+      _clouds.filter(c => c.type === 'cumulonimbus').forEach(c =>
+        _drawCloud(c, w, h, 0.80));
+      // Dense cumulus advancing like avalanche — packed left-to-right
+      _clouds.filter(c => c.type === 'cumulus').slice(0, 5).forEach(c =>
+        _drawCloud({...c, y: c.y * 0.8}, w, h, 0.68));
+      // A few backlit patches where light breaks through
+      _clouds.filter(c => c.type === 'backlit').slice(0, 2).forEach(c =>
+        _drawCloud(c, w, h, 0.42));
+
+      // Rain streaks — diagonal, wind-driven
       _ctx.save();
-      _ctx.strokeStyle = 'rgba(180,210,240,0.18)';
-      _ctx.lineWidth   = 0.8;
-      const rainPhase = (t * 0.5) % 80;
-      for (let i = 0; i < 120; i++) {
-        const rx = ((i * 137.5 + rainPhase) % w);
-        const ry = ((i * 53  + t * 1.2 ) % (h * 0.85));
+      _ctx.strokeStyle = 'rgba(175,208,240,0.16)';
+      _ctx.lineWidth   = 0.7;
+      const rainPhase = (t * 0.55) % 90;
+      for (let i = 0; i < 130; i++) {
+        const rx = ((i * 139.3 + rainPhase) % w);
+        const ry = ((i * 57   + t * 1.3  ) % (h * 0.88));
         _ctx.beginPath();
         _ctx.moveTo(rx, ry);
-        _ctx.lineTo(rx - 1, ry + 14);
+        _ctx.lineTo(rx - 2.5, ry + 16);  // slight diagonal = wind
         _ctx.stroke();
       }
       _ctx.restore();
 
     } else if (type === 'overcast') {
-      // Overcast — uniform grey veil + low flat clouds
-      const og = _ctx.createLinearGradient(0, 0, 0, h * 0.6);
-      og.addColorStop(0,   'rgba(80,90,110,0.35)');
-      og.addColorStop(1,   'rgba(50,60,80,0.10)');
-      _ctx.fillStyle = og; _ctx.fillRect(0, 0, w, h * 0.6);
-      _clouds.slice(0, 10).forEach(c => _drawCloud(c, w, h, 0.55));
+      // Overcast — "a labyrinth of vapour and shadow, endless and deliberate"
+      // Dense layered cloud cover, advancing uniformly
+      const og = _ctx.createLinearGradient(0, 0, 0, h * 0.65);
+      og.addColorStop(0,   'rgba(72,80,102,0.38)');
+      og.addColorStop(0.6, 'rgba(48,56,78,0.18)');
+      og.addColorStop(1,   'rgba(35,42,62,0.06)');
+      _ctx.fillStyle = og;
+      _ctx.fillRect(0, 0, w, h * 0.65);
+      // All cloud types layered — backlit gives lavender pearl shadows
+      _clouds.filter(c => c.type === 'cumulus').forEach(c  => _drawCloud(c, w, h, 0.52));
+      _clouds.filter(c => c.type === 'backlit').forEach(c  => _drawCloud(c, w, h, 0.45));
+      _clouds.filter(c => c.type === 'wispy').slice(0, 3).forEach(c =>
+        _drawCloud(c, w, h, 0.28));
 
     } else if (type === 'clouds') {
-      // Scattered afternoon/evening clouds
-      const count = Math.floor(4 + _weatherSeed * 4);
-      _clouds.slice(0, count).forEach(c => _drawCloud(c, w, h, 0.40));
+      // Scattered afternoon/evening — mix of fair cumulus + occasional drama
+      const count = Math.floor(4 + _weatherSeed * 3);
+      _clouds.filter(c => c.type === 'cumulus').slice(0, count).forEach(c =>
+        _drawCloud(c, w, h, 0.42));
+      // Occasional backlit where sun catches cloud edge
+      _clouds.filter(c => c.type === 'backlit').slice(0, 2).forEach(c =>
+        _drawCloud(c, w, h, 0.35));
+      _clouds.filter(c => c.type === 'wispy').slice(0, 2).forEach(c =>
+        _drawCloud(c, w, h, 0.22));
 
     } else {
-      // Clear / light-cloud — just 2-3 distant wisps
-      _clouds.slice(0, 3).forEach(c => _drawCloud({...c, type:'wispy'}, w, h, 0.22));
+      // Clear / light-cloud — distant wisps + maybe one cumulus on the horizon
+      _clouds.filter(c => c.type === 'wispy').slice(0, 3).forEach(c =>
+        _drawCloud(c, w, h, 0.20));
+      if (_weatherSeed > 0.6) {
+        _clouds.filter(c => c.type === 'cumulus').slice(0, 2).forEach(c =>
+          _drawCloud(c, w, h, 0.25));
+      }
     }
   }
 
@@ -812,7 +949,7 @@ const CanvasScenes = (() => {
     if (wtype === 'shower' || hr < 6 || hr > 20) return;
     if (mode === 'focus') return;  // focus = minimal
 
-    const hy = h * (mode === 'sleep' ? 0.68 : 0.75);
+    const hy = h * (mode === 'sleep' ? 0.60 : 0.65);
     // Ducks sit just below horizon, floating on near-surface water
     const duckY = hy + h * 0.04;
 
@@ -851,58 +988,102 @@ const CanvasScenes = (() => {
     });
   }
 
-  // ── Fish glimpse — rare, subtle, transparent ─────────────
-  let _fishTimer = 0;
-  const _fish = { active: false, x: 0, y: 0, vx: 0, life: 0, maxLife: 0 };
+  // ── Fish school — slow, semi-transparent, zen ────────────
+  // A quiet school drifts through every 40-80 seconds.
+  // They move very slowly — this is NOT an aquarium screensaver.
+  let _fishSpawnTimer = 1200; // initial delay before first school
+  const _fishPool = [];       // active fish in current school
+
+  function _spawnSchool(hy, h) {
+    _fishPool.length = 0;
+    const count   = 3 + Math.floor(Math.random() * 3);   // 3–5 fish
+    const fromLeft = Math.random() > 0.5;
+    // Very slow: cross screen in ~90s at 60fps (90*60 = 5400 frames, w/5400 per frame)
+    const baseVx = (fromLeft ? 1 : -1) * (0.00018 + Math.random() * 0.00010);
+
+    for (let i = 0; i < count; i++) {
+      const offset = i * (fromLeft ? -0.045 : 0.045);  // stagger start positions
+      _fishPool.push({
+        x:       fromLeft ? (-0.06 + offset) : (1.06 + offset),
+        yFrac:   hy / h + 0.06 + Math.random() * 0.13,  // below horizon
+        yOff:    (Math.random() - 0.5) * h * 0.045,      // vertical scatter in school
+        vx:      baseVx * (0.88 + Math.random() * 0.24), // slight individual variation
+        life:    0,
+        maxLife: 3600 + Math.random() * 1800,             // 60-90 s visible
+        phase:   Math.random() * Math.PI * 2,
+        size:    0.72 + Math.random() * 0.55,             // size variety
+      });
+    }
+    // Next school in 40-80 s
+    _fishSpawnTimer = 2400 + Math.random() * 2400;
+  }
 
   function _drawFish(t, hr, mode) {
     const w = _canvas.width, h = _canvas.height;
     if (mode === 'focus' || hr < 6 || hr > 20) return;
 
-    const hy = h * (mode === 'sleep' ? 0.68 : 0.75);
-    _fishTimer--;
+    const hy = h * (mode === 'sleep' ? 0.60 : 0.65);
+    _fishSpawnTimer--;
 
-    if (!_fish.active && _fishTimer <= 0) {
-      // Spawn a fish every 15-45 s (900-2700 frames at 60fps)
-      _fishTimer = 900 + Math.random() * 1800;
-      _fish.active = true;
-      _fish.x      = Math.random() > 0.5 ? -0.05 : 1.05;
-      _fish.y      = hy + h * (0.06 + Math.random() * 0.12);
-      _fish.vx     = _fish.x < 0 ? 0.0015 : -0.0015;
-      _fish.life   = 0;
-      _fish.maxLife = 200 + Math.random() * 200;
+    // Spawn a new school when timer expires and pool is empty or finished
+    if (_fishSpawnTimer <= 0 && _fishPool.every(f => !f.active && f.life >= f.maxLife)) {
+      _spawnSchool(hy, h);
     }
-    if (!_fish.active) return;
+    // Also spawn initially
+    if (_fishPool.length === 0 && _fishSpawnTimer <= 0) _spawnSchool(hy, h);
 
-    _fish.x   += _fish.vx;
-    _fish.life++;
-    if (_fish.life > _fish.maxLife) { _fish.active = false; return; }
+    _fishPool.forEach(fish => {
+      fish.x    += fish.vx;
+      fish.life++;
 
-    const alpha = Math.min(_fish.life, _fish.maxLife - _fish.life, 40) / 40 * 0.32;
-    const fx    = _fish.x * w;
-    const fy    = _fish.y + Math.sin(_fish.life * 0.08) * 6; // gentle undulation
-    const facing = _fish.vx > 0 ? 1 : -1;
+      // Deactivate when off screen or exceeded life
+      if (fish.life > fish.maxLife) return;
+      if (fish.x < -0.15 || fish.x > 1.15) return;
 
-    _ctx.save();
-    _ctx.translate(fx, fy);
-    _ctx.scale(facing, 1);
-    // Semi-transparent fish body
-    _ctx.beginPath();
-    _ctx.ellipse(0, 0, 22, 7, 0, 0, Math.PI * 2);
-    _ctx.fillStyle = `rgba(160,220,210,${alpha})`;
-    _ctx.fill();
-    // Tail
-    _ctx.beginPath();
-    _ctx.moveTo(-18, 0);
-    _ctx.lineTo(-28, -8); _ctx.lineTo(-28, 8); _ctx.closePath();
-    _ctx.fillStyle = `rgba(140,200,190,${alpha * 0.7})`;
-    _ctx.fill();
-    // Eye
-    _ctx.beginPath();
-    _ctx.arc(14, -2, 2.5, 0, Math.PI * 2);
-    _ctx.fillStyle = `rgba(30,60,80,${alpha * 1.2})`;
-    _ctx.fill();
-    _ctx.restore();
+      // Fade in first 3s, fade out last 3s
+      const fadeFrames = 180;
+      const fadeIn  = Math.min(fish.life, fadeFrames) / fadeFrames;
+      const fadeOut = Math.min(fish.maxLife - fish.life, fadeFrames) / fadeFrames;
+      const alpha   = Math.min(fadeIn, fadeOut) * 0.28;
+      if (alpha < 0.01) return;
+
+      const fx     = fish.x * w;
+      const fy     = fish.yFrac * h + fish.yOff + Math.sin(fish.life * 0.04 + fish.phase) * 4;
+      const facing = fish.vx > 0 ? 1 : -1;
+      const sz     = fish.size;
+
+      _ctx.save();
+      _ctx.translate(fx, fy);
+      _ctx.scale(facing, 1);
+
+      // Body — soft teal, very transparent
+      _ctx.beginPath();
+      _ctx.ellipse(0, 0, 22 * sz, 7 * sz, 0, 0, Math.PI * 2);
+      _ctx.fillStyle = `rgba(155,215,205,${alpha})`;
+      _ctx.fill();
+
+      // Subtle iridescent sheen on upper body
+      _ctx.beginPath();
+      _ctx.ellipse(-2 * sz, -2 * sz, 14 * sz, 3.5 * sz, -0.2, 0, Math.PI * 2);
+      _ctx.fillStyle = `rgba(200,240,230,${alpha * 0.5})`;
+      _ctx.fill();
+
+      // Tail — forked, slightly more opaque
+      _ctx.beginPath();
+      _ctx.moveTo(-18 * sz, 0);
+      _ctx.lineTo(-27 * sz, -7 * sz); _ctx.lineTo(-24 * sz, 0);
+      _ctx.lineTo(-27 * sz,  7 * sz); _ctx.closePath();
+      _ctx.fillStyle = `rgba(130,195,185,${alpha * 0.75})`;
+      _ctx.fill();
+
+      // Eye — dark, just visible
+      _ctx.beginPath();
+      _ctx.arc(14 * sz, -2 * sz, 2.2 * sz, 0, Math.PI * 2);
+      _ctx.fillStyle = `rgba(25,55,75,${alpha * 1.5})`;
+      _ctx.fill();
+
+      _ctx.restore();
+    });
   }
 
   // ── Main world frame ───────────────────────────────────────
