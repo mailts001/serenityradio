@@ -42,24 +42,23 @@ const CanvasScenes = (() => {
   }
 
   // ── Sky colour by real hour ─────────────────────────────────
-  // Returns [topColor, midColor, botColor] as rgba strings
+  // Calibrated for equatorial (Singapore) — full daylight by 7 am.
+  // Colours are atmospheric watercolour tones, not pitch-black.
   function _skyPalette(hr, mode) {
-    // hr: 0–24 float
-    // Base palette checkpoints
     const raw = (() => {
-      if (hr < 4.5)  return { top:'#020610', mid:'#04091c', bot:'#060c24' }; // deep night
-      if (hr < 5.5)  return { top:'#0a0518', mid:'#1a0820', bot:'#2a1228' }; // pre-dawn purple
-      if (hr < 6.5)  return { top:'#150818', mid:'#3a1020', bot:'#7a2828' }; // dawn rose
-      if (hr < 7.5)  return { top:'#1a0c18', mid:'#48201a', bot:'#a04030' }; // sunrise warm
-      if (hr < 9)    return { top:'#0a1020', mid:'#1a2838', bot:'#2a4058' }; // morning blue
-      if (hr < 12)   return { top:'#081420', mid:'#102030', bot:'#1a3248' }; // mid-morning
-      if (hr < 14)   return { top:'#060e1c', mid:'#0e1c2e', bot:'#162a40' }; // noon
-      if (hr < 16)   return { top:'#081220', mid:'#121e30', bot:'#1e3048' }; // afternoon
-      if (hr < 17.5) return { top:'#120c18', mid:'#301828', bot:'#603018' }; // late afternoon amber
-      if (hr < 18.5) return { top:'#180a10', mid:'#3a1a10', bot:'#804020' }; // golden hour
-      if (hr < 19.5) return { top:'#160810', mid:'#280a18', bot:'#4a1828' }; // dusk
-      if (hr < 21)   return { top:'#0c0614', mid:'#14081e', bot:'#200a28' }; // twilight
-      return { top:'#020610', mid:'#04091c', bot:'#060c24' };                 // night
+      if (hr < 4.5)  return { top:'#020610', mid:'#040a1e', bot:'#06102a' }; // deep night
+      if (hr < 5.5)  return { top:'#0c0620', mid:'#1e0c30', bot:'#341840' }; // pre-dawn indigo
+      if (hr < 6.2)  return { top:'#180a18', mid:'#401020', bot:'#803030' }; // first light rose
+      if (hr < 7.0)  return { top:'#1a1020', mid:'#502818', bot:'#c06030' }; // sunrise amber
+      if (hr < 8.0)  return { top:'#0f2040', mid:'#1e3c60', bot:'#3a6a90' }; // early morning blue
+      if (hr < 10)   return { top:'#102848', mid:'#205080', bot:'#4080b0' }; // bright morning
+      if (hr < 13)   return { top:'#0e2240', mid:'#1c4070', bot:'#3870a8' }; // midday clear blue
+      if (hr < 16)   return { top:'#102040', mid:'#1e3c68', bot:'#3468a0' }; // afternoon
+      if (hr < 17.5) return { top:'#1a1828', mid:'#3a2820', bot:'#7a4820' }; // late afternoon gold
+      if (hr < 18.5) return { top:'#200c10', mid:'#481808', bot:'#904020' }; // golden hour
+      if (hr < 19.5) return { top:'#180a12', mid:'#30101a', bot:'#502030' }; // dusk
+      if (hr < 21)   return { top:'#0e0618', mid:'#180a22', bot:'#240e2e' }; // twilight
+      return { top:'#020610', mid:'#040a1e', bot:'#06102a' };                 // night
     })();
 
     // Mode tints — subtle shifts
@@ -96,17 +95,34 @@ const CanvasScenes = (() => {
     _ctx.fillStyle = g;
     _ctx.fillRect(0, 0, w, h);
 
-    // Horizon glow at dawn/dusk
-    if ((hr >= 5.5 && hr <= 8) || (hr >= 17 && hr <= 20)) {
-      const intensity = hr < 12
-        ? Math.sin(((hr - 5.5) / 2.5) * Math.PI) * 0.18
-        : Math.sin(((hr - 17)  / 3.0) * Math.PI) * 0.22;
-      const hg = _ctx.createLinearGradient(0, h * 0.5, 0, h * 0.75);
-      const col = hr < 12 ? `rgba(220,100,50,${intensity})` : `rgba(200,80,30,${intensity})`;
-      hg.addColorStop(0, col);
-      hg.addColorStop(1, 'rgba(0,0,0,0)');
+    // Horizon glow — dawn, full day atmospheric haze, dusk
+    if (hr >= 5.5 && hr < 8) {
+      // Sunrise warm band
+      const t = (hr - 5.5) / 2.5;
+      const i = Math.sin(t * Math.PI) * 0.32;
+      const hg = _ctx.createLinearGradient(0, h * 0.42, 0, h * 0.72);
+      hg.addColorStop(0,   `rgba(240,120,50,${i})`);
+      hg.addColorStop(0.5, `rgba(220,90,30,${i * 0.5})`);
+      hg.addColorStop(1,   'rgba(0,0,0,0)');
       _ctx.fillStyle = hg;
-      _ctx.fillRect(0, h * 0.5, w, h * 0.25);
+      _ctx.fillRect(0, h * 0.42, w, h * 0.3);
+    } else if (hr >= 8 && hr < 17) {
+      // Bright day — soft warm haze at horizon
+      const i = 0.10 + 0.06 * Math.sin(((hr - 8) / 9) * Math.PI);
+      const hg = _ctx.createLinearGradient(0, h * 0.55, 0, h * 0.78);
+      hg.addColorStop(0,   `rgba(200,230,255,${i})`);
+      hg.addColorStop(1,   'rgba(180,210,240,0)');
+      _ctx.fillStyle = hg;
+      _ctx.fillRect(0, h * 0.55, w, h * 0.23);
+    } else if (hr >= 17 && hr <= 20) {
+      // Sunset warm band
+      const i = Math.sin(((hr - 17) / 3) * Math.PI) * 0.38;
+      const hg = _ctx.createLinearGradient(0, h * 0.40, 0, h * 0.72);
+      hg.addColorStop(0,   `rgba(240,100,30,${i})`);
+      hg.addColorStop(0.5, `rgba(200,60,20,${i * 0.5})`);
+      hg.addColorStop(1,   'rgba(0,0,0,0)');
+      _ctx.fillStyle = hg;
+      _ctx.fillRect(0, h * 0.40, w, h * 0.32);
     }
   }
 
@@ -440,6 +456,9 @@ const CanvasScenes = (() => {
     if (!_canvas) return;
 
     const mode = (channel === 'default' || channel === 'auto') ? 'default' : channel;
+    // Tell ambient audio to adjust its mix for this mode
+    if (typeof AmbientAudio !== 'undefined') AmbientAudio.setMode(mode);
+
     let t = 0;
     function frame() {
       _raf = requestAnimationFrame(frame);
