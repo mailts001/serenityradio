@@ -209,10 +209,10 @@
 
   <div id="channel-tabs"></div>
   <div class="stats-strip">
-    <div class="stat-card"><div class="stat-value" id="stat-listeners">2.8k</div><div class="stat-label">Live Listeners</div></div>
+    <div class="stat-card"><div class="stat-value" id="stat-listeners">—</div><div class="stat-label">Tuned In Now</div></div>
+    <div class="stat-card"><div class="stat-value" id="stat-today">—</div><div class="stat-label">Unique Today</div></div>
     <div class="stat-card"><div class="stat-value" id="track-count">0</div><div class="stat-label">Tracks in Library</div></div>
-    <div class="stat-card"><div class="stat-value">24/7</div><div class="stat-label">Always On</div></div>
-    <div class="stat-card"><div class="stat-value">98%</div><div class="stat-label">Uptime</div></div>
+    <div class="stat-card"><div class="stat-value" id="stat-total">—</div><div class="stat-label">Total Visitors</div></div>
   </div>
 
   <div class="player-card">
@@ -880,12 +880,21 @@ async function loadPlaylist() {
   }
 }
 
-// ── VISITORS ──
-setInterval(() => {
-  visitorBase = Math.max(2400, visitorBase + Math.floor(Math.random() * 7) - 2);
-  document.getElementById('visitor-count').textContent = visitorBase.toLocaleString();
-  document.getElementById('stat-listeners').textContent = (visitorBase / 1000).toFixed(1) + 'k';
-}, 4000);
+// ── LIVE STATS — real data from server ──
+function fmt(n) { return n >= 1000 ? (n/1000).toFixed(1)+'k' : String(n); }
+function pollStats() {
+  fetch('/api/stats').then(r => r.json()).then(d => {
+    const live = d.active_listeners ?? 0;
+    document.getElementById('stat-listeners').textContent = live || '—';
+    document.getElementById('stat-today').textContent     = fmt(d.unique_today  ?? 0) || '—';
+    document.getElementById('stat-total').textContent     = fmt(d.unique_total  ?? 0) || '—';
+    // Keep the hero "souls tuned in" counter in sync
+    const vc = document.getElementById('visitor-count');
+    if (vc) vc.textContent = live ? live.toLocaleString() : '—';
+  }).catch(() => {});
+}
+pollStats();
+setInterval(pollStats, 30000);
 
 // ── QUOTES ──
 function rotateQuote() {

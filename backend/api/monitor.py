@@ -21,17 +21,30 @@ CRIT_GB_DAY      = float(os.getenv('CRIT_GB_DAY',   '50'))
 _listeners: dict[str, float] = {}
 _lock = threading.Lock()
 
+# Unique IP tracking
+_unique_ips_today: set  = set()   # resets at midnight
+_unique_ips_total: set  = set()   # persists in memory (process lifetime)
+_today_date: str        = ''      # YYYY-MM-DD of last reset
+
 # Rolling byte counter: {hour_bucket: bytes_served}
 _bytes_by_hour: dict[int, int] = defaultdict(int)
 _last_alert_at  = 0.0
 ALERT_COOLDOWN  = 3600  # don't spam — max 1 alert/hour
 
 
-def heartbeat(session_id: str):
+def heartbeat(session_id: str, ip: str = ''):
     """Called every 30s by the frontend to register an active listener."""
+    global _today_date, _unique_ips_today
     with _lock:
         _listeners[session_id] = time.time()
         _prune()
+        if ip:
+            today = __import__('datetime').date.today().isoformat()
+            if today != _today_date:
+                _today_date = today
+                _unique_ips_today = set()
+            _unique_ips_today.add(ip)
+            _unique_ips_total.add(ip)
 
 
 def record_bytes(n: int):
@@ -64,13 +77,15 @@ def get_stats() -> dict:
         gb_1h     = _bytes_by_hour.get(bucket, 0) / 1024**3
         gb_day_est = round(gb_1h * 24, 2)
         return {
-            'active_listeners': active,
-            'gb_last_24h':      gb_24h,
-            'gb_day_estimate':  gb_day_est,
-            'warn_listeners':   WARN_LISTENERS,
-            'crit_listeners':   CRIT_LISTENERS,
-            'warn_gb_day':      WARN_GB_DAY,
-            'crit_gb_day':      CRIT_GB_DAY,
+            'active_listeners':  active,
+            'unique_today':      len(_unique_ips_today),
+            'unique_total':      len(_unique_ips_total),
+            'gb_last_24h':       gb_24h,
+            'gb_day_estimate':   gb_day_est,
+            'warn_listeners':    WARN_LISTENERS,
+            'crit_listeners':    CRIT_LISTENERS,
+            'warn_gb_day':       WARN_GB_DAY,
+            'crit_gb_day':       CRIT_GB_DAY,
             'status': _severity(active, gb_day_est),
         }
 
@@ -140,8 +155,9 @@ threading.Thread(target=check_and_alert, daemon=True).start()
 from flask import request, jsonify
 
 def handle_heartbeat():
-    data = request.get_json() or {}
-    heartbeat(data.get('session_id', request.remote_addr))
+    data   = request.get_json() or {}
+    ip     = request.headers.get('X-Forwarded-For', request.remote_addr).split(',')[0].strip()
+    heartbeat(data.get('session_id', ip), ip)
     return jsonify({'ok': True})
 
 def handle_stats():

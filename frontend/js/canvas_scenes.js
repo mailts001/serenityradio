@@ -48,20 +48,22 @@ const CanvasScenes = (() => {
     // Calibrated for equatorial tropics (Singapore):
     //   night = deep navy, day = genuine medium-bright blue.
     //   Top of sky is deep blue at zenith; horizon is lighter & warmer.
+    // Real photographic sky colours for equatorial tropics.
+    // Zenith is deep cobalt; horizon is light hazy blue; sunset/dawn are warm.
     const raw = (() => {
-      if (hr < 4.5)  return { top:'#020610', mid:'#040a1e', bot:'#06102a' }; // deep night
-      if (hr < 5.5)  return { top:'#0c0620', mid:'#1e0c30', bot:'#341840' }; // pre-dawn indigo
-      if (hr < 6.2)  return { top:'#1a0a18', mid:'#401020', bot:'#803030' }; // first light rose
-      if (hr < 7.0)  return { top:'#1c1225', mid:'#503020', bot:'#c87040' }; // sunrise amber
-      if (hr < 8.0)  return { top:'#163060', mid:'#2a5890', bot:'#5090c0' }; // early morning — clearly blue
-      if (hr < 10)   return { top:'#1a4080', mid:'#2e62a8', bot:'#5a90cc' }; // bright morning — rich blue
-      if (hr < 13)   return { top:'#163878', mid:'#285ea0', bot:'#5088c8' }; // midday — deep clear blue
-      if (hr < 16)   return { top:'#183880', mid:'#2a5ea8', bot:'#4e88c8' }; // afternoon — still bright
-      if (hr < 17.5) return { top:'#1e2850', mid:'#3c3828', bot:'#886030' }; // late afternoon gold
-      if (hr < 18.5) return { top:'#220c10', mid:'#501a08', bot:'#a04820' }; // golden hour
-      if (hr < 19.5) return { top:'#180a12', mid:'#30101a', bot:'#502030' }; // dusk
-      if (hr < 21)   return { top:'#0e0618', mid:'#180a22', bot:'#240e2e' }; // twilight
-      return { top:'#020610', mid:'#040a1e', bot:'#06102a' };                 // night
+      if (hr < 4.5)  return { top:'#020610', mid:'#040a1e', bot:'#060e28' }; // deep night
+      if (hr < 5.5)  return { top:'#0a0520', mid:'#1c0a2e', bot:'#30143e' }; // pre-dawn indigo
+      if (hr < 6.2)  return { top:'#180a18', mid:'#3e0e1e', bot:'#782a28' }; // first light rose
+      if (hr < 7.0)  return { top:'#1a1020', mid:'#4a2818', bot:'#c06838' }; // sunrise amber
+      if (hr < 8.0)  return { top:'#1050a0', mid:'#2878c8', bot:'#60a8e8' }; // early morning — vivid blue
+      if (hr < 10)   return { top:'#1460b8', mid:'#2e80d8', bot:'#68b0f0' }; // bright morning — sky blue
+      if (hr < 13)   return { top:'#1258b0', mid:'#2a78d0', bot:'#62aae8' }; // midday — clear tropical blue
+      if (hr < 16)   return { top:'#1460b8', mid:'#2c7cd4', bot:'#64a8ec' }; // hot afternoon — same vivid blue
+      if (hr < 17.5) return { top:'#1e2040', mid:'#3c3020', bot:'#906030' }; // late afternoon turning golden
+      if (hr < 18.5) return { top:'#200a10', mid:'#4e1808', bot:'#a04820' }; // golden hour
+      if (hr < 19.5) return { top:'#16080e', mid:'#2c0e18', bot:'#4e1e2c' }; // dusk
+      if (hr < 21)   return { top:'#0c0616', mid:'#160820', bot:'#200c2a' }; // twilight
+      return { top:'#020610', mid:'#040a1e', bot:'#060e28' };                 // night
     })();
 
     // Mode tints — subtle shifts
@@ -320,113 +322,83 @@ const CanvasScenes = (() => {
     }
   }
 
-  // ── Water shimmer ──────────────────────────────────────────
-  // Pre-computed wave parameters — stable across frames, organic variety
-  const _waveParams = Array.from({length: 7}, (_, i) => ({
-    freq:      0.0028 + i * 0.0007 + Math.random() * 0.0004,
-    freq2:     0.0051 + i * 0.0005 + Math.random() * 0.0003, // second harmonic
-    speed:     0.008  + i * 0.0018 + Math.random() * 0.001,
-    speed2:    0.013  + i * 0.0012 + Math.random() * 0.0008,
-    phase:     Math.random() * Math.PI * 2,
-    phase2:    Math.random() * Math.PI * 2,
-    depthFrac: 0.04   + i * 0.055,   // distance below horizon (fraction of water height)
-    amp:       2.5    + i * 1.8,     // base amplitude px
-  }));
-
-  function _waveY(p, x, t, waterH) {
-    // Two superimposed sine waves per layer — breaks single-frequency rigidity
-    return p.amp * (
-      Math.sin(x * p.freq  + t * p.speed  + p.phase)  * 0.65 +
-      Math.sin(x * p.freq2 + t * p.speed2 + p.phase2) * 0.35
-    );
-  }
-
+  // ── Water — single composite surface, NO stacked fills ───────
   function _drawWater(t, hr, mode) {
     const w = _canvas.width, h = _canvas.height;
+    const horizonY = h * (mode === 'sleep' ? 0.70 : 0.78);
+    const amp      = mode === 'sleep' ? 1.8 : 1.0;
 
-    // Horizon sits at ~78% down; sleep pushes it to ~68%
-    const horizonY = h * (mode === 'sleep' ? 0.68 : 0.78);
-    const waterH   = h - horizonY;
-    const sleepAmp = mode === 'sleep' ? 2.2 : 1.0;
+    // Composite surface Y at pixel x — four superimposed sine waves,
+    // each at a different speed/frequency so the pattern is never periodic
+    function surfY(x) {
+      return horizonY
+        + Math.sin(x * 0.0042 + t * 0.010)        * 10 * amp
+        + Math.sin(x * 0.0091 + t * 0.017 + 1.1)  *  5 * amp
+        + Math.sin(x * 0.0178 + t * 0.026 + 2.3)  *  3 * amp
+        + Math.sin(x * 0.0031 + t * 0.007 + 0.5)  *  7 * amp;
+    }
 
-    // ── Surface: organic wave edge blended into sky, NO hard line ──
-    // Draw from bottom up through wave layers.
-    // Each layer's top edge is a sine curve — they overlap softly.
+    // ── 1. Fill water body below the surface ─────────────────
+    _ctx.beginPath();
+    _ctx.moveTo(0, surfY(0));
+    for (let x = 2; x <= w; x += 2) _ctx.lineTo(x, surfY(x));
+    _ctx.lineTo(w, h); _ctx.lineTo(0, h); _ctx.closePath();
 
-    // Sky reflection colour (mirrors sky bottom)
-    const p = _skyPalette(hr, mode);
-    const skyBot = p.bot; // hex like #5a90cc
+    const wg = _ctx.createLinearGradient(0, horizonY, 0, h);
+    wg.addColorStop(0,    'rgba(20, 55, 110, 0.55)');  // sky-tinted surface
+    wg.addColorStop(0.15, 'rgba(12, 35,  80, 0.78)');
+    wg.addColorStop(0.5,  'rgba( 6, 18,  50, 0.88)');
+    wg.addColorStop(1,    'rgba( 3,  8,  25, 0.95)');
+    _ctx.fillStyle = wg; _ctx.fill();
 
-    // Dark deep-water fill — starts transparent at horizon, opaque at base
-    const depthGrad = _ctx.createLinearGradient(0, horizonY - 30, 0, h);
-    depthGrad.addColorStop(0,    'rgba(8,16,36,0)');      // invisible at horizon — sky bleeds through
-    depthGrad.addColorStop(0.12, 'rgba(8,16,36,0.35)');
-    depthGrad.addColorStop(0.5,  'rgba(6,12,28,0.72)');
-    depthGrad.addColorStop(1,    'rgba(3,7,18,0.92)');
-    _ctx.fillStyle = depthGrad;
-    _ctx.fillRect(0, horizonY - 30, w, h - horizonY + 30);
+    // ── 2. Soft sky-colour reflection band at the surface ────
+    // Makes the horizon area feel like water mirrors the sky
+    const skyRefl = _ctx.createLinearGradient(0, horizonY - 4, 0, horizonY + h * 0.12);
+    const isDawn  = hr >= 5.5 && hr < 8;
+    const isDusk  = hr >= 17  && hr < 20;
+    const isDay   = hr >= 8   && hr < 17;
+    const reflCol = isDawn || isDusk ? '200,130,80' : isDay ? '120,190,240' : '60,90,160';
+    const reflAmt = isDawn || isDusk ? 0.18 : isDay ? 0.14 : 0.06;
+    skyRefl.addColorStop(0,   `rgba(${reflCol},${reflAmt})`);
+    skyRefl.addColorStop(0.6, `rgba(${reflCol},${reflAmt * 0.3})`);
+    skyRefl.addColorStop(1,   `rgba(${reflCol},0)`);
+    _ctx.fillStyle = skyRefl;
+    // Fill only below the surface curve — clip to water body
+    _ctx.beginPath();
+    _ctx.moveTo(0, surfY(0));
+    for (let x = 2; x <= w; x += 2) _ctx.lineTo(x, surfY(x));
+    _ctx.lineTo(w, h); _ctx.lineTo(0, h); _ctx.closePath();
+    _ctx.fill();
 
-    // Wave layers — painted back-to-front, each slightly darker/more opaque
-    const layers = mode === 'sleep' ? 7 : 5;
-    for (let i = 0; i < layers; i++) {
-      const wp    = _waveParams[i];
-      const baseY = horizonY + waterH * wp.depthFrac;
-      const amp   = wp.amp * sleepAmp * (1 - i * 0.06); // gentle decrease with depth
-      const alpha = 0.06 + i * 0.04;
-
+    // ── 3. Wave crest highlights — thin strokes only ─────────
+    // 3 crest lines at increasing depth, each independently animated
+    const crests = [
+      { off: h * 0.04, a1: 0.0058, a2: 0.0112, s1: 0.013, s2: 0.019, ph: 0.0,  maxAmp: 8,  alpha: 0.09 },
+      { off: h * 0.09, a1: 0.0072, a2: 0.0095, s1: 0.009, s2: 0.015, ph: 1.4,  maxAmp: 5,  alpha: 0.06 },
+      { off: h * 0.15, a1: 0.0048, a2: 0.0130, s1: 0.007, s2: 0.011, ph: 2.8,  maxAmp: 3,  alpha: 0.04 },
+    ];
+    crests.forEach(c => {
+      function crestY(x) {
+        return horizonY + c.off
+          + Math.sin(x * c.a1 + t * c.s1 + c.ph) * c.maxAmp * amp
+          + Math.sin(x * c.a2 + t * c.s2 + c.ph + 0.8) * (c.maxAmp * 0.5) * amp;
+      }
       _ctx.beginPath();
-      _ctx.moveTo(0, baseY + _waveY(wp, 0, t, waterH) * sleepAmp);
-      for (let x = 3; x <= w; x += 3) {
-        _ctx.lineTo(x, baseY + _waveY(wp, x, t, waterH) * sleepAmp);
-      }
-      _ctx.lineTo(w, h); _ctx.lineTo(0, h); _ctx.closePath();
+      _ctx.moveTo(0, crestY(0));
+      for (let x = 3; x <= w; x += 3) _ctx.lineTo(x, crestY(x));
+      _ctx.strokeStyle = `rgba(160,210,250,${c.alpha})`;
+      _ctx.lineWidth   = 1.2;
+      _ctx.stroke();
+    });
 
-      // Colour shifts from sky-tinted near surface → deeper blue below
-      const surfaceTint = i < 2 ? 0.18 - i * 0.06 : 0;
-      _ctx.fillStyle = `rgba(${12 + i*4},${28 + i*8},${55 + i*6},${alpha})`;
-      _ctx.fill();
-
-      // First (topmost) layer gets a sky-coloured sheen — blends horizon in
-      if (i === 0) {
-        _ctx.beginPath();
-        _ctx.moveTo(0, baseY + _waveY(wp, 0, t, waterH) * sleepAmp);
-        for (let x = 3; x <= w; x += 3) {
-          _ctx.lineTo(x, baseY + _waveY(wp, x, t, waterH) * sleepAmp);
-        }
-        _ctx.lineTo(w, baseY + 3); _ctx.lineTo(0, baseY + 3); _ctx.closePath();
-        // Thin luminous crest — catches light like real water
-        _ctx.fillStyle = `rgba(160,200,240,0.07)`;
-        _ctx.fill();
-      }
-    }
-
-    // ── Horizon softener — melts sky into water, eliminates hard edge ──
-    const blend = _ctx.createLinearGradient(0, horizonY - h * 0.06, 0, horizonY + h * 0.06);
-    blend.addColorStop(0,   'rgba(0,0,0,0)');           // pure sky above
-    blend.addColorStop(0.38,'rgba(8,18,42,0)');
-    blend.addColorStop(0.55,'rgba(8,18,42,0.18)');      // gentle darkening
-    blend.addColorStop(1,   'rgba(6,14,32,0.55)');
-    _ctx.fillStyle = blend;
-    _ctx.fillRect(0, horizonY - h * 0.06, w, h * 0.12);
-
-    // ── Sun / moon sparkle path on water ──
-    if (hr >= 5.5 && hr < 19.5) {
-      const dayAlpha = Math.sin(((hr - 5.5) / 14) * Math.PI) * 0.10;
-      const sparkGrad = _ctx.createLinearGradient(0, horizonY, 0, horizonY + waterH * 0.4);
-      sparkGrad.addColorStop(0,   `rgba(220,235,255,${dayAlpha})`);
-      sparkGrad.addColorStop(0.5, `rgba(200,220,255,${dayAlpha * 0.3})`);
-      sparkGrad.addColorStop(1,   'rgba(200,220,255,0)');
-      _ctx.fillStyle = sparkGrad;
-      _ctx.fillRect(0, horizonY, w, waterH * 0.4);
-    } else if (hr < 5.5 || hr >= 19) {
-      // Moonlit shimmer
-      const moonAlpha = 0.035;
-      const mg = _ctx.createLinearGradient(0, horizonY, 0, horizonY + waterH * 0.3);
-      mg.addColorStop(0,   `rgba(180,200,240,${moonAlpha})`);
-      mg.addColorStop(1,   'rgba(180,200,240,0)');
-      _ctx.fillStyle = mg;
-      _ctx.fillRect(0, horizonY, w, waterH * 0.3);
-    }
+    // ── 4. Horizon melt — sky bleeds into water surface ──────
+    // A transparent-to-slight gradient spanning just the junction
+    const melt = _ctx.createLinearGradient(0, horizonY - h*0.04, 0, horizonY + h*0.04);
+    melt.addColorStop(0,   'rgba(0,0,0,0)');
+    melt.addColorStop(0.5, 'rgba(10,25,60,0.12)');
+    melt.addColorStop(1,   'rgba(10,25,60,0.28)');
+    _ctx.fillStyle = melt;
+    _ctx.fillRect(0, horizonY - h*0.04, w, h*0.08);
   }
 
   // ── Birds ──────────────────────────────────────────────────
