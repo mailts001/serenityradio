@@ -341,14 +341,20 @@ const CanvasScenes = (() => {
     const sG = isDawn||isDusk ? 120 : isDay ? 155 : 48;
     const sB = isDawn||isDusk ?  55 : isDay ? 220 : 125;
 
-    // ── 1. One solid gradient — no hard-edge seam at horizon ─
-    // Top is nearly transparent (sky shows through), darkens smoothly downward.
+    // ── 1. Water gradient — derives top colour from live sky palette ──
+    // Reading the exact sky-bot hex and starting from it at alpha 0
+    // means the water begins as an invisible continuation of the sky,
+    // with zero visible seam at the horizon line.
+    const skyBot = _skyPalette(hr, mode).bot;
+    const bn = parseInt(skyBot.slice(1), 16);
+    const bR = (bn >> 16) & 255, bG = (bn >> 8) & 255, bB = bn & 255;
+
     const wg = _ctx.createLinearGradient(0, hy, 0, h);
-    wg.addColorStop(0,    `rgba(${sR},${sG},${sB},0.06)`);  // almost invisible at seam
-    wg.addColorStop(0.05, `rgba(${sR},${sG},${sB},0.30)`);  // gentle sky-color tint
-    wg.addColorStop(0.18, `rgba(${Math.round(sR*0.45)},${Math.round(sG*0.40)},${Math.round(sB*0.60)},0.82)`);
-    wg.addColorStop(0.45, 'rgba(5,18,58,0.94)');
-    wg.addColorStop(1,    'rgba(2,6,20,0.98)');
+    wg.addColorStop(0,    `rgba(${bR},${bG},${bB},0.00)`);   // exact sky colour, invisible
+    wg.addColorStop(0.06, `rgba(${bR},${bG},${bB},0.22)`);   // gentle tint appears
+    wg.addColorStop(0.20, `rgba(${Math.round(bR*0.42)},${Math.round(bG*0.38)},${Math.round(bB*0.62)},0.78)`);
+    wg.addColorStop(0.50, 'rgba(4,15,50,0.94)');
+    wg.addColorStop(1,    'rgba(1,5,18,0.98)');
     _ctx.fillStyle = wg;
     _ctx.fillRect(0, hy, w, wH);
 
@@ -402,15 +408,7 @@ const CanvasScenes = (() => {
       }
     }
 
-    // ── 3. Horizon feather — sky bleeds gently into sea ─────
-    // Span 4% above and 6% below the horizon line
-    const melt = _ctx.createLinearGradient(0, hy - h*0.04, 0, hy + h*0.06);
-    melt.addColorStop(0,    'rgba(0,0,0,0)');
-    melt.addColorStop(0.42, `rgba(${sR},${sG},${sB},0.06)`);
-    melt.addColorStop(0.60, `rgba(${sR},${sG},${sB},0.04)`);
-    melt.addColorStop(1,    'rgba(0,0,0,0)');
-    _ctx.fillStyle = melt;
-    _ctx.fillRect(0, hy - h*0.04, w, h*0.10);
+    // No extra feather pass needed — gradient already starts at alpha 0.
   }
 
   // ── Birds ──────────────────────────────────────────────────
@@ -892,197 +890,66 @@ const CanvasScenes = (() => {
     }
   }
 
-  // ── Mandarin ducks — float on the water surface ───────────
-  const _ducks = Array.from({length: 3}, (_, i) => ({
-    x:      0.15 + i * 0.28 + Math.random() * 0.12,  // 0..1 fraction of w
-    vx:     (Math.random() > 0.5 ? 1 : -1) * (0.00008 + Math.random() * 0.00006),
-    bob:    Math.random() * Math.PI * 2,              // bobbing phase
-    paired: i < 2,                                    // first two are a pair
-    wake:   [],                                        // trailing wake dots
+  // ── Surreal sky lights — subtle, otherworldly, calming ───────
+  // A few slow-breathing luminous forms drifting through the sky.
+  // No hard edges, no animals — just light and atmosphere.
+  const _skyLights = Array.from({length: 5}, (_, i) => ({
+    x:      0.1 + i * 0.20 + Math.random() * 0.10,   // spread across sky
+    y:      0.06 + Math.random() * 0.36,              // upper 40% of canvas (sky only)
+    vx:     (Math.random() > 0.5 ? 1 : -1) * (0.000025 + Math.random() * 0.000020),
+    phase:  Math.random() * Math.PI * 2,
+    pulse:  0.008 + Math.random() * 0.006,
+    rBase:  Math.min(window.innerWidth, window.innerHeight) * (0.08 + Math.random() * 0.10),
+    // Colour family — rotate between soft aurora tones
+    hue:    [200, 230, 180, 260, 210][i],   // sky-blue, periwinkle, sage, lavender, cyan
+    sat:    55 + Math.random() * 25,
   }));
 
-  function _drawDuck(x, y, facing, alpha) {
-    // Simplified mandarin duck silhouette — body + head + tail crest
-    _ctx.save();
-    _ctx.translate(x, y);
-    _ctx.scale(facing, 1);  // flip for direction
-
-    // Body — warm amber-chestnut oval
-    _ctx.beginPath();
-    _ctx.ellipse(0, 0, 18, 9, -0.1, 0, Math.PI * 2);
-    _ctx.fillStyle = `rgba(160,80,30,${alpha * 0.85})`;
-    _ctx.fill();
-
-    // Wing highlight — teal-green patch
-    _ctx.beginPath();
-    _ctx.ellipse(-2, -2, 9, 5, 0.2, 0, Math.PI * 2);
-    _ctx.fillStyle = `rgba(40,120,100,${alpha * 0.75})`;
-    _ctx.fill();
-
-    // Head — dark iridescent green
-    _ctx.beginPath();
-    _ctx.arc(14, -7, 7, 0, Math.PI * 2);
-    _ctx.fillStyle = `rgba(20,80,50,${alpha * 0.90})`;
-    _ctx.fill();
-
-    // Orange bill
-    _ctx.beginPath();
-    _ctx.ellipse(21, -5, 5, 2.5, 0.2, 0, Math.PI * 2);
-    _ctx.fillStyle = `rgba(220,130,30,${alpha * 0.9})`;
-    _ctx.fill();
-
-    // Tail crest — swept up
-    _ctx.beginPath();
-    _ctx.moveTo(-14, -3);
-    _ctx.quadraticCurveTo(-22, -14, -18, -18);
-    _ctx.quadraticCurveTo(-12, -10, -10, -3);
-    _ctx.fillStyle = `rgba(80,40,15,${alpha * 0.7})`;
-    _ctx.fill();
-
-    _ctx.restore();
-  }
-
-  function _drawDucks(t, hr, mode) {
+  function _drawSkyLights(t, hr, mode) {
     const w = _canvas.width, h = _canvas.height;
-    // Only show ducks in calm daytime — not in heavy rain or night
-    const wtype = _weatherType(hr);
-    if (wtype === 'shower' || hr < 6 || hr > 20) return;
-    if (mode === 'focus') return;  // focus = minimal
-
     const hy = h * (mode === 'sleep' ? 0.60 : 0.65);
-    // Ducks sit just below horizon, floating on near-surface water
-    const duckY = hy + h * 0.04;
 
-    _ducks.forEach((d, i) => {
-      d.x  += d.vx;
-      d.bob += 0.025;
-      // Gentle turn at edges
-      if (d.x < 0.04) d.vx =  Math.abs(d.vx);
-      if (d.x > 0.96) d.vx = -Math.abs(d.vx);
+    // Only draw within the sky region (above horizon)
+    // Brightness: very subtle during full daylight, more visible at dusk/dawn/night
+    const isFullDay = hr >= 9 && hr < 16;
+    const baseAlpha = isFullDay ? 0.028 : (hr >= 5.5 && hr < 9) || (hr >= 16 && hr < 20)
+      ? 0.065   // dawn/dusk — dreamy pastel glow
+      : 0.090;  // night/sleep — quiet aurora shimmer
 
-      const px = d.x * w;
-      const py = duckY + Math.sin(d.bob) * 2.5;   // gentle bobbing
-      const facing = d.vx > 0 ? 1 : -1;
+    if (mode === 'focus') return; // focus = clean sky
 
-      // Appear gradually on calm days — fade in over first 30s
-      const alpha = Math.min(0.75, t / 1800) * (mode === 'nature' ? 1 : 0.7);
+    _skyLights.forEach(sl => {
+      // Drift slowly across sky
+      sl.x += sl.vx;
+      if (sl.x < -0.15) sl.x = 1.15;
+      if (sl.x >  1.15) sl.x = -0.15;
 
-      // Subtle wake — short V-lines behind duck
-      _ctx.save();
-      _ctx.strokeStyle = `rgba(200,230,250,${alpha * 0.18})`;
-      _ctx.lineWidth = 0.8;
-      for (let w2 = 1; w2 <= 3; w2++) {
-        const wx = px - facing * w2 * 8;
-        _ctx.beginPath();
-        _ctx.moveTo(wx, py + 6);
-        _ctx.lineTo(wx - facing * 6, py + 10);
-        _ctx.stroke();
-        _ctx.beginPath();
-        _ctx.moveTo(wx, py + 6);
-        _ctx.lineTo(wx + facing * 6, py + 10);
-        _ctx.stroke();
-      }
-      _ctx.restore();
+      const cx = sl.x * w;
+      const cy = sl.y * h;
 
-      _drawDuck(px, py, facing, alpha);
-    });
-  }
+      // Only render if above horizon
+      if (cy > hy * 0.92) return;
 
-  // ── Fish school — slow, semi-transparent, zen ────────────
-  // A quiet school drifts through every 40-80 seconds.
-  // They move very slowly — this is NOT an aquarium screensaver.
-  let _fishSpawnTimer = 1200; // initial delay before first school
-  const _fishPool = [];       // active fish in current school
+      // Breathing pulse — slow sine, each light independent
+      const breath = (Math.sin(t * sl.pulse + sl.phase) + 1) / 2;  // 0→1
+      const alpha  = baseAlpha * (0.4 + 0.6 * breath);
+      const r      = sl.rBase * (0.75 + 0.25 * breath);
 
-  function _spawnSchool(hy, h) {
-    _fishPool.length = 0;
-    const count   = 3 + Math.floor(Math.random() * 3);   // 3–5 fish
-    const fromLeft = Math.random() > 0.5;
-    // Very slow: cross screen in ~90s at 60fps (90*60 = 5400 frames, w/5400 per frame)
-    const baseVx = (fromLeft ? 1 : -1) * (0.00018 + Math.random() * 0.00010);
+      // Outer glow — very large, near-invisible radial wash
+      const outer = _ctx.createRadialGradient(cx, cy, 0, cx, cy, r * 2.8);
+      outer.addColorStop(0,   `hsla(${sl.hue},${sl.sat}%,80%,${alpha * 0.55})`);
+      outer.addColorStop(0.4, `hsla(${sl.hue},${sl.sat}%,75%,${alpha * 0.22})`);
+      outer.addColorStop(1,   `hsla(${sl.hue},${sl.sat}%,70%,0)`);
+      _ctx.fillStyle = outer;
+      _ctx.fillRect(cx - r*2.8, cy - r*2.8, r*5.6, r*5.6);
 
-    for (let i = 0; i < count; i++) {
-      const offset = i * (fromLeft ? -0.045 : 0.045);  // stagger start positions
-      _fishPool.push({
-        x:       fromLeft ? (-0.06 + offset) : (1.06 + offset),
-        yFrac:   hy / h + 0.06 + Math.random() * 0.13,  // below horizon
-        yOff:    (Math.random() - 0.5) * h * 0.045,      // vertical scatter in school
-        vx:      baseVx * (0.88 + Math.random() * 0.24), // slight individual variation
-        life:    0,
-        maxLife: 3600 + Math.random() * 1800,             // 60-90 s visible
-        phase:   Math.random() * Math.PI * 2,
-        size:    0.72 + Math.random() * 0.55,             // size variety
-      });
-    }
-    // Next school in 40-80 s
-    _fishSpawnTimer = 2400 + Math.random() * 2400;
-  }
-
-  function _drawFish(t, hr, mode) {
-    const w = _canvas.width, h = _canvas.height;
-    if (mode === 'focus' || hr < 6 || hr > 20) return;
-
-    const hy = h * (mode === 'sleep' ? 0.60 : 0.65);
-    _fishSpawnTimer--;
-
-    // Spawn a new school when timer expires and pool is empty or finished
-    if (_fishSpawnTimer <= 0 && _fishPool.every(f => !f.active && f.life >= f.maxLife)) {
-      _spawnSchool(hy, h);
-    }
-    // Also spawn initially
-    if (_fishPool.length === 0 && _fishSpawnTimer <= 0) _spawnSchool(hy, h);
-
-    _fishPool.forEach(fish => {
-      fish.x    += fish.vx;
-      fish.life++;
-
-      // Deactivate when off screen or exceeded life
-      if (fish.life > fish.maxLife) return;
-      if (fish.x < -0.15 || fish.x > 1.15) return;
-
-      // Fade in first 3s, fade out last 3s
-      const fadeFrames = 180;
-      const fadeIn  = Math.min(fish.life, fadeFrames) / fadeFrames;
-      const fadeOut = Math.min(fish.maxLife - fish.life, fadeFrames) / fadeFrames;
-      const alpha   = Math.min(fadeIn, fadeOut) * 0.28;
-      if (alpha < 0.01) return;
-
-      const fx     = fish.x * w;
-      const fy     = fish.yFrac * h + fish.yOff + Math.sin(fish.life * 0.04 + fish.phase) * 4;
-      const facing = fish.vx > 0 ? 1 : -1;
-      const sz     = fish.size;
-
-      _ctx.save();
-      _ctx.translate(fx, fy);
-      _ctx.scale(facing, 1);
-
-      // Body — soft teal, very transparent
-      _ctx.beginPath();
-      _ctx.ellipse(0, 0, 22 * sz, 7 * sz, 0, 0, Math.PI * 2);
-      _ctx.fillStyle = `rgba(155,215,205,${alpha})`;
-      _ctx.fill();
-
-      // Subtle iridescent sheen on upper body
-      _ctx.beginPath();
-      _ctx.ellipse(-2 * sz, -2 * sz, 14 * sz, 3.5 * sz, -0.2, 0, Math.PI * 2);
-      _ctx.fillStyle = `rgba(200,240,230,${alpha * 0.5})`;
-      _ctx.fill();
-
-      // Tail — forked, slightly more opaque
-      _ctx.beginPath();
-      _ctx.moveTo(-18 * sz, 0);
-      _ctx.lineTo(-27 * sz, -7 * sz); _ctx.lineTo(-24 * sz, 0);
-      _ctx.lineTo(-27 * sz,  7 * sz); _ctx.closePath();
-      _ctx.fillStyle = `rgba(130,195,185,${alpha * 0.75})`;
-      _ctx.fill();
-
-      // Eye — dark, just visible
-      _ctx.beginPath();
-      _ctx.arc(14 * sz, -2 * sz, 2.2 * sz, 0, Math.PI * 2);
-      _ctx.fillStyle = `rgba(25,55,75,${alpha * 1.5})`;
-      _ctx.fill();
-
-      _ctx.restore();
+      // Inner core — a soft luminous heart
+      const inner = _ctx.createRadialGradient(cx, cy, 0, cx, cy, r * 0.6);
+      inner.addColorStop(0,   `hsla(${sl.hue},${sl.sat+10}%,95%,${alpha * 0.70})`);
+      inner.addColorStop(0.5, `hsla(${sl.hue},${sl.sat}%,82%,${alpha * 0.30})`);
+      inner.addColorStop(1,   `hsla(${sl.hue},${sl.sat}%,75%,0)`);
+      _ctx.fillStyle = inner;
+      _ctx.fillRect(cx - r*0.6, cy - r*0.6, r*1.2, r*1.2);
     });
   }
 
@@ -1094,9 +961,8 @@ const CanvasScenes = (() => {
     _drawStarsAndMoon(t, hr, mode);
     _drawWeather(t, hr, mode);
     _drawMist(t, hr, mode);
+    _drawSkyLights(t, hr, mode);           // subtle surreal luminous drifts
     _drawWater(t, hr, mode);
-    _drawDucks(t, hr, mode);              // mandarin ducks on surface
-    _drawFish(t, hr, mode);              // occasional transparent fish
     _drawFireflies(t, hr, mode);
     _drawBirds(t, hr, mode);
     _drawPetals(t, mode);
