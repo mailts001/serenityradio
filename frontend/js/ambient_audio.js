@@ -111,24 +111,49 @@ const AmbientAudio = (() => {
     _windSource = src;
   }
 
-  // ── Cricket shimmer — gentle high oscillators ─────────────
+  // ── Night forest hum — replaces sharp cricket tones ─────────
+  // Uses bandpass-filtered noise modulated at a slow rate, giving
+  // the sense of distant night insects without any piercing frequency.
   function _startCrickets() {
-    // Two slightly detuned oscillators → chorus shimmer
-    const freqs = [4200, 4280, 4350];
-    const out   = _makeGain(1); out.connect(_gCrickets);
-    freqs.forEach((f, i) => {
-      const osc = _ac.createOscillator();
-      const g   = _makeGain(0.22);
-      // Slow amplitude flutter
-      const lfo = _ac.createOscillator();
-      const lg  = _makeGain(0.18);
-      lfo.frequency.value = 5 + i * 1.5;
-      lfo.connect(lg); lg.connect(g.gain);
-      osc.frequency.value = f;
-      osc.type = 'sine';
-      osc.connect(g); g.connect(out);
-      lfo.start(); osc.start();
-    });
+    // Filtered noise base — warm low-mid band (not high-pitched)
+    const buf = _ac.createBuffer(1, _ac.sampleRate * 4, _ac.sampleRate);
+    const d   = buf.getChannelData(0);
+    for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+
+    const src = _ac.createBufferSource();
+    src.buffer = buf; src.loop = true;
+
+    // Bandpass centred at 800 Hz — warm, not sharp; Q=4 keeps it narrow/organic
+    const bpf = _ac.createBiquadFilter();
+    bpf.type = 'bandpass'; bpf.frequency.value = 800; bpf.Q.value = 4;
+
+    // Second, softer layer at 1200 Hz for texture
+    const bpf2 = _ac.createBiquadFilter();
+    bpf2.type = 'bandpass'; bpf2.frequency.value = 1200; bpf2.Q.value = 6;
+
+    // Slow swell LFO — 0.8 Hz — gives the "pulse" of a summer night
+    const lfo    = _ac.createOscillator();
+    const lfoGain = _makeGain(0.45);
+    const dcBias  = _makeGain(0.55);   // keeps gain always positive
+    lfo.frequency.value = 0.8;
+    lfo.type = 'sine';
+
+    const out = _makeGain(1);
+    out.connect(_gCrickets);
+
+    const g1 = _makeGain(0.5);
+    const g2 = _makeGain(0.28);
+
+    src.connect(bpf);  bpf.connect(g1);  g1.connect(out);
+    src.connect(bpf2); bpf2.connect(g2); g2.connect(out);
+
+    // LFO modulates g1 gain for the night-pulse feel
+    lfo.connect(lfoGain); lfoGain.connect(g1.gain);
+    // dcBias keeps a constant floor so it never goes silent
+    const dc = _ac.createConstantSource(); dc.offset.value = 0.55;
+    dc.connect(g1.gain);
+    dc.start(); lfo.start(); src.start();
+
     _cricketOsc = out;
   }
 
@@ -149,8 +174,8 @@ const AmbientAudio = (() => {
       const env  = _ac.createGain();
       osc.connect(env); env.connect(gain);
 
-      // Frequency: a realistic bird-like sweep 2–5 kHz
-      const baseFreq = 2200 + Math.random() * 2000;
+      // Frequency: gentle bird sweep 800–2200 Hz (no sharp high register)
+      const baseFreq = 800 + Math.random() * 1400;
       const sweep    = baseFreq * (0.8 + Math.random() * 0.8);
       const noteDur  = 0.06 + Math.random() * 0.08;
       const t0       = _ac.currentTime + offset;

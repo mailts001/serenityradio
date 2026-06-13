@@ -31,6 +31,9 @@ const Auth = (() => {
   function isTeacher() { return _user && _user.plan === 'pro_teacher'; }
 
   function _render() {
+    // Always dispatch the auth:changed event so pages without auth-area
+    // (e.g. teacher.html) still know the login state.
+    document.dispatchEvent(new CustomEvent('auth:changed', { detail: _user }));
     const el = document.getElementById('auth-area');
     if (!el) return;
     if (_user) {
@@ -43,8 +46,6 @@ const Auth = (() => {
     } else {
       el.innerHTML = `<button class="auth-login-btn" onclick="Auth.openLogin()">Sign in</button>`;
     }
-    // Dispatch event so other modules can react
-    document.dispatchEvent(new CustomEvent('auth:changed', { detail: _user }));
   }
 
   function openLogin() {
