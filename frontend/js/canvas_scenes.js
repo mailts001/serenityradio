@@ -45,17 +45,20 @@ const CanvasScenes = (() => {
   // Calibrated for equatorial (Singapore) — full daylight by 7 am.
   // Colours are atmospheric watercolour tones, not pitch-black.
   function _skyPalette(hr, mode) {
+    // Calibrated for equatorial tropics (Singapore):
+    //   night = deep navy, day = genuine medium-bright blue.
+    //   Top of sky is deep blue at zenith; horizon is lighter & warmer.
     const raw = (() => {
       if (hr < 4.5)  return { top:'#020610', mid:'#040a1e', bot:'#06102a' }; // deep night
       if (hr < 5.5)  return { top:'#0c0620', mid:'#1e0c30', bot:'#341840' }; // pre-dawn indigo
-      if (hr < 6.2)  return { top:'#180a18', mid:'#401020', bot:'#803030' }; // first light rose
-      if (hr < 7.0)  return { top:'#1a1020', mid:'#502818', bot:'#c06030' }; // sunrise amber
-      if (hr < 8.0)  return { top:'#0f2040', mid:'#1e3c60', bot:'#3a6a90' }; // early morning blue
-      if (hr < 10)   return { top:'#102848', mid:'#205080', bot:'#4080b0' }; // bright morning
-      if (hr < 13)   return { top:'#0e2240', mid:'#1c4070', bot:'#3870a8' }; // midday clear blue
-      if (hr < 16)   return { top:'#102040', mid:'#1e3c68', bot:'#3468a0' }; // afternoon
-      if (hr < 17.5) return { top:'#1a1828', mid:'#3a2820', bot:'#7a4820' }; // late afternoon gold
-      if (hr < 18.5) return { top:'#200c10', mid:'#481808', bot:'#904020' }; // golden hour
+      if (hr < 6.2)  return { top:'#1a0a18', mid:'#401020', bot:'#803030' }; // first light rose
+      if (hr < 7.0)  return { top:'#1c1225', mid:'#503020', bot:'#c87040' }; // sunrise amber
+      if (hr < 8.0)  return { top:'#163060', mid:'#2a5890', bot:'#5090c0' }; // early morning — clearly blue
+      if (hr < 10)   return { top:'#1a4080', mid:'#2e62a8', bot:'#5a90cc' }; // bright morning — rich blue
+      if (hr < 13)   return { top:'#163878', mid:'#285ea0', bot:'#5088c8' }; // midday — deep clear blue
+      if (hr < 16)   return { top:'#183880', mid:'#2a5ea8', bot:'#4e88c8' }; // afternoon — still bright
+      if (hr < 17.5) return { top:'#1e2850', mid:'#3c3828', bot:'#886030' }; // late afternoon gold
+      if (hr < 18.5) return { top:'#220c10', mid:'#501a08', bot:'#a04820' }; // golden hour
       if (hr < 19.5) return { top:'#180a12', mid:'#30101a', bot:'#502030' }; // dusk
       if (hr < 21)   return { top:'#0e0618', mid:'#180a22', bot:'#240e2e' }; // twilight
       return { top:'#020610', mid:'#040a1e', bot:'#06102a' };                 // night
@@ -107,13 +110,20 @@ const CanvasScenes = (() => {
       _ctx.fillStyle = hg;
       _ctx.fillRect(0, h * 0.42, w, h * 0.3);
     } else if (hr >= 8 && hr < 17) {
-      // Bright day — soft warm haze at horizon
-      const i = 0.10 + 0.06 * Math.sin(((hr - 8) / 9) * Math.PI);
-      const hg = _ctx.createLinearGradient(0, h * 0.55, 0, h * 0.78);
-      hg.addColorStop(0,   `rgba(200,230,255,${i})`);
-      hg.addColorStop(1,   'rgba(180,210,240,0)');
+      // Bright tropical day — strong light haze band at horizon
+      const peak = 0.22 + 0.10 * Math.sin(((hr - 8) / 9) * Math.PI);
+      const hg = _ctx.createLinearGradient(0, h * 0.48, 0, h * 0.80);
+      hg.addColorStop(0,   `rgba(220,240,255,${peak})`);
+      hg.addColorStop(0.4, `rgba(200,225,255,${peak * 0.55})`);
+      hg.addColorStop(1,   'rgba(180,210,245,0)');
       _ctx.fillStyle = hg;
-      _ctx.fillRect(0, h * 0.55, w, h * 0.23);
+      _ctx.fillRect(0, h * 0.48, w, h * 0.32);
+      // Extra sun-scattering brightness just above waterline
+      const sg = _ctx.createLinearGradient(0, h * 0.70, 0, h * 0.85);
+      sg.addColorStop(0, `rgba(255,248,230,${peak * 0.35})`);
+      sg.addColorStop(1, 'rgba(255,240,200,0)');
+      _ctx.fillStyle = sg;
+      _ctx.fillRect(0, h * 0.70, w, h * 0.15);
     } else if (hr >= 17 && hr <= 20) {
       // Sunset warm band
       const i = Math.sin(((hr - 17) / 3) * Math.PI) * 0.38;
