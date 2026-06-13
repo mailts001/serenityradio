@@ -928,8 +928,9 @@ const CanvasScenes = (() => {
   function _initPan() {
     // Listen on document — canvas has pointer-events:none so it can't receive events
     function onDown(e) {
-      // Ignore clicks on UI elements (buttons, inputs, etc.)
-      if (e.target && e.target !== document.body && e.target.tagName !== 'CANVAS') return;
+      // Ignore clicks on interactive UI controls — allow drag anywhere else
+      const tag = e.target ? e.target.tagName.toUpperCase() : '';
+      if (['BUTTON','INPUT','SELECT','TEXTAREA','A','LABEL'].includes(tag)) return;
       _panDragX = (e.touches ? e.touches[0].clientX : e.clientX);
     }
     function onMove(e) {
