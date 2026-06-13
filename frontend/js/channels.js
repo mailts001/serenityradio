@@ -17,7 +17,16 @@ function renderChannelTabs() {
   const container = document.getElementById('channel-tabs');
   if (!container) return;
 
-  container.innerHTML = CHANNELS.map(ch => `
+  // Ambient toggle sits before the All tab
+  const ambientOn = typeof AmbientAudio !== 'undefined' && AmbientAudio.isEnabled();
+  const ambientBtn = `
+    <button id="ambient-btn" class="ch-tab ch-ambient" title="Toggle nature sounds"
+      style="${ambientOn ? 'color:rgba(180,220,160,.9);border-color:rgba(140,200,120,.35);' : ''}"
+      onclick="toggleAmbient(this)">
+      ${ambientOn ? '🔊' : '🔇'} Nature
+    </button>`;
+
+  container.innerHTML = ambientBtn + CHANNELS.map(ch => `
     <button class="ch-tab ${ch.id === activeChannel ? 'active' : ''}"
             onclick="switchChannel('${ch.id}')"
             title="${ch.desc}">

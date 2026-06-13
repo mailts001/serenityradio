@@ -126,6 +126,72 @@ const CanvasScenes = (() => {
     }
   }
 
+  // ── Sun arc ────────────────────────────────────────────────
+  // Sun travels a semicircle: rises right-horizon at ~6am, peaks at noon, sets left at ~18:30
+  function _drawSun(hr) {
+    const w = _canvas.width, h = _canvas.height;
+
+    // Sun visible 5.5 – 19 h; fade at edges
+    if (hr < 5.5 || hr > 19.2) return;
+    const fade = hr < 6.5  ? (hr - 5.5)        // fade in over 1 h at dawn
+               : hr > 18.2 ? (19.2 - hr)        // fade out over 1 h at dusk
+               : 1.0;
+    const alpha = Math.max(0, Math.min(1, fade));
+
+    // Map hour → angle along a semicircle (0 = right horizon, π = left horizon)
+    // 6.0 h → angle 0 (east), 12.75 h → angle π/2 (zenith), 19.5 h → angle π (west)
+    const dayStart = 6.0, dayEnd = 19.5;
+    const progress = Math.max(0, Math.min(1, (hr - dayStart) / (dayEnd - dayStart)));
+    const angle    = progress * Math.PI;  // 0 → π
+
+    // Arc: centre below bottom of screen so it curves naturally
+    const arcCx = w * 0.5;
+    const arcCy = h * 0.94;                 // arc centre near bottom
+    const arcR  = h * 0.88;
+
+    const sx = arcCx - Math.cos(angle) * arcR * 0.92;  // flip: cos(0)=1 → right
+    const sy = arcCy - Math.sin(angle) * arcR;
+
+    // Only draw if above visible area
+    if (sy > h * 0.96) return;
+
+    // Sun size — smaller near horizon (atmospheric), bigger at altitude
+    const altitude = Math.sin(angle);  // 0 at horizon, 1 at zenith
+    const radius   = 10 + altitude * 8;
+
+    // Colour: white-yellow at altitude, warm orange near horizon
+    const sunR = Math.round(255);
+    const sunG = Math.round(200 + altitude * 50);
+    const sunB = Math.round(80  + altitude * 120);
+    const col  = `rgba(${sunR},${sunG},${sunB},${alpha})`;
+
+    // Outer atmospheric halo
+    const haloR = radius * (altitude < 0.15 ? 5 : 3.5);
+    const halo  = _ctx.createRadialGradient(sx, sy, 0, sx, sy, haloR);
+    const haloAlpha = alpha * (altitude < 0.15 ? 0.22 : 0.14);
+    halo.addColorStop(0,   `rgba(${sunR},${sunG},${sunB},${haloAlpha})`);
+    halo.addColorStop(0.4, `rgba(${sunR},${Math.round(sunG*0.8)},${Math.round(sunB*0.5)},${haloAlpha * 0.4})`);
+    halo.addColorStop(1,   `rgba(255,160,60,0)`);
+    _ctx.fillStyle = halo;
+    _ctx.fillRect(sx - haloR, sy - haloR, haloR * 2, haloR * 2);
+
+    // Sun disc
+    _ctx.beginPath();
+    _ctx.arc(sx, sy, radius, 0, Math.PI * 2);
+    _ctx.fillStyle = col;
+    _ctx.fill();
+
+    // Thin horizon reflection column on water (when near horizon)
+    if (altitude < 0.25 && sy < h * 0.88) {
+      const waterY = h * 0.82;
+      const rg = _ctx.createLinearGradient(sx, waterY, sx, h);
+      rg.addColorStop(0, `rgba(${sunR},${sunG},${sunB},${alpha * 0.12})`);
+      rg.addColorStop(1, 'rgba(255,180,60,0)');
+      _ctx.fillStyle = rg;
+      _ctx.fillRect(sx - radius * 1.5, waterY, radius * 3, h - waterY);
+    }
+  }
+
   // ── Stars + Moon ───────────────────────────────────────────
   function _drawStarsAndMoon(t, hr, mode) {
     const w = _canvas.width, h = _canvas.height;
@@ -155,25 +221,46 @@ const CanvasScenes = (() => {
       });
     }
 
-    // Moon — sleep mode always, others only at night
-    const showMoon = mode === 'sleep' || nightness > 0.3;
+    // Moon arc — rises right ~20h, peaks ~1am, sets left ~6am
+    const showMoon = mode === 'sleep' || nightness > 0.25;
     if (showMoon) {
-      const moonAlpha = Math.min(0.95, (mode === 'sleep' ? 0.5 : 0) + nightness * 0.85);
-      if (moonAlpha > 0.05) {
-        const mx = w * 0.78, my = h * 0.18, mr = Math.min(w, h) * 0.055;
-        // Moon glow
-        const mg = _ctx.createRadialGradient(mx, my, 0, mx, my, mr * 3.5);
-        mg.addColorStop(0, `rgba(200,215,255,${moonAlpha * 0.22})`);
+      const moonAlpha = Math.min(0.92, (mode === 'sleep' ? 0.35 : 0) + nightness * 0.82);
+      if (moonAlpha > 0.04) {
+        // Map night hours → arc progress
+        // 20h → 0, 1h (=25h) → 0.5, 6h → 1
+        const nightHr = hr < 8 ? hr + 24 : hr;  // 20..30 range
+        const progress = Math.max(0, Math.min(1, (nightHr - 20) / 10));
+        const angle    = progress * Math.PI;
+
+        const arcCx = w * 0.5, arcCy = h * 0.94, arcR = h * 0.82;
+        const mx = arcCx - Math.cos(angle) * arcR * 0.80;
+        const my = arcCy - Math.sin(angle) * arcR;
+        if (my > h * 0.95) return;
+
+        const mr = Math.min(w, h) * 0.048;
+        // Glow
+        const mg = _ctx.createRadialGradient(mx, my, 0, mx, my, mr * 4);
+        mg.addColorStop(0, `rgba(200,215,255,${moonAlpha * 0.18})`);
         mg.addColorStop(1, 'rgba(200,215,255,0)');
         _ctx.fillStyle = mg; _ctx.fillRect(0, 0, w, h);
-        // Moon disc
+        // Disc
         _ctx.beginPath(); _ctx.arc(mx, my, mr, 0, Math.PI * 2);
         _ctx.fillStyle = `rgba(228,235,255,${moonAlpha})`;
         _ctx.fill();
-        // Crescent shadow
-        _ctx.beginPath(); _ctx.arc(mx + mr * 0.28, my - mr * 0.08, mr * 0.88, 0, Math.PI * 2);
+        // Crescent shadow bite
+        _ctx.beginPath(); _ctx.arc(mx + mr * 0.3, my - mr * 0.06, mr * 0.86, 0, Math.PI * 2);
         _ctx.fillStyle = _skyPalette(hr, mode).top;
         _ctx.fill();
+        // Moon reflection on water at low altitude
+        const altitude = Math.sin(angle);
+        if (altitude < 0.3 && my < h * 0.85) {
+          const waterY = h * 0.84;
+          const rg = _ctx.createLinearGradient(mx, waterY, mx, h);
+          rg.addColorStop(0, `rgba(200,215,255,${moonAlpha * 0.10})`);
+          rg.addColorStop(1, 'rgba(200,215,255,0)');
+          _ctx.fillStyle = rg;
+          _ctx.fillRect(mx - mr * 1.2, waterY, mr * 2.4, h - waterY);
+        }
       }
     }
   }
@@ -439,7 +526,8 @@ const CanvasScenes = (() => {
   function _worldFrame(t, mode) {
     const hr = new Date().getHours() + new Date().getMinutes() / 60;
     _drawSky(hr, mode);
-    _drawStarsAndMoon(t, hr, mode);
+    _drawSun(hr);                      // sun arc — dawn → zenith → dusk
+    _drawStarsAndMoon(t, hr, mode);    // stars fade in at dusk; moon arcs overnight
     _drawMist(t, hr, mode);
     _drawWater(t, hr, mode);
     _drawFireflies(t, hr, mode);

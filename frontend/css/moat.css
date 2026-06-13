@@ -20,6 +20,14 @@
   border-color: var(--sage);
   box-shadow: 0 0 14px rgba(122,158,126,.3);
 }
+/* Ambient toggle — sits left of channel tabs, slightly separated */
+.ch-ambient {
+  margin-right: 6px;
+  border-right: 1px solid rgba(255,255,255,.08);
+  padding-right: 18px;
+  color: rgba(255,255,255,.38);
+}
+.ch-ambient:hover { color: rgba(180,220,160,.9); border-color: rgba(140,200,120,.3); }
 
 /* ── Channel switch toast ── */
 #ch-toast {
