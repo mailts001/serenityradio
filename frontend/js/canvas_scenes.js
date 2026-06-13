@@ -322,83 +322,119 @@ const CanvasScenes = (() => {
     }
   }
 
-  // ── Water — single composite surface, NO stacked fills ───────
+  // ── Ocean with perspective — waves shrink toward horizon ─────
+  // Seascape rule: at the horizon waves are tiny compressed lines;
+  // as they approach the viewer (bottom) they grow in amplitude and spacing.
   function _drawWater(t, hr, mode) {
-    const w = _canvas.width, h = _canvas.height;
-    const horizonY = h * (mode === 'sleep' ? 0.70 : 0.78);
-    const amp      = mode === 'sleep' ? 1.8 : 1.0;
+    const w  = _canvas.width, h = _canvas.height;
+    const hy = h * (mode === 'sleep' ? 0.68 : 0.75); // horizon y
+    const wH = h - hy;                                // water height
+    const modeAmp = mode === 'sleep' ? 1.5 : 1.0;
 
-    // Composite surface Y at pixel x — four superimposed sine waves,
-    // each at a different speed/frequency so the pattern is never periodic
-    function surfY(x) {
-      return horizonY
-        + Math.sin(x * 0.0042 + t * 0.010)        * 10 * amp
-        + Math.sin(x * 0.0091 + t * 0.017 + 1.1)  *  5 * amp
-        + Math.sin(x * 0.0178 + t * 0.026 + 2.3)  *  3 * amp
-        + Math.sin(x * 0.0031 + t * 0.007 + 0.5)  *  7 * amp;
+    // ── 1. Base water gradient (fills whole water region) ────
+    // Sky colour bleeds into the very top of the water; deepens downward
+    const isDawn = hr >= 5.5 && hr < 8;
+    const isDusk = hr >= 17  && hr < 20;
+    const isDay  = hr >= 8   && hr < 17;
+    const surfR  = isDawn||isDusk ? 180 : isDay ? 60  : 20;
+    const surfG  = isDawn||isDusk ? 120 : isDay ? 150 : 50;
+    const surfB  = isDawn||isDusk ?  60 : isDay ? 220 : 120;
+
+    const wg = _ctx.createLinearGradient(0, hy, 0, h);
+    wg.addColorStop(0,    `rgba(${surfR},${surfG},${surfB},0.45)`); // sky mirror at horizon
+    wg.addColorStop(0.08, `rgba(15,45,100,0.72)`);
+    wg.addColorStop(0.35, `rgba( 8,25, 65,0.88)`);
+    wg.addColorStop(1,    `rgba( 3, 9, 28,0.96)`);
+    _ctx.fillStyle = wg;
+    _ctx.fillRect(0, hy, w, wH);
+
+    // ── 2. Perspective wave bands ─────────────────────────────
+    // 28 strips from horizon (i=0, far) to bottom (i=27, near).
+    // Each strip occupies a quadratically-spaced Y slice (perspective).
+    // Amplitude, spacing, and speed all grow toward viewer.
+    const N = 28;
+    for (let i = 0; i < N; i++) {
+      // Quadratic perspective mapping: far strips are thin, near ones are tall
+      const p0 = (i   / N) ** 1.7;  // start of strip (perspective fraction)
+      const p1 = ((i+1)/N) ** 1.7;  // end of strip
+      const p  = (p0 + p1) / 2;     // midpoint
+
+      const y0 = hy + wH * p0;
+      const y1 = hy + wH * p1;
+
+      // Amplitude: near-zero at horizon, grows quadratically to foreground
+      const amp  = p * p * 22 * modeAmp;
+
+      // Apparent frequency: high at horizon (waves compressed), low near viewer
+      const freq = 0.012 * (1 - p * 0.88) + 0.001;
+
+      // Speed: waves accelerate toward viewer
+      const spd  = 0.006 + p * 0.018;
+
+      // Two-harmonic wave shape per strip (prevents single-sine rigidity)
+      const ph1  = i * 0.55 + t * spd;
+      const ph2  = i * 0.93 + t * spd * 0.65 + 1.8;
+
+      function wy(x) {
+        return y0 + amp * (
+          Math.sin(x * freq        + ph1) * 0.62 +
+          Math.sin(x * freq * 1.72 + ph2) * 0.38
+        );
+      }
+
+      // Far strips (i < 8): draw only as thin luminous lines — no fill
+      if (i < 8) {
+        const lineAlpha = 0.06 + p * 0.12;
+        _ctx.beginPath();
+        _ctx.moveTo(0, wy(0));
+        for (let x = 4; x <= w; x += 4) _ctx.lineTo(x, wy(x));
+        _ctx.strokeStyle = `rgba(140,200,240,${lineAlpha})`;
+        _ctx.lineWidth   = 0.6 + p;
+        _ctx.stroke();
+        continue;
+      }
+
+      // Mid + near strips: draw trough fill + bright crest line
+      // Trough fill (between this crest and the next strip top)
+      _ctx.beginPath();
+      _ctx.moveTo(0, wy(0));
+      for (let x = 3; x <= w; x += 3) _ctx.lineTo(x, wy(x));
+      _ctx.lineTo(w, y1); _ctx.lineTo(0, y1); _ctx.closePath();
+      const troughAlpha = 0.025 + p * 0.055;
+      _ctx.fillStyle = `rgba(8,22,60,${troughAlpha})`;
+      _ctx.fill();
+
+      // Crest highlight — luminous thin line on top of each wave
+      const crestAlpha = 0.08 + p * 0.20;
+      const crestWidth = 0.8 + p * 2.2;
+      _ctx.beginPath();
+      _ctx.moveTo(0, wy(0));
+      for (let x = 3; x <= w; x += 3) _ctx.lineTo(x, wy(x));
+      _ctx.strokeStyle = `rgba(200,235,255,${crestAlpha})`;
+      _ctx.lineWidth   = crestWidth;
+      _ctx.stroke();
+
+      // Near strips (i > 20): add subtle foam flecks on crests
+      if (i > 20 && p > 0.7) {
+        const foamEvery = Math.floor(w / (6 + (1-p)*10));
+        for (let fx = foamEvery/2; fx < w; fx += foamEvery) {
+          const fy = wy(fx);
+          const fr = 2 + p * 3;
+          _ctx.beginPath();
+          _ctx.arc(fx + Math.sin(t*0.03+fx)*fr*0.5, fy, fr * (0.4 + Math.random()*0.3), 0, Math.PI*2);
+          _ctx.fillStyle = `rgba(240,250,255,${0.06 + p * 0.08})`;
+          _ctx.fill();
+        }
+      }
     }
 
-    // ── 1. Fill water body below the surface ─────────────────
-    _ctx.beginPath();
-    _ctx.moveTo(0, surfY(0));
-    for (let x = 2; x <= w; x += 2) _ctx.lineTo(x, surfY(x));
-    _ctx.lineTo(w, h); _ctx.lineTo(0, h); _ctx.closePath();
-
-    const wg = _ctx.createLinearGradient(0, horizonY, 0, h);
-    wg.addColorStop(0,    'rgba(20, 55, 110, 0.55)');  // sky-tinted surface
-    wg.addColorStop(0.15, 'rgba(12, 35,  80, 0.78)');
-    wg.addColorStop(0.5,  'rgba( 6, 18,  50, 0.88)');
-    wg.addColorStop(1,    'rgba( 3,  8,  25, 0.95)');
-    _ctx.fillStyle = wg; _ctx.fill();
-
-    // ── 2. Soft sky-colour reflection band at the surface ────
-    // Makes the horizon area feel like water mirrors the sky
-    const skyRefl = _ctx.createLinearGradient(0, horizonY - 4, 0, horizonY + h * 0.12);
-    const isDawn  = hr >= 5.5 && hr < 8;
-    const isDusk  = hr >= 17  && hr < 20;
-    const isDay   = hr >= 8   && hr < 17;
-    const reflCol = isDawn || isDusk ? '200,130,80' : isDay ? '120,190,240' : '60,90,160';
-    const reflAmt = isDawn || isDusk ? 0.18 : isDay ? 0.14 : 0.06;
-    skyRefl.addColorStop(0,   `rgba(${reflCol},${reflAmt})`);
-    skyRefl.addColorStop(0.6, `rgba(${reflCol},${reflAmt * 0.3})`);
-    skyRefl.addColorStop(1,   `rgba(${reflCol},0)`);
-    _ctx.fillStyle = skyRefl;
-    // Fill only below the surface curve — clip to water body
-    _ctx.beginPath();
-    _ctx.moveTo(0, surfY(0));
-    for (let x = 2; x <= w; x += 2) _ctx.lineTo(x, surfY(x));
-    _ctx.lineTo(w, h); _ctx.lineTo(0, h); _ctx.closePath();
-    _ctx.fill();
-
-    // ── 3. Wave crest highlights — thin strokes only ─────────
-    // 3 crest lines at increasing depth, each independently animated
-    const crests = [
-      { off: h * 0.04, a1: 0.0058, a2: 0.0112, s1: 0.013, s2: 0.019, ph: 0.0,  maxAmp: 8,  alpha: 0.09 },
-      { off: h * 0.09, a1: 0.0072, a2: 0.0095, s1: 0.009, s2: 0.015, ph: 1.4,  maxAmp: 5,  alpha: 0.06 },
-      { off: h * 0.15, a1: 0.0048, a2: 0.0130, s1: 0.007, s2: 0.011, ph: 2.8,  maxAmp: 3,  alpha: 0.04 },
-    ];
-    crests.forEach(c => {
-      function crestY(x) {
-        return horizonY + c.off
-          + Math.sin(x * c.a1 + t * c.s1 + c.ph) * c.maxAmp * amp
-          + Math.sin(x * c.a2 + t * c.s2 + c.ph + 0.8) * (c.maxAmp * 0.5) * amp;
-      }
-      _ctx.beginPath();
-      _ctx.moveTo(0, crestY(0));
-      for (let x = 3; x <= w; x += 3) _ctx.lineTo(x, crestY(x));
-      _ctx.strokeStyle = `rgba(160,210,250,${c.alpha})`;
-      _ctx.lineWidth   = 1.2;
-      _ctx.stroke();
-    });
-
-    // ── 4. Horizon melt — sky bleeds into water surface ──────
-    // A transparent-to-slight gradient spanning just the junction
-    const melt = _ctx.createLinearGradient(0, horizonY - h*0.04, 0, horizonY + h*0.04);
+    // ── 3. Horizon softener — feathers sky into sea ───────────
+    const melt = _ctx.createLinearGradient(0, hy - h*0.03, 0, hy + h*0.05);
     melt.addColorStop(0,   'rgba(0,0,0,0)');
-    melt.addColorStop(0.5, 'rgba(10,25,60,0.12)');
-    melt.addColorStop(1,   'rgba(10,25,60,0.28)');
+    melt.addColorStop(0.45,'rgba(5,15,45,0.08)');
+    melt.addColorStop(1,   'rgba(5,15,45,0.30)');
     _ctx.fillStyle = melt;
-    _ctx.fillRect(0, horizonY - h*0.04, w, h*0.08);
+    _ctx.fillRect(0, hy - h*0.03, w, h*0.08);
   }
 
   // ── Birds ──────────────────────────────────────────────────
@@ -590,12 +626,141 @@ const CanvasScenes = (() => {
     _ctx.fillStyle = gr; _ctx.fillRect(0, 0, w, h);
   }
 
+  // ── Weather system ────────────────────────────────────────
+  // Seeded by day-of-year so weather is consistent within a day
+  // but varies naturally across days.
+  const _dayOfYear = (() => {
+    const n = new Date(); return Math.floor((n - new Date(n.getFullYear(),0,0)) / 86400000);
+  })();
+  const _weatherSeed = Math.sin(_dayOfYear * 2.399) * 0.5 + 0.5; // 0–1 stable per day
+
+  // Weather type for this hour
+  function _weatherType(hr) {
+    // Morning haze always present dawn-8am
+    if (hr >= 5 && hr < 8)   return 'haze';
+    // Afternoon tropical shower (seed determines if today has one)
+    if (hr >= 13 && hr < 16 && _weatherSeed > 0.55) return 'shower';
+    // Overcast on ~30% of days in the morning
+    if (hr >= 9  && hr < 12 && _weatherSeed < 0.3)  return 'overcast';
+    // Evening scattered clouds
+    if (hr >= 16 && hr < 19) return 'clouds';
+    // Otherwise clear or light clouds
+    return _weatherSeed > 0.5 ? 'clear' : 'light-cloud';
+  }
+
+  // Cloud pool — reused across frames
+  const _clouds = Array.from({length: 12}, (_, i) => ({
+    x:     (i / 12) * 1.4 - 0.1,          // 0..1.3 as fraction of w
+    y:     0.05 + Math.random() * 0.28,    // fraction of h, stays in sky
+    w:     0.18 + Math.random() * 0.25,    // fraction of w
+    h:     0.04 + Math.random() * 0.06,    // fraction of h
+    speed: 0.000025 + Math.random() * 0.00003,
+    puffs: Math.floor(3 + Math.random() * 4),
+    alpha: 0.35 + Math.random() * 0.30,
+    type:  Math.random() > 0.5 ? 'cumulus' : 'wispy',
+  }));
+
+  function _drawCloud(c, w, h, alpha) {
+    const cx = c.x * w, cy = c.y * h;
+    const cw = c.w * w, ch = c.h * h;
+    if (c.type === 'wispy') {
+      // Thin cirrus streaks
+      _ctx.beginPath();
+      _ctx.ellipse(cx, cy, cw * 0.7, ch * 0.25, -0.15, 0, Math.PI * 2);
+      _ctx.fillStyle = `rgba(255,255,255,${alpha * 0.28})`;
+      _ctx.fill();
+    } else {
+      // Puffy cumulus — several overlapping ellipses
+      for (let p = 0; p < c.puffs; p++) {
+        const px = cx + (p - c.puffs/2) * cw * 0.28;
+        const py = cy - ch * 0.2 * Math.sin((p / c.puffs) * Math.PI);
+        const pr = ch * (0.6 + Math.sin(p * 1.4) * 0.3);
+        _ctx.beginPath();
+        _ctx.ellipse(px, py, cw * 0.22, pr, 0, 0, Math.PI * 2);
+        _ctx.fillStyle = `rgba(255,255,255,${alpha * 0.55})`;
+        _ctx.fill();
+      }
+      // Dark base
+      _ctx.beginPath();
+      _ctx.ellipse(cx, cy + ch * 0.3, cw * 0.55, ch * 0.22, 0, 0, Math.PI * 2);
+      _ctx.fillStyle = `rgba(180,190,210,${alpha * 0.25})`;
+      _ctx.fill();
+    }
+  }
+
+  function _drawWeather(t, hr, mode) {
+    const w = _canvas.width, h = _canvas.height;
+    const type = _weatherType(hr);
+
+    // Move clouds slowly across sky
+    _clouds.forEach(c => {
+      c.x += c.speed;
+      if (c.x > 1.35) c.x = -0.35;
+    });
+
+    if (type === 'haze') {
+      // Morning haze — white-ish veil over lower sky
+      const fade = hr < 6.5 ? 1 : Math.max(0, 1 - (hr - 6.5) / 1.5);
+      const hg = _ctx.createLinearGradient(0, h * 0.35, 0, h * 0.80);
+      hg.addColorStop(0,   'rgba(220,230,240,0)');
+      hg.addColorStop(0.4, `rgba(220,230,240,${fade * 0.22})`);
+      hg.addColorStop(1,   'rgba(220,230,240,0)');
+      _ctx.fillStyle = hg;
+      _ctx.fillRect(0, h * 0.35, w, h * 0.45);
+      // Draw a few wispy clouds
+      _clouds.slice(0, 5).forEach(c => _drawCloud({...c, type:'wispy'}, w, h, fade * 0.5));
+
+    } else if (type === 'shower') {
+      // Afternoon tropical shower — dark clouds + rain streaks
+      const hy = h * 0.72;
+      // Overcast base
+      const cg = _ctx.createLinearGradient(0, 0, 0, hy);
+      cg.addColorStop(0,   'rgba(60,70,90,0.45)');
+      cg.addColorStop(1,   'rgba(30,40,60,0.20)');
+      _ctx.fillStyle = cg; _ctx.fillRect(0, 0, w, hy);
+      // Storm clouds
+      _clouds.slice(0, 8).forEach(c => _drawCloud({...c, type:'cumulus', alpha:0.65}, w, h, 0.7));
+      // Rain streaks
+      _ctx.save();
+      _ctx.strokeStyle = 'rgba(180,210,240,0.18)';
+      _ctx.lineWidth   = 0.8;
+      const rainPhase = (t * 0.5) % 80;
+      for (let i = 0; i < 120; i++) {
+        const rx = ((i * 137.5 + rainPhase) % w);
+        const ry = ((i * 53  + t * 1.2 ) % (h * 0.85));
+        _ctx.beginPath();
+        _ctx.moveTo(rx, ry);
+        _ctx.lineTo(rx - 1, ry + 14);
+        _ctx.stroke();
+      }
+      _ctx.restore();
+
+    } else if (type === 'overcast') {
+      // Overcast — uniform grey veil + low flat clouds
+      const og = _ctx.createLinearGradient(0, 0, 0, h * 0.6);
+      og.addColorStop(0,   'rgba(80,90,110,0.35)');
+      og.addColorStop(1,   'rgba(50,60,80,0.10)');
+      _ctx.fillStyle = og; _ctx.fillRect(0, 0, w, h * 0.6);
+      _clouds.slice(0, 10).forEach(c => _drawCloud(c, w, h, 0.55));
+
+    } else if (type === 'clouds') {
+      // Scattered afternoon/evening clouds
+      const count = Math.floor(4 + _weatherSeed * 4);
+      _clouds.slice(0, count).forEach(c => _drawCloud(c, w, h, 0.40));
+
+    } else {
+      // Clear / light-cloud — just 2-3 distant wisps
+      _clouds.slice(0, 3).forEach(c => _drawCloud({...c, type:'wispy'}, w, h, 0.22));
+    }
+  }
+
   // ── Main world frame ───────────────────────────────────────
   function _worldFrame(t, mode) {
     const hr = new Date().getHours() + new Date().getMinutes() / 60;
     _drawSky(hr, mode);
-    _drawSun(hr);                      // sun arc — dawn → zenith → dusk
-    _drawStarsAndMoon(t, hr, mode);    // stars fade in at dusk; moon arcs overnight
+    _drawSun(hr);
+    _drawStarsAndMoon(t, hr, mode);
+    _drawWeather(t, hr, mode);          // clouds, rain, haze
     _drawMist(t, hr, mode);
     _drawWater(t, hr, mode);
     _drawFireflies(t, hr, mode);

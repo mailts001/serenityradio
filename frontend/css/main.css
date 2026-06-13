@@ -151,7 +151,8 @@ h1 em {
 
 .tagline {
   font-size: 14px;
-  color: var(--text-muted);
+  color: rgba(255,255,255,0.82);
+  text-shadow: 0 1px 6px rgba(0,0,0,0.55);
   margin-top: 0.5rem;
   letter-spacing: 0.05em;
 }
@@ -164,7 +165,8 @@ h1 em {
   gap: 8px;
   margin: 1rem 0 0;
   font-size: 13px;
-  color: var(--text-muted);
+  color: rgba(255,255,255,0.80);
+  text-shadow: 0 1px 5px rgba(0,0,0,0.5);
 }
 .live-dot {
   width: 8px; height: 8px;
