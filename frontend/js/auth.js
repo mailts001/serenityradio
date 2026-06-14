@@ -22,6 +22,11 @@ const Auth = (() => {
       _user = d.logged_in ? d : null;
     } catch { _user = null; }
     _render();
+    // Show onboarding once per new login (magic link sets sr_just_verified)
+    if (_user && sessionStorage.getItem('sr_just_verified')) {
+      sessionStorage.removeItem('sr_just_verified');
+      _maybeOnboard(_user);
+    }
     return _user;
   }
 
@@ -48,7 +53,7 @@ const Auth = (() => {
     }
   }
 
-  function openLogin() {
+  function openLogin(opts = {}) {
     _removeModal();
     const m = document.createElement('div');
     m.id = 'auth-modal';
@@ -58,33 +63,41 @@ const Auth = (() => {
         <button class="auth-dialog-close" onclick="Auth.closeModal()">✕</button>
         <div style="font-size:2rem;margin-bottom:.75rem">✦</div>
         <h2 style="font-family:'Playfair Display',serif;font-size:1.5rem;font-weight:400;margin-bottom:.4rem">Welcome to Serenity</h2>
-        <p style="font-size:14px;color:#888;margin-bottom:1.5rem;line-height:1.6">Enter your email — we'll send a magic link.<br>No password needed.</p>
+        <p style="font-size:14px;color:#888;margin-bottom:.6rem;line-height:1.6">
+          ${opts.hint || 'Enter your email — we\'ll send a magic link.<br>No password needed.'}
+        </p>
+        <input type="text" id="auth-name" placeholder="Your name (optional)" autocomplete="name"
+          style="width:100%;padding:11px 16px;border-radius:10px;border:1px solid #444;
+                 background:#1e2538;color:#e8e0d5;font-size:14px;font-family:inherit;
+                 outline:none;margin-bottom:.6rem;box-sizing:border-box;">
         <input type="email" id="auth-email" placeholder="you@example.com" autocomplete="email"
           style="width:100%;padding:12px 16px;border-radius:10px;border:1px solid #444;
                  background:#1e2538;color:#e8e0d5;font-size:15px;font-family:inherit;
-                 outline:none;margin-bottom:1rem;box-sizing:border-box;">
+                 outline:none;margin-bottom:.9rem;box-sizing:border-box;">
         <button id="auth-send-btn" onclick="Auth.sendLink()"
           style="width:100%;padding:13px;border-radius:50px;background:#7a9e7e;
                  color:#fff;border:none;font-size:15px;font-weight:500;
                  cursor:pointer;font-family:inherit;transition:opacity .2s">
-          Send Magic Link
+          Send Magic Link ✦
         </button>
         <div id="auth-msg" style="font-size:13px;margin-top:.75rem;min-height:1.2em;text-align:center"></div>
+        <div style="font-size:12px;color:#555;text-align:center;margin-top:1rem;line-height:1.5">
+          Free to join · No password · Unsubscribe anytime
+        </div>
       </div>`;
     document.body.appendChild(m);
-    // Two rAF frames to guarantee paint before transition
     requestAnimationFrame(() => requestAnimationFrame(() => m.classList.add('visible')));
     setTimeout(() => {
-      const inp = document.getElementById('auth-email');
-      if (inp) {
-        inp.focus();
-        inp.addEventListener('keydown', e => { if (e.key === 'Enter') Auth.sendLink(); });
-      }
+      const nameInp = document.getElementById('auth-name');
+      const emailInp = document.getElementById('auth-email');
+      if (nameInp) nameInp.focus();
+      if (emailInp) emailInp.addEventListener('keydown', e => { if (e.key === 'Enter') Auth.sendLink(); });
     }, 50);
   }
 
   async function sendLink() {
-    const email = (document.getElementById('auth-email').value || '').trim();
+    const email = (document.getElementById('auth-email')?.value || '').trim();
+    const name  = (document.getElementById('auth-name')?.value  || '').trim();
     if (!email || !email.includes('@')) {
       _setMsg('Please enter a valid email.', 'error'); return;
     }
@@ -94,12 +107,11 @@ const Auth = (() => {
       const r = await fetch('/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email })
+        body: JSON.stringify({ email, name })
       });
       const d = await r.json();
       if (d.ok) {
         if (d.dev_link) {
-          // Dev mode: no email configured — show clickable link
           _setMsg(`<a href="${d.dev_link}" style="color:#7a9e7e">Click here to sign in (dev mode)</a>`, 'ok');
         } else {
           _setMsg('✓ Check your inbox — magic link sent!', 'ok');
@@ -107,12 +119,111 @@ const Auth = (() => {
         btn.textContent = 'Sent ✓';
       } else {
         _setMsg(d.error || 'Something went wrong', 'error');
-        btn.disabled = false; btn.textContent = 'Send Magic Link';
+        btn.disabled = false; btn.textContent = 'Send Magic Link ✦';
       }
     } catch {
       _setMsg('Network error. Try again.', 'error');
-      btn.disabled = false; btn.textContent = 'Send Magic Link';
+      btn.disabled = false; btn.textContent = 'Send Magic Link ✦';
     }
+  }
+
+  // ── Post-login onboarding ─────────────────────────────────────
+  // Called after magic-link verify — shows plan choice for new users
+  function _maybeOnboard(user) {
+    const key = 'sr_onboarded_' + user.id;
+    if (localStorage.getItem(key)) return;
+    localStorage.setItem(key, '1');
+    // Brief delay so login transition settles
+    setTimeout(() => _showOnboarding(user), 600);
+  }
+
+  function _showOnboarding(user) {
+    _removeModal();
+    const isNew = !user.plan || user.plan === 'free';
+    const m = document.createElement('div');
+    m.id = 'auth-modal';
+    m.innerHTML = `
+      <div class="auth-overlay-bg"></div>
+      <div class="auth-dialog" style="max-width:480px">
+        <div style="font-size:2.2rem;margin-bottom:.5rem">🌿</div>
+        <h2 style="font-family:'Playfair Display',serif;font-size:1.4rem;font-weight:400;margin-bottom:.4rem">
+          Welcome${user.name ? ', ' + user.name.split(' ')[0] : ''}
+        </h2>
+        <p style="font-size:14px;color:#888;margin-bottom:1.4rem;line-height:1.6">
+          You're in. Serenity Radio is free forever — upgrade anytime for the full experience.
+        </p>
+        <div style="display:flex;gap:10px;margin-bottom:1rem">
+          <div class="ob-plan" onclick="Auth.checkout('listener')" style="flex:1;border:1px solid rgba(255,255,255,.12);border-radius:14px;padding:16px;cursor:pointer;transition:border-color .2s;text-align:center">
+            <div style="font-size:22px;margin-bottom:6px">🎧</div>
+            <div style="font-weight:600;font-size:14px;margin-bottom:4px">Listener Pro</div>
+            <div style="font-size:22px;font-weight:300;margin-bottom:4px">$9<span style="font-size:13px;opacity:.6">/mo</span></div>
+            <div style="font-size:12px;opacity:.55;line-height:1.5">Unlimited favourites · Score history · Personalised wellness</div>
+          </div>
+          <div class="ob-plan" onclick="Auth.checkout('teacher')" style="flex:1;border:1px solid rgba(212,168,67,.4);border-radius:14px;padding:16px;cursor:pointer;background:rgba(212,168,67,.06);text-align:center">
+            <div style="font-size:22px;margin-bottom:6px">🧘</div>
+            <div style="font-weight:600;font-size:14px;margin-bottom:4px">Teacher Pro</div>
+            <div style="font-size:22px;font-weight:300;margin-bottom:4px">$29<span style="font-size:13px;opacity:.6">/mo</span></div>
+            <div style="font-size:12px;opacity:.55;line-height:1.5">Teacher profile · Embeddable player · Student analytics</div>
+          </div>
+        </div>
+        <button onclick="Auth.closeModal()"
+          style="width:100%;padding:11px;border-radius:50px;background:rgba(255,255,255,.06);
+                 color:#aaa;border:1px solid rgba(255,255,255,.1);font-size:14px;
+                 cursor:pointer;font-family:inherit">
+          Start free — upgrade later
+        </button>
+      </div>`;
+    document.body.appendChild(m);
+    requestAnimationFrame(() => requestAnimationFrame(() => m.classList.add('visible')));
+    m.querySelectorAll('.ob-plan').forEach(p => {
+      p.addEventListener('mouseenter', () => p.style.borderColor = 'rgba(122,158,126,.6)');
+      p.addEventListener('mouseleave', () => p.style.borderColor = p.style.borderColor.includes('212') ? 'rgba(212,168,67,.4)' : 'rgba(255,255,255,.12)');
+    });
+  }
+
+  // ── Feature gating ────────────────────────────────────────────
+  // Call these at the point where a Pro feature is used.
+  // Returns true if allowed, false + shows upgrade nudge if not.
+  function requirePro(featureName, hint) {
+    if (isPro()) return true;
+    if (!isLoggedIn()) {
+      openLogin({ hint: `<strong>${featureName}</strong> requires a free account first.` });
+    } else {
+      _showUpgradeNudge(featureName, hint);
+    }
+    return false;
+  }
+
+  function _showUpgradeNudge(feature, hint) {
+    _removeModal();
+    const m = document.createElement('div');
+    m.id = 'auth-modal';
+    m.innerHTML = `
+      <div class="auth-overlay-bg" onclick="Auth.closeModal()"></div>
+      <div class="auth-dialog" style="max-width:400px;text-align:center">
+        <button class="auth-dialog-close" onclick="Auth.closeModal()">✕</button>
+        <div style="font-size:2rem;margin-bottom:.75rem">★</div>
+        <h2 style="font-family:'Playfair Display',serif;font-size:1.3rem;font-weight:400;margin-bottom:.5rem">
+          ${feature} is a Pro feature
+        </h2>
+        <p style="font-size:14px;color:#888;margin-bottom:1.4rem;line-height:1.6">
+          ${hint || 'Upgrade to unlock the full Serenity experience.'}
+        </p>
+        <div style="display:flex;gap:10px">
+          <button onclick="Auth.checkout('listener')" style="flex:1;padding:12px;border-radius:50px;
+            background:#7a9e7e;color:#fff;border:none;font-size:14px;cursor:pointer;font-family:inherit">
+            Listener $9/mo
+          </button>
+          <button onclick="Auth.checkout('teacher')" style="flex:1;padding:12px;border-radius:50px;
+            background:rgba(212,168,67,.85);color:#fff;border:none;font-size:14px;cursor:pointer;font-family:inherit">
+            Teacher $29/mo
+          </button>
+        </div>
+        <button onclick="Auth.closeModal()" style="margin-top:.8rem;background:none;border:none;
+          color:#555;font-size:13px;cursor:pointer;font-family:inherit">Maybe later</button>
+      </div>`;
+    document.body.appendChild(m);
+    requestAnimationFrame(() => requestAnimationFrame(() => m.classList.add('visible')));
   }
 
   function openMenu(e) {
@@ -228,7 +339,7 @@ const Auth = (() => {
   }
 
   return { init, user, isLoggedIn, isPro, isTeacher, openLogin, sendLink,
-           openMenu, openUpgrade, checkout, logout, closeModal, headers };
+           openMenu, openUpgrade, checkout, logout, closeModal, headers, requirePro };
 })();
 
 // Auto-init — handle both early and late script loading

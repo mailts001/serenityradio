@@ -21,9 +21,20 @@ const Favorites = (() => {
 
   function isFav(src) { return _favSrcs.has(src); }
 
+  const FREE_FAV_LIMIT = 20;
+
   async function toggle(src, title, artist, channel) {
-    if (!Auth.isLoggedIn()) { Auth.openLogin(); return; }
+    if (!Auth.isLoggedIn()) {
+      Auth.openLogin({ hint: 'Save your favourite tracks — free to join, no password needed.' });
+      return;
+    }
     const wasFav = _favSrcs.has(src);
+    // Free users: cap at FREE_FAV_LIMIT
+    if (!wasFav && !Auth.isPro() && _favList.length >= FREE_FAV_LIMIT) {
+      Auth.requirePro('Unlimited Favourites',
+        `Free accounts can save up to ${FREE_FAV_LIMIT} favourites. Upgrade to Listener Pro to save as many as you like.`);
+      return;
+    }
     if (wasFav) { _favSrcs.delete(src); _favList = _favList.filter(f => f.src !== src); }
     else        { _favSrcs.add(src);    _favList.push({ src, title, artist, channel }); }
     _refreshHearts();

@@ -131,6 +131,7 @@ def handle_verify_token():
         localStorage.setItem("sr_session_token", "{sess_token}");
         localStorage.setItem("sr_user_email", "{user['email']}");
         localStorage.setItem("sr_user_plan", "{user['plan']}");
+        sessionStorage.setItem("sr_just_verified", "1");
         window.location = "/";
         </script>''')
     resp.set_cookie('sr_session', sess_token, max_age=SESSION_DAYS*86400,
