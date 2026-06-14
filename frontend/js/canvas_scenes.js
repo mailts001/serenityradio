@@ -260,47 +260,45 @@ const CanvasScenes = (() => {
     if (showMoon) {
       const moonAlpha = Math.min(0.92, (mode === 'sleep' ? 0.35 : 0) + nightness * 0.82);
       if (moonAlpha > 0.04) {
-        const nightHr   = hr < 8 ? hr + 24 : hr;  // 20..30 range
-        const progress  = Math.max(0, Math.min(1, (nightHr - 20) / 10));
-        const altitude  = Math.sin(progress * Math.PI);
+        const nightHr  = hr < 8 ? hr + 24 : hr;  // map 0–8 → 24–32 so range is 20–30
+        const progress = Math.max(0, Math.min(1, (nightHr - 20) / 10));
+        const altitude = Math.sin(progress * Math.PI);
 
-        // Moon azimuth: rises east (90°) → south (180°) → sets west (270°)
+        // Moon azimuth: rises east (90°) → transits south (180°) → sets west (270°)
         const moonAz = 90 + progress * 180;
         const relAzM = ((moonAz - _panAz + 540) % 360) - 180;
-        if (Math.abs(relAzM) > 95) { /* moon off-screen */ } else {
-        const hyBase2 = h * 0.65;
-        const hy2 = Math.min(h * 0.92, Math.max(h * 0.20, hyBase2 + _panAlt * (hyBase2 / 90)));
-        const mx = w * 0.5 + (relAzM / 90) * w * 0.5;
-        const my = hy2 - altitude * (hy2 * 0.88);
-        if (my > h * 0.95) { /* below visible */ } else {
-
-        const mr = Math.min(w, h) * 0.048;
-        const mr = Math.min(w, h) * 0.048;
-        // Glow
-        const mg = _ctx.createRadialGradient(mx, my, 0, mx, my, mr * 4);
-        mg.addColorStop(0, `rgba(200,215,255,${moonAlpha * 0.18})`);
-        mg.addColorStop(1, 'rgba(200,215,255,0)');
-        _ctx.fillStyle = mg;
-        _ctx.beginPath(); _ctx.arc(mx, my, mr * 4, 0, Math.PI * 2); _ctx.fill();
-        // Disc
-        _ctx.beginPath(); _ctx.arc(mx, my, mr, 0, Math.PI * 2);
-        _ctx.fillStyle = `rgba(228,235,255,${moonAlpha})`;
-        _ctx.fill();
-        // Crescent shadow bite
-        _ctx.beginPath(); _ctx.arc(mx + mr * 0.3, my - mr * 0.06, mr * 0.86, 0, Math.PI * 2);
-        _ctx.fillStyle = _skyPalette(hr, mode).top;
-        _ctx.fill();
-        // Moon reflection on water at low altitude
-        if (altitude < 0.3 && my < h * 0.85) {
-          const waterY = h * 0.84;
-          const rg = _ctx.createLinearGradient(mx, waterY, mx, h);
-          rg.addColorStop(0, `rgba(200,215,255,${moonAlpha * 0.10})`);
-          rg.addColorStop(1, 'rgba(200,215,255,0)');
-          _ctx.fillStyle = rg;
-          _ctx.fillRect(mx - mr * 1.2, waterY, mr * 2.4, h - waterY);
+        if (Math.abs(relAzM) <= 95) {
+          const hyBase2 = h * 0.65;
+          const hy2 = Math.min(h * 0.92, Math.max(h * 0.20, hyBase2 + _panAlt * (hyBase2 / 90)));
+          const mx = w * 0.5 + (relAzM / 90) * w * 0.5;
+          const my = hy2 - altitude * (hy2 * 0.88);
+          if (my <= h * 0.95 && my >= 0) {
+            const mr = Math.min(w, h) * 0.048;
+            // Glow — draw as arc not fillRect so edges fade cleanly
+            const mg = _ctx.createRadialGradient(mx, my, 0, mx, my, mr * 4);
+            mg.addColorStop(0, `rgba(200,215,255,${moonAlpha * 0.18})`);
+            mg.addColorStop(1, 'rgba(200,215,255,0)');
+            _ctx.fillStyle = mg;
+            _ctx.beginPath(); _ctx.arc(mx, my, mr * 4, 0, Math.PI * 2); _ctx.fill();
+            // Disc
+            _ctx.beginPath(); _ctx.arc(mx, my, mr, 0, Math.PI * 2);
+            _ctx.fillStyle = `rgba(228,235,255,${moonAlpha})`;
+            _ctx.fill();
+            // Crescent shadow bite
+            _ctx.beginPath(); _ctx.arc(mx + mr * 0.3, my - mr * 0.06, mr * 0.86, 0, Math.PI * 2);
+            _ctx.fillStyle = _skyPalette(hr, mode).top;
+            _ctx.fill();
+            // Water reflection when near horizon
+            if (altitude < 0.3 && my < h * 0.85) {
+              const waterY = h * 0.84;
+              const rg = _ctx.createLinearGradient(mx, waterY, mx, h);
+              rg.addColorStop(0, `rgba(200,215,255,${moonAlpha * 0.10})`);
+              rg.addColorStop(1, 'rgba(200,215,255,0)');
+              _ctx.fillStyle = rg;
+              _ctx.fillRect(mx - mr * 1.2, waterY, mr * 2.4, h - waterY);
+            }
+          }
         }
-        } // end relAzM check
-        } // end my check
       }
     }
   }
