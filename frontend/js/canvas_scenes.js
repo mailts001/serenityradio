@@ -136,13 +136,16 @@ const CanvasScenes = (() => {
         // Wide radial from sun position (upper-middle sky)
         const sunX = w * 0.5;
         const sunY = h * 0.18;
-        const ng = _ctx.createRadialGradient(sunX, sunY, 0, sunX, sunY, w * 0.6);
-        ng.addColorStop(0,   `rgba(255,248,200,${glare * 0.9})`);  // warm white core
-        ng.addColorStop(0.3, `rgba(255,230,140,${glare * 0.4})`);  // amber mid
-        ng.addColorStop(0.6, `rgba(255,210,80,${glare * 0.12})`);  // ochre edge
-        ng.addColorStop(1,   'rgba(255,200,60,0)');
+        const ng = _ctx.createRadialGradient(sunX, sunY, 0, sunX, sunY, w * 0.65);
+        ng.addColorStop(0,   `rgba(255,248,200,${glare * 0.9})`);
+        ng.addColorStop(0.3, `rgba(255,230,140,${glare * 0.4})`);
+        ng.addColorStop(0.6, `rgba(255,210,80,${glare * 0.10})`);
+        ng.addColorStop(1,   'rgba(255,200,60,0)');   // fades to 0 — no edge
         _ctx.fillStyle = ng;
-        _ctx.fillRect(0, 0, w, h * 0.65);   // clip to sky only
+        // Draw as a circle arc so no rectangular edge is visible
+        _ctx.beginPath();
+        _ctx.arc(sunX, sunY, w * 0.65, 0, Math.PI * 2);
+        _ctx.fill();
       }
     } else if (hr >= 17 && hr <= 20) {
       // Sunset warm band
@@ -508,27 +511,46 @@ const CanvasScenes = (() => {
     _ctx.fill();
     _ctx.restore();
 
-    // Atmospheric haze veil — stronger for far islands
-    _ctx.save();
-    const hg = _ctx.createLinearGradient(0, baseY - ih, 0, baseY + ih * 0.2);
-    const hr2 = isNight ? 140 : 185;
-    const hg2 = isNight ? 160 : 205;
-    const hb2 = isNight ? 190 : 230;
-    hg.addColorStop(0,   `rgba(${hr2},${hg2},${hb2},0)`);
-    hg.addColorStop(0.6, `rgba(${hr2},${hg2},${hb2},${hazeA * 0.12})`);
-    hg.addColorStop(1,   `rgba(${hr2},${hg2},${hb2},${hazeA * 0.30})`);
-    _ctx.fillStyle = hg;
-    _ctx.fillRect(cx - iw, baseY - ih * 1.2, iw * 2, ih * 2.2);
-    _ctx.restore();
+    // Atmospheric haze — radial gradient centred on island, fades to 0 on ALL sides.
+    // No fillRect; draw a large circle so edges are never visible.
+    {
+      const hr2 = isNight ? 140 : 185;
+      const hg2 = isNight ? 160 : 205;
+      const hb2 = isNight ? 190 : 230;
+      // Wide elliptical haze: scale canvas context so radial gradient becomes elliptical
+      const hazeW = iw * 2.8;
+      const hazeH = ih * 3.5;
+      const hacx  = cx, hacy = baseY - ih * 0.5;
+      _ctx.save();
+      _ctx.scale(1, hazeH / hazeW);   // squish vertically into ellipse
+      const hg = _ctx.createRadialGradient(
+        hacx, hacy * (hazeW / hazeH), 0,
+        hacx, hacy * (hazeW / hazeH), hazeW * 0.5
+      );
+      hg.addColorStop(0,   `rgba(${hr2},${hg2},${hb2},${hazeA * 0.20})`);
+      hg.addColorStop(0.5, `rgba(${hr2},${hg2},${hb2},${hazeA * 0.08})`);
+      hg.addColorStop(1,   `rgba(${hr2},${hg2},${hb2},0)`);
+      _ctx.fillStyle = hg;
+      // Draw oversized circle — gradient already fades to 0 at edge so no rectangle
+      _ctx.beginPath();
+      _ctx.arc(hacx, hacy * (hazeW / hazeH), hazeW * 0.5, 0, Math.PI * 2);
+      _ctx.fill();
+      _ctx.restore();
+    }
 
-    // Night settlement glow (only for nearby/medium islands)
+    // Night settlement glow — pure radial, drawn as circle arc (no fillRect)
     if (isNight && dist < 0.7) {
       _ctx.save();
-      const gl = _ctx.createRadialGradient(cx, baseY - ih * 0.4, 0, cx, baseY - ih * 0.4, iw * 0.35);
+      const glcx = cx, glcy = baseY - ih * 0.45;
+      const glR  = iw * 0.50;
+      const gl = _ctx.createRadialGradient(glcx, glcy, 0, glcx, glcy, glR);
       gl.addColorStop(0,   `rgba(255,200,80,${0.10 * (1 - dist)})`);
-      gl.addColorStop(1,   'rgba(255,200,80,0)');
+      gl.addColorStop(0.6, `rgba(255,180,60,${0.04 * (1 - dist)})`);
+      gl.addColorStop(1,   'rgba(255,160,40,0)');
       _ctx.fillStyle = gl;
-      _ctx.fillRect(cx - iw * 0.35, baseY - ih, iw * 0.7, ih);
+      _ctx.beginPath();
+      _ctx.arc(glcx, glcy, glR, 0, Math.PI * 2);
+      _ctx.fill();
       _ctx.restore();
     }
   }
