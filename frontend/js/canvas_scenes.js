@@ -58,8 +58,12 @@ const CanvasScenes = (() => {
       if (hr < 7.0)  return { top:'#1a1020', mid:'#4a2818', bot:'#c06838' }; // sunrise amber
       if (hr < 8.0)  return { top:'#1050a0', mid:'#2878c8', bot:'#60a8e8' }; // early morning — vivid blue
       if (hr < 10)   return { top:'#1460b8', mid:'#2e80d8', bot:'#68b0f0' }; // bright morning — sky blue
-      if (hr < 13)   return { top:'#1258b0', mid:'#2a78d0', bot:'#62aae8' }; // midday — clear tropical blue
-      if (hr < 16)   return { top:'#1460b8', mid:'#2c7cd4', bot:'#64a8ec' }; // hot afternoon — same vivid blue
+      if (hr < 11)   return { top:'#1258b0', mid:'#2a78d0', bot:'#62aae8' }; // late morning — clear blue
+      if (hr < 12)   return { top:'#1a5898', mid:'#3870b8', bot:'#78a8d8' }; // approaching noon — slight warm haze
+      if (hr < 13)   return { top:'#284870', mid:'#507090', bot:'#8898a8' }; // high noon — bleached, warm-white glare
+      if (hr < 14)   return { top:'#2c5080', mid:'#4878a0', bot:'#7898b8' }; // early afternoon — still warm
+      if (hr < 15)   return { top:'#1a5898', mid:'#3878c0', bot:'#70a8e0' }; // mid afternoon — blue returning
+      if (hr < 16)   return { top:'#1460b8', mid:'#2c7cd4', bot:'#64a8ec' }; // hot afternoon — vivid blue
       if (hr < 17.5) return { top:'#1e2040', mid:'#3c3020', bot:'#906030' }; // late afternoon turning golden
       if (hr < 18.5) return { top:'#200a10', mid:'#4e1808', bot:'#a04820' }; // golden hour
       if (hr < 19.5) return { top:'#16080e', mid:'#2c0e18', bot:'#4e1e2c' }; // dusk
@@ -116,13 +120,30 @@ const CanvasScenes = (() => {
       _ctx.fillRect(0, h * 0.42, w, h * 0.3);
     } else if (hr >= 8 && hr < 17) {
       // Daytime atmospheric haze — very faint, entirely within sky, fades to 0 at horizon
-      const peak = 0.06 + 0.03 * Math.sin(((hr - 8) / 9) * Math.PI);  // max ~0.09 opacity
+      const peak = 0.06 + 0.03 * Math.sin(((hr - 8) / 9) * Math.PI);
       const hg = _ctx.createLinearGradient(0, h * 0.35, 0, h * 0.63);
       hg.addColorStop(0,   'rgba(210,232,255,0)');
       hg.addColorStop(0.4, `rgba(210,232,255,${peak})`);
-      hg.addColorStop(1,   'rgba(210,232,255,0)');   // gone before horizon
+      hg.addColorStop(1,   'rgba(210,232,255,0)');
       _ctx.fillStyle = hg;
       _ctx.fillRect(0, h * 0.35, w, h * 0.28);
+
+      // Noon glare — warm yellow-white bloom at high noon (11:30–14:30)
+      // Peaks at 13:00 SGT (sun is almost exactly overhead in Singapore)
+      if (hr >= 11.5 && hr < 14.5) {
+        const noonT = Math.sin(((hr - 11.5) / 3.0) * Math.PI);  // 0→1→0 bell
+        const glare = noonT * 0.18;
+        // Wide radial from sun position (upper-middle sky)
+        const sunX = w * 0.5;
+        const sunY = h * 0.18;
+        const ng = _ctx.createRadialGradient(sunX, sunY, 0, sunX, sunY, w * 0.6);
+        ng.addColorStop(0,   `rgba(255,248,200,${glare * 0.9})`);  // warm white core
+        ng.addColorStop(0.3, `rgba(255,230,140,${glare * 0.4})`);  // amber mid
+        ng.addColorStop(0.6, `rgba(255,210,80,${glare * 0.12})`);  // ochre edge
+        ng.addColorStop(1,   'rgba(255,200,60,0)');
+        _ctx.fillStyle = ng;
+        _ctx.fillRect(0, 0, w, h * 0.65);   // clip to sky only
+      }
     } else if (hr >= 17 && hr <= 20) {
       // Sunset warm band
       const i = Math.sin(((hr - 17) / 3) * Math.PI) * 0.38;
@@ -343,67 +364,174 @@ const CanvasScenes = (() => {
     _ctx.fillStyle = wg;
     _ctx.fillRect(0, hy, w, wH);
 
-    // ── 2. 50 crest STROKES — perspective-scaled, full coverage ─
-    // Every strip is drawn as a stroke from x=0 to x=w.
-    // p^1.6 spacing: many thin lines near horizon, fewer thick near viewer.
-    const N = 50;
-    for (let i = 0; i < N; i++) {
-      const p   = (i / N) ** 1.6;         // perspective fraction 0→1
-      const y   = hy + wH * p;            // Y position of this crest
+    // ── 2. Wave crests — three depth bands, perspective-correct spacing ──
+    // Band A (far / horizon):  many thin hairlines, tightly packed, very slow
+    // Band B (mid / open sea): moderate swell, occasional taller rogue wave
+    // Band C (near / viewer):  thick foam crests, rolling slower, most amplitude
+    //
+    // Spacing uses p^2.4 so near-viewer rows spread MUCH further apart than
+    // far rows — strong sense of receding distance.
 
-      // Amplitude: tiny near horizon, very gentle even at foreground
-      const amp  = p * p * 12 * mA;   // halved — calm, not choppy
+    const BANDS = [
+      // [ count, pStart, pEnd, ampScale, spdBase, spdScale, freqBase, freqScale, lwBase, lwScale, alphaBase, alphaScale ]
+      [28, 0.00, 0.40, 0.8,  0.0012, 0.002,  0.009, 0.003,  0.3, 0.5,  0.020, 0.08 ],  // A: far
+      [14, 0.40, 0.72, 1.4,  0.0020, 0.006,  0.006, 0.002,  0.8, 1.4,  0.060, 0.16 ],  // B: mid
+      [ 8, 0.72, 1.00, 2.2,  0.0030, 0.010,  0.004, 0.001,  1.8, 3.2,  0.140, 0.18 ],  // C: near
+    ];
 
-      // Frequency: long lazy swells
-      const freq = 0.008 * (1 - p * 0.82) + 0.0006;
+    BANDS.forEach(([N, p0, p1, ampSc, spdB, spdSc, frqB, frqSc, lwB, lwSc, alB, alSc], bi) => {
+      for (let i = 0; i < N; i++) {
+        // Non-linear spacing within each band — pack more rows toward far edge
+        const tRaw = i / N;
+        const t2   = tRaw ** (bi === 0 ? 2.0 : bi === 1 ? 1.5 : 1.2);
+        const p    = p0 + (p1 - p0) * t2;       // 0→1 fraction across whole sea
 
-      // Speed: slow — open ocean calm, not rushing shore
-      const spd  = 0.0018 + p * 0.008;   // ~3× slower than before
+        const y    = hy + wH * p;
 
-      const ph1  = i * 0.58 + t * spd;
-      const ph2  = i * 1.05 + t * spd * 0.55 + 2.0;
+        // Amplitude: grows steeply with depth; occasional rogue wave in mid band
+        let amp = p * p * 14 * mA * ampSc;
+        if (bi === 1 && (i % 5 === 2)) amp *= 2.1;   // rogue swell — taller
 
-      function wy(x) {
-        return y + amp * (
-          Math.sin(x * freq        + ph1) * 0.64 +
-          Math.sin(x * freq * 1.75 + ph2) * 0.36
-        );
-      }
+        const freq = frqB * (1 - p * 0.85) + frqSc;
+        const spd  = spdB + p * spdSc;
 
-      // Crest brightness and thickness grow toward viewer
-      const alpha = 0.025 + p * 0.28;
-      const lw    = 0.4   + p * 3.0;
+        // Each wave has its own phase offset so they don't all crest together
+        const ph1 = bi * 4.2 + i * 0.72 + t * spd;
+        const ph2 = bi * 2.7 + i * 1.18 + t * spd * 0.48 + 1.8;
+        // Secondary micro-ripple on near waves
+        const ph3 = i * 2.3  + t * spd * 1.6 + 3.5;
 
-      _ctx.beginPath();
-      _ctx.moveTo(0, wy(0));
-      for (let x = 3; x <= w; x += 3) _ctx.lineTo(x, wy(x));
-      _ctx.strokeStyle = `rgba(210,238,255,${alpha})`;
-      _ctx.lineWidth   = lw;
-      _ctx.stroke();
+        const wyv = (x) => {
+          let v = amp * (
+            Math.sin(x * freq        + ph1) * 0.60 +
+            Math.sin(x * freq * 1.82 + ph2) * 0.30
+          );
+          if (bi === 2) v += amp * 0.18 * Math.sin(x * freq * 3.1 + ph3);  // ripple
+          return y + v;
+        };
 
-      // Foreground crests (p > 0.75): add a thin foam highlight on top
-      if (p > 0.75) {
+        const alpha = alB + p * alSc;
+        const lw    = lwB + p * lwSc;
+
         _ctx.beginPath();
-        _ctx.moveTo(0, wy(0) - lw * 0.4);
-        for (let x = 3; x <= w; x += 3) _ctx.lineTo(x, wy(x) - lw * 0.4);
-        _ctx.strokeStyle = `rgba(255,255,255,${alpha * 0.45})`;
-        _ctx.lineWidth   = lw * 0.35;
+        _ctx.moveTo(0, wyv(0));
+        // Far rows: coarser step (performance); near rows: smoother
+        const step = bi === 0 ? 6 : bi === 1 ? 4 : 3;
+        for (let x = step; x <= w; x += step) _ctx.lineTo(x, wyv(x));
+        _ctx.strokeStyle = `rgba(210,238,255,${alpha})`;
+        _ctx.lineWidth   = lw;
         _ctx.stroke();
-      }
-    }
 
-    // No extra feather pass needed — gradient already starts at alpha 0.
+        // Foam highlight on mid and near crests
+        if (bi >= 1 && p > 0.5) {
+          _ctx.beginPath();
+          _ctx.moveTo(0, wyv(0) - lw * 0.35);
+          for (let x = step; x <= w; x += step) _ctx.lineTo(x, wyv(x) - lw * 0.35);
+          _ctx.strokeStyle = `rgba(255,255,255,${alpha * (bi === 2 ? 0.55 : 0.30)})`;
+          _ctx.lineWidth   = lw * (bi === 2 ? 0.40 : 0.25);
+          _ctx.stroke();
+        }
+      }
+    });
   }
 
   // ── Islands — silhouettes at fixed azimuths, visible when panning ──
   // Three islands at different bearings from Singapore (approximate).
   // Each is a low, dark landmass silhouette on the horizon, with subtle
   // atmospheric haze for depth. Only drawn when their azimuth is in view.
+  // Islands at realistic bearings from Singapore.
+  // dist: 0=near (dark, saturated), 1=far (pale, hazy, blue-shifted)
+  // cluster: optional companion islands drawn offset
   const _ISLANDS = [
-    { az: 78,  label: 'Batam',   width: 0.28, height: 0.055, bumps: [0.2,0.5,0.75,1.0,0.6,0.35,0.15] },
-    { az: 198, label: 'Sentosa', width: 0.16, height: 0.032, bumps: [0.4,0.7,1.0,0.8,0.5,0.3] },
-    { az: 305, label: 'Island',  width: 0.12, height: 0.042, bumps: [0.2,0.6,0.9,1.0,0.7,0.3] },
+    // Batam — large, far, low rolling hills
+    { az: 78,  dist: 0.75, width: 0.30, height: 0.048,
+      bumps: [0.15,0.38,0.60,0.78,1.0,0.88,0.70,0.50,0.30,0.12],
+      cluster: [{ dAz: -8, w: 0.08, h: 0.022, bumps: [0.3,0.6,1.0,0.7,0.2] }] },
+
+    // Sentosa / southern cluster — closer, multiple small bumps
+    { az: 198, dist: 0.25, width: 0.14, height: 0.040,
+      bumps: [0.2,0.5,0.9,1.0,0.8,0.6,0.3],
+      cluster: [
+        { dAz:  6, w: 0.06, h: 0.028, bumps: [0.4,0.8,1.0,0.5,0.2] },
+        { dAz: -5, w: 0.04, h: 0.018, bumps: [0.3,0.7,1.0,0.4] },
+      ] },
+
+    // Northwest island — medium distance, steep profile like a forested hill
+    { az: 305, dist: 0.50, width: 0.10, height: 0.055,
+      bumps: [0.1,0.4,0.8,1.0,0.9,0.5,0.2],
+      cluster: [{ dAz: 7, w: 0.05, h: 0.020, bumps: [0.2,0.5,1.0,0.6,0.1] }] },
   ];
+
+  // Draw one island silhouette (shared by main islands and cluster companions)
+  function _drawOneIsland(cx, baseY, iw, ih, dist, isNight, isDusk, isNoon) {
+    const w = _canvas.width;
+    // dist 0=near/dark, 1=far/pale/blue-shifted
+    // Near: dark green-grey; Far: blue-grey atmospheric; Night: near=inky, far=navy
+    let r, g, b;
+    if (isNight) {
+      r = Math.round(6  + dist * 18);
+      g = Math.round(10 + dist * 20);
+      b = Math.round(24 + dist * 38);
+    } else if (isDusk) {
+      r = Math.round(18 + dist * 40);
+      g = Math.round(22 + dist * 28);
+      b = Math.round(38 + dist * 42);
+    } else if (isNoon) {
+      // Noon: near=warm olive-grey, far=pale bleached blue
+      r = Math.round(55 - dist * 18);
+      g = Math.round(68 - dist * 10);
+      b = Math.round(60 + dist * 60);
+    } else {
+      // Day: near=dark green-grey, far=pale blue
+      r = Math.round(28 + dist * 30);
+      g = Math.round(42 + dist * 18);
+      b = Math.round(48 + dist * 65);
+    }
+
+    const hazeA  = 0.18 + dist * 0.55;    // far islands nearly invisible
+    const bodyA  = (isNight ? 0.80 : 0.55) * (1 - dist * 0.45);
+
+    _ctx.save();
+    _ctx.globalAlpha = bodyA;
+    _ctx.beginPath();
+    _ctx.moveTo(cx - iw * 0.5, baseY);
+    const bumps = arguments[8] || [0.3,0.6,1.0,0.7,0.3];  // fallback
+    const n = bumps.length;
+    for (let bi = 0; bi <= n; bi++) {
+      const bx   = cx - iw * 0.5 + (bi / n) * iw;
+      const bump = bi < n ? bumps[bi] : 0;
+      _ctx.lineTo(bx, baseY - ih * bump);
+    }
+    _ctx.lineTo(cx + iw * 0.5, baseY);
+    _ctx.closePath();
+    _ctx.fillStyle = `rgb(${r},${g},${b})`;
+    _ctx.fill();
+    _ctx.restore();
+
+    // Atmospheric haze veil — stronger for far islands
+    _ctx.save();
+    const hg = _ctx.createLinearGradient(0, baseY - ih, 0, baseY + ih * 0.2);
+    const hr2 = isNight ? 140 : 185;
+    const hg2 = isNight ? 160 : 205;
+    const hb2 = isNight ? 190 : 230;
+    hg.addColorStop(0,   `rgba(${hr2},${hg2},${hb2},0)`);
+    hg.addColorStop(0.6, `rgba(${hr2},${hg2},${hb2},${hazeA * 0.12})`);
+    hg.addColorStop(1,   `rgba(${hr2},${hg2},${hb2},${hazeA * 0.30})`);
+    _ctx.fillStyle = hg;
+    _ctx.fillRect(cx - iw, baseY - ih * 1.2, iw * 2, ih * 2.2);
+    _ctx.restore();
+
+    // Night settlement glow (only for nearby/medium islands)
+    if (isNight && dist < 0.7) {
+      _ctx.save();
+      const gl = _ctx.createRadialGradient(cx, baseY - ih * 0.4, 0, cx, baseY - ih * 0.4, iw * 0.35);
+      gl.addColorStop(0,   `rgba(255,200,80,${0.10 * (1 - dist)})`);
+      gl.addColorStop(1,   'rgba(255,200,80,0)');
+      _ctx.fillStyle = gl;
+      _ctx.fillRect(cx - iw * 0.35, baseY - ih, iw * 0.7, ih);
+      _ctx.restore();
+    }
+  }
 
   function _drawIslands(hr, mode) {
     const w  = _canvas.width, h = _canvas.height;
@@ -411,70 +539,33 @@ const CanvasScenes = (() => {
     const hy = Math.min(h * 0.92, Math.max(h * 0.20,
       hyBase + _panAlt * (hyBase / 90)));
 
-    // Only draw islands near water level; if tilted far up, horizon is off screen
     if (hy > h * 0.95 || hy < h * 0.10) return;
 
     const isNight = hr < 6 || hr >= 20;
     const isDusk  = hr >= 17 && hr < 20;
+    const isNoon  = hr >= 11 && hr < 14;
 
     _ISLANDS.forEach(isl => {
-      // Relative azimuth from current view
       let relAz = ((isl.az - _panAz + 540) % 360) - 180;
-      if (Math.abs(relAz) > 85) return;   // off-screen
+      if (Math.abs(relAz) > 90) return;
 
-      // Screen X of island centre
-      const cx = w * 0.5 + (relAz / 90) * w * 0.5;
-      const iw = w * isl.width;
-      const ih = hy * isl.height;          // island height above horizon
-      const baseY = hy;
+      const cx  = w * 0.5 + (relAz / 90) * w * 0.5;
+      const iw  = w * isl.width;
+      const ih  = hy * isl.height;
 
-      // Atmospheric haze reduces visibility of far islands
-      const hazeAlpha = Math.min(0.7, 0.3 + Math.abs(relAz) * 0.005);
-      const skyAlpha  = isNight ? 0.55 : isDusk ? 0.45 : 0.35;   // dark silhouette
+      // Main island
+      _drawOneIsland(cx, hy, iw, ih, isl.dist, isNight, isDusk, isNoon, isl.bumps);
 
-      // Base fill: dark landmass silhouette
-      const bumps = isl.bumps;
-      const n = bumps.length;
-
-      _ctx.save();
-      _ctx.globalAlpha = skyAlpha * (1 - hazeAlpha * 0.4);
-
-      // Draw silhouette as a filled path following the bump profile
-      _ctx.beginPath();
-      _ctx.moveTo(cx - iw * 0.5, baseY);
-      for (let bi = 0; bi <= n; bi++) {
-        const bx = cx - iw * 0.5 + (bi / n) * iw;
-        const bump = bi < n ? bumps[bi] : 0;
-        const by = baseY - ih * bump;
-        bi === 0 ? _ctx.lineTo(bx, by) : _ctx.lineTo(bx, by);
-      }
-      _ctx.lineTo(cx + iw * 0.5, baseY);
-      _ctx.closePath();
-
-      // Night: very dark blue-black; day: cool dark grey-blue
-      const r = isNight ? 8  : isDusk ? 20  : 35;
-      const g = isNight ? 12 : isDusk ? 28  : 50;
-      const b = isNight ? 28 : isDusk ? 50  : 75;
-      _ctx.fillStyle = `rgb(${r},${g},${b})`;
-      _ctx.fill();
-
-      // Atmospheric haze overlay — soft radial gradient washing the island
-      const hg = _ctx.createRadialGradient(cx, baseY - ih * 0.3, 0, cx, baseY, iw * 0.7);
-      hg.addColorStop(0,   'rgba(180,200,230,0)');
-      hg.addColorStop(0.6, `rgba(180,200,230,${hazeAlpha * 0.15})`);
-      hg.addColorStop(1,   `rgba(180,200,230,${hazeAlpha * 0.35})`);
-      _ctx.fillStyle = hg;
-      _ctx.fillRect(cx - iw, baseY - ih * 1.5, iw * 2, ih * 2);
-
-      // Tiny warm glow at night (settlement lights)
-      if (isNight) {
-        const gl = _ctx.createRadialGradient(cx, baseY - ih * 0.5, 0, cx, baseY - ih * 0.5, iw * 0.3);
-        gl.addColorStop(0,   'rgba(255,200,80,0.08)');
-        gl.addColorStop(1,   'rgba(255,200,80,0)');
-        _ctx.fillStyle = gl;
-        _ctx.fillRect(cx - iw * 0.3, baseY - ih, iw * 0.6, ih);
-      }
-      _ctx.restore();
+      // Companion cluster islands
+      (isl.cluster || []).forEach(cl => {
+        let cRelAz = ((isl.az + cl.dAz - _panAz + 540) % 360) - 180;
+        if (Math.abs(cRelAz) > 90) return;
+        const ccx = w * 0.5 + (cRelAz / 90) * w * 0.5;
+        const ciw = w * cl.w;
+        const cih = hy * cl.h;
+        // Companions are slightly farther than the main island
+        _drawOneIsland(ccx, hy, ciw, cih, Math.min(1, isl.dist + 0.15), isNight, isDusk, isNoon, cl.bumps);
+      });
     });
   }
 
