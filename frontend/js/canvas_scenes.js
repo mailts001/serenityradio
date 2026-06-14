@@ -311,8 +311,10 @@ const CanvasScenes = (() => {
   // No fills between waves = no banding, continuous coverage.
   function _drawWater(t, hr, mode) {
     const w  = _canvas.width, h = _canvas.height;
-    // Horizon at 65% — matches where sky gradient ends; sleep shifts slightly lower
-    const hy = h * (mode === 'sleep' ? 0.60 : 0.65);
+    // Horizon position responds to vertical tilt: look up = horizon drops down
+    const hyBase = h * (mode === 'sleep' ? 0.60 : 0.65);
+    const hy = Math.min(h * 0.92, Math.max(h * 0.20,
+      hyBase + _panAlt * (hyBase / 90)));  // each degree shifts ~1% of sky height
     const wH = h - hy;
     const mA = mode === 'sleep' ? 1.6 : 1.0;
 
@@ -391,6 +393,89 @@ const CanvasScenes = (() => {
     }
 
     // No extra feather pass needed — gradient already starts at alpha 0.
+  }
+
+  // ── Islands — silhouettes at fixed azimuths, visible when panning ──
+  // Three islands at different bearings from Singapore (approximate).
+  // Each is a low, dark landmass silhouette on the horizon, with subtle
+  // atmospheric haze for depth. Only drawn when their azimuth is in view.
+  const _ISLANDS = [
+    { az: 78,  label: 'Batam',   width: 0.28, height: 0.055, bumps: [0.2,0.5,0.75,1.0,0.6,0.35,0.15] },
+    { az: 198, label: 'Sentosa', width: 0.16, height: 0.032, bumps: [0.4,0.7,1.0,0.8,0.5,0.3] },
+    { az: 305, label: 'Island',  width: 0.12, height: 0.042, bumps: [0.2,0.6,0.9,1.0,0.7,0.3] },
+  ];
+
+  function _drawIslands(hr, mode) {
+    const w  = _canvas.width, h = _canvas.height;
+    const hyBase = h * (mode === 'sleep' ? 0.60 : 0.65);
+    const hy = Math.min(h * 0.92, Math.max(h * 0.20,
+      hyBase + _panAlt * (hyBase / 90)));
+
+    // Only draw islands near water level; if tilted far up, horizon is off screen
+    if (hy > h * 0.95 || hy < h * 0.10) return;
+
+    const isNight = hr < 6 || hr >= 20;
+    const isDusk  = hr >= 17 && hr < 20;
+
+    _ISLANDS.forEach(isl => {
+      // Relative azimuth from current view
+      let relAz = ((isl.az - _panAz + 540) % 360) - 180;
+      if (Math.abs(relAz) > 85) return;   // off-screen
+
+      // Screen X of island centre
+      const cx = w * 0.5 + (relAz / 90) * w * 0.5;
+      const iw = w * isl.width;
+      const ih = hy * isl.height;          // island height above horizon
+      const baseY = hy;
+
+      // Atmospheric haze reduces visibility of far islands
+      const hazeAlpha = Math.min(0.7, 0.3 + Math.abs(relAz) * 0.005);
+      const skyAlpha  = isNight ? 0.55 : isDusk ? 0.45 : 0.35;   // dark silhouette
+
+      // Base fill: dark landmass silhouette
+      const bumps = isl.bumps;
+      const n = bumps.length;
+
+      _ctx.save();
+      _ctx.globalAlpha = skyAlpha * (1 - hazeAlpha * 0.4);
+
+      // Draw silhouette as a filled path following the bump profile
+      _ctx.beginPath();
+      _ctx.moveTo(cx - iw * 0.5, baseY);
+      for (let bi = 0; bi <= n; bi++) {
+        const bx = cx - iw * 0.5 + (bi / n) * iw;
+        const bump = bi < n ? bumps[bi] : 0;
+        const by = baseY - ih * bump;
+        bi === 0 ? _ctx.lineTo(bx, by) : _ctx.lineTo(bx, by);
+      }
+      _ctx.lineTo(cx + iw * 0.5, baseY);
+      _ctx.closePath();
+
+      // Night: very dark blue-black; day: cool dark grey-blue
+      const r = isNight ? 8  : isDusk ? 20  : 35;
+      const g = isNight ? 12 : isDusk ? 28  : 50;
+      const b = isNight ? 28 : isDusk ? 50  : 75;
+      _ctx.fillStyle = `rgb(${r},${g},${b})`;
+      _ctx.fill();
+
+      // Atmospheric haze overlay — soft radial gradient washing the island
+      const hg = _ctx.createRadialGradient(cx, baseY - ih * 0.3, 0, cx, baseY, iw * 0.7);
+      hg.addColorStop(0,   'rgba(180,200,230,0)');
+      hg.addColorStop(0.6, `rgba(180,200,230,${hazeAlpha * 0.15})`);
+      hg.addColorStop(1,   `rgba(180,200,230,${hazeAlpha * 0.35})`);
+      _ctx.fillStyle = hg;
+      _ctx.fillRect(cx - iw, baseY - ih * 1.5, iw * 2, ih * 2);
+
+      // Tiny warm glow at night (settlement lights)
+      if (isNight) {
+        const gl = _ctx.createRadialGradient(cx, baseY - ih * 0.5, 0, cx, baseY - ih * 0.5, iw * 0.3);
+        gl.addColorStop(0,   'rgba(255,200,80,0.08)');
+        gl.addColorStop(1,   'rgba(255,200,80,0)');
+        _ctx.fillStyle = gl;
+        _ctx.fillRect(cx - iw * 0.3, baseY - ih, iw * 0.6, ih);
+      }
+      _ctx.restore();
+    });
   }
 
   // ── Birds ──────────────────────────────────────────────────
@@ -901,51 +986,77 @@ const CanvasScenes = (() => {
     return ((g % 360 + 360) % 360 + _LON + 360) % 360;   // LST in degrees
   }
 
-  // Convert RA/Dec → screen x,y. Returns null if below horizon or off-screen.
-  // panAz: azimuth center of view in degrees (180 = looking south)
+  // Convert RA/Dec → screen x,y using azimuth+altitude pan.
+  // _panAz: horizontal centre (degrees). _panAlt: vertical tilt (degrees, +up).
   function _starScreen(ra, dec, panAz, w, h) {
     const ha   = (_lst() - ra + 360) % 360;
     const haR  = ha  * Math.PI / 180;
     const decR = dec * Math.PI / 180;
-    const alt  = Math.asin(Math.sin(decR)*Math.sin(_LAT) + Math.cos(decR)*Math.cos(_LAT)*Math.cos(haR));
-    if (alt < 0) return null;   // below horizon
+    const altRad = Math.asin(Math.sin(decR)*Math.sin(_LAT) + Math.cos(decR)*Math.cos(_LAT)*Math.cos(haR));
+    const altDeg = altRad * 180 / Math.PI;
+
     const az   = Math.atan2(Math.sin(haR), Math.cos(haR)*Math.sin(_LAT) - Math.tan(decR)*Math.cos(_LAT));
     const azDeg = ((az * 180 / Math.PI) + 180 + 360) % 360;
-    // Relative azimuth from view centre, wrapped to -180..180
-    let relAz = ((azDeg - panAz + 540) % 360) - 180;
-    // Field of view ±90°; beyond ±100° is off-screen
-    if (Math.abs(relAz) > 100) return null;
-    const altFrac = alt / (Math.PI / 2);           // 0 (horizon) → 1 (zenith)
-    const hy  = h * 0.65;
-    const sx  = w * 0.5 + (relAz / 90) * w * 0.5;
-    const sy  = hy * (1 - altFrac);                 // zenith at top, horizon at hy
+
+    // Relative azimuth/altitude from current view centre
+    let relAz  = ((azDeg - panAz + 540) % 360) - 180;
+    let relAlt = altDeg - _panAlt;   // positive = above view centre
+
+    // Field of view ±95° horizontal, ±70° vertical
+    if (Math.abs(relAz) > 95 || relAlt < -15 || relAlt > 90) return null;
+
+    // When tilted up, horizon moves down on screen.
+    // altFrac: 0 at view-centre alt, proportional above/below.
+    const hy    = h * 0.65;               // default horizon screen Y
+    // horizon offset from tilt: _panAlt degrees shifts it by altPxPerDeg
+    const altPxPerDeg = hy / 90;          // 90° = full sky height
+    const horizY = hy + _panAlt * altPxPerDeg;   // screen Y of horizon after tilt
+
+    const sx  = w * 0.5 + (relAz  / 90) * w * 0.5;
+    const sy  = horizY  - (relAlt / 90) * hy;    // above horizon = smaller Y
+
+    // Clip: don't draw stars below tilted horizon or above screen
+    if (sy > horizY || sy < 0 || altDeg < 0) return null;
+
     return { sx, sy };
   }
 
-  let _panAz    = 180;   // view azimuth (degrees); 180 = looking south
-  let _panDragX = null;  // drag state
+  let _panAz    = 180;   // horizontal azimuth (degrees); 180 = looking south
+  let _panAlt   = 0;     // vertical tilt (degrees); 0 = horizon centred; +up, −down; clamped ±50
+  let _panDragX = null;
+  let _panDragY = null;
 
   function _initPan() {
     // Listen on document — canvas has pointer-events:none so it can't receive events
     function onDown(e) {
-      // Ignore clicks on interactive UI controls — allow drag anywhere else
       const tag = e.target ? e.target.tagName.toUpperCase() : '';
       if (['BUTTON','INPUT','SELECT','TEXTAREA','A','LABEL'].includes(tag)) return;
-      _panDragX = (e.touches ? e.touches[0].clientX : e.clientX);
+      _panDragX = (e.touches ? e.touches[0].clientX  : e.clientX);
+      _panDragY = (e.touches ? e.touches[0].clientY  : e.clientY);
     }
     function onMove(e) {
       if (_panDragX === null) return;
-      const cx = (e.touches ? e.touches[0].clientX : e.clientX);
-      const delta = cx - _panDragX;
-      _panAz = (_panAz - delta * 0.12 + 360) % 360;
-      // Shift cloud/aurora x positions with pan (pixel offset mapped to fraction)
-      const frac = delta / (window.innerWidth || 1200) * 0.08;
+      const cx   = (e.touches ? e.touches[0].clientX : e.clientX);
+      const cy   = (e.touches ? e.touches[0].clientY : e.clientY);
+      const dX   = cx - _panDragX;
+      const dY   = cy - _panDragY;
+
+      // Horizontal: rotate azimuth
+      _panAz = (_panAz - dX * 0.12 + 360) % 360;
+
+      // Vertical: tilt ±50° (drag up = look up = positive alt)
+      _panAlt = Math.max(-50, Math.min(50, _panAlt - dY * 0.10));
+
+      // Shift cloud/aurora x with horizontal pan
+      const frac = dX / (window.innerWidth || 1200) * 0.08;
       _auroraClusters.forEach(cl => { cl.x = ((cl.x + frac) % 1.4 + 1.4) % 1.4 - 0.1; });
       _clouds.forEach(c => { c.x = ((c.x + frac) % 1.6 + 1.6) % 1.6 - 0.15; });
+
       _panDragX = cx;
-      _starPositions = null;  // force star reproject on next frame
+      _panDragY = cy;
+      _starPositions = null;  // force star reproject
     }
-    function onUp() { _panDragX = null; }
+    function onUp() { _panDragX = null; _panDragY = null; }
     document.addEventListener('mousedown',  onDown);
     document.addEventListener('mousemove',  onMove);
     document.addEventListener('mouseup',    onUp);
@@ -1071,6 +1182,7 @@ const CanvasScenes = (() => {
     _drawMist(t, hr, mode);
     _drawSkyLights(t, hr, mode);           // subtle surreal luminous drifts
     _drawWater(t, hr, mode);
+    _drawIslands(hr, mode);         // landmass silhouettes at fixed azimuths
     _drawFireflies(t, hr, mode);
     _drawBirds(t, hr, mode);
     _drawPetals(t, mode);
