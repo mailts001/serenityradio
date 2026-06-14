@@ -325,8 +325,32 @@ const Wellness = (() => {
   // ── Panel toggle ──────────────────────────────────────────────
   function togglePanel() {
     const panel = document.getElementById('wellness-panel');
+    const btn   = document.getElementById('wellness-btn');
     if (!panel) return;
-    panel.classList.toggle('visible');
+
+    const isOpen = panel.classList.toggle('visible');
+    if (isOpen && btn) {
+      // Position panel above the button, keeping it within viewport
+      const rect  = btn.getBoundingClientRect();
+      const panW  = 300;
+      const panH  = Math.min(window.innerHeight * 0.85, 520); // estimated height
+      const spaceAbove = rect.top;
+      const spaceBelow = window.innerHeight - rect.bottom;
+
+      // Prefer above; fall back to below if not enough room
+      if (spaceAbove >= panH + 12 || spaceAbove > spaceBelow) {
+        panel.style.bottom = (window.innerHeight - rect.top + 8) + 'px';
+        panel.style.top    = '';
+      } else {
+        panel.style.top    = (rect.bottom + 8) + 'px';
+        panel.style.bottom = '';
+      }
+
+      // Horizontal: centre on button, clamp to viewport
+      let left = rect.left + rect.width / 2 - panW / 2;
+      left = Math.max(8, Math.min(left, window.innerWidth - panW - 8));
+      panel.style.left = left + 'px';
+    }
     _renderPanel();
   }
 

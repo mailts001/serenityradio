@@ -173,16 +173,16 @@
   @media(prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms !important;transition-duration:.01ms !important;}}
 
   /* ── Wellness ── */
-  #wellness-btn { position:relative; }
   #wellness-btn.active { color: #7ed4a8; }
 
+  /* Fixed position — escapes player-card overflow:hidden */
   #wellness-panel {
-    display: none; position: absolute; bottom: calc(100% + 12px); left: 50%;
-    transform: translateX(-50%); width: 290px;
-    background: rgba(12,18,34,0.97); backdrop-filter: blur(16px);
-    border: 1px solid rgba(255,255,255,.10); border-radius: 16px;
-    padding: 18px; z-index: 500; box-shadow: 0 8px 40px rgba(0,0,0,.5);
+    display: none; position: fixed; width: 300px;
+    background: rgba(10,15,28,0.97); backdrop-filter: blur(20px);
+    border: 1px solid rgba(255,255,255,.12); border-radius: 18px;
+    padding: 18px; z-index: 1000; box-shadow: 0 12px 48px rgba(0,0,0,.6);
     font-size: 14px; color: var(--text);
+    max-height: 90vh; overflow-y: auto;
   }
   #wellness-panel.visible { display: block; }
   .wp-title { font-weight: 600; font-size: 15px; margin-bottom: 14px;
