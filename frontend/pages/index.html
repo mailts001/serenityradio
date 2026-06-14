@@ -172,6 +172,109 @@
   @media(max-width:600px){.header-actions{position:static;justify-content:center;margin-top:1rem;}.controls{gap:.75rem;}}
   @media(prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms !important;transition-duration:.01ms !important;}}
 
+  /* ── Wellness ── */
+  #wellness-btn { position:relative; }
+  #wellness-btn.active { color: #7ed4a8; }
+
+  #wellness-panel {
+    display: none; position: absolute; bottom: calc(100% + 12px); left: 50%;
+    transform: translateX(-50%); width: 290px;
+    background: rgba(12,18,34,0.97); backdrop-filter: blur(16px);
+    border: 1px solid rgba(255,255,255,.10); border-radius: 16px;
+    padding: 18px; z-index: 500; box-shadow: 0 8px 40px rgba(0,0,0,.5);
+    font-size: 14px; color: var(--text);
+  }
+  #wellness-panel.visible { display: block; }
+  .wp-title { font-weight: 600; font-size: 15px; margin-bottom: 14px;
+    display: flex; align-items: center; gap: 8px; }
+  .wp-row { display: flex; align-items: center; justify-content: space-between;
+    padding: 9px 0; border-bottom: 1px solid rgba(255,255,255,.06); }
+  .wp-row:last-child { border-bottom: none; }
+  .wp-label { display: flex; flex-direction: column; gap: 2px; }
+  .wp-label span { font-size: 11px; opacity: .55; }
+  .wp-sub-row { display: flex; align-items: center; gap: 8px;
+    padding: 6px 0 10px 20px; font-size: 13px; opacity: .75; }
+  .wp-sub-row select, .wp-sub-row input[type=time] {
+    background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.12);
+    border-radius: 6px; color: var(--text); padding: 3px 6px; font-size: 13px;
+    font-family: 'DM Sans', sans-serif; }
+  /* Toggle switch */
+  .wp-toggle { position:relative; width:36px; height:20px; flex-shrink:0; }
+  .wp-toggle input { opacity:0; width:0; height:0; }
+  .wp-slider { position:absolute; inset:0; background:rgba(255,255,255,.18);
+    border-radius:20px; cursor:pointer; transition:background .2s; }
+  .wp-slider:before { content:''; position:absolute; width:14px; height:14px;
+    left:3px; top:3px; background:#fff; border-radius:50%; transition:transform .2s; }
+  .wp-toggle input:checked + .wp-slider { background: #7ed4a8; }
+  .wp-toggle input:checked + .wp-slider:before { transform: translateX(16px); }
+  .wp-tcm-result { font-size:12px; opacity:.6; margin-top:3px; }
+  .wp-divider { font-size:11px; opacity:.4; text-transform:uppercase;
+    letter-spacing:.08em; padding: 10px 0 4px; }
+
+  /* Wellness toast */
+  .wellness-toast {
+    position: fixed; top: -120px; left: 50%; transform: translateX(-50%);
+    width: min(420px, 92vw); background: rgba(10,16,30,0.96);
+    backdrop-filter: blur(14px); border: 1px solid rgba(255,255,255,.10);
+    border-radius: 16px; padding: 16px; z-index: 600;
+    box-shadow: 0 4px 30px rgba(0,0,0,.5); color: #e8edf8; font-size: 14px;
+    transition: top .4s cubic-bezier(.34,1.4,.64,1);
+    line-height: 1.5;
+  }
+  .wellness-toast.visible { top: 16px; }
+  .wellness-action-btn {
+    display: inline-block; margin-top: 10px; padding: 6px 14px;
+    background: rgba(126,212,168,.18); border: 1px solid rgba(126,212,168,.35);
+    border-radius: 20px; color: #7ed4a8; font-size: 13px; cursor: pointer;
+    font-family: 'DM Sans', sans-serif; transition: background .2s;
+  }
+  .wellness-action-btn:hover { background: rgba(126,212,168,.28); }
+
+  /* Breathing overlay */
+  #wellness-breath-overlay {
+    display: none; position: fixed; inset: 0; background: rgba(4,10,22,0.88);
+    backdrop-filter: blur(12px); z-index: 700;
+    flex-direction: column; align-items: center; justify-content: center;
+    color: #e8edf8; text-align: center;
+  }
+  #wellness-breath-overlay.visible { display: flex; }
+  .breath-title { font-size: 13px; opacity: .55; margin-bottom: 40px; letter-spacing: .06em; }
+  .breath-ring {
+    width: 160px; height: 160px; border-radius: 50%;
+    border: 3px solid #6ec6f5; transition: transform 4s ease-in-out, opacity 4s ease;
+    display: flex; align-items: center; justify-content: center;
+    box-shadow: 0 0 32px 8px #6ec6f544; margin-bottom: 36px;
+  }
+  .breath-count { font-size: 48px; font-weight: 200; color: #e8edf8; }
+  .breath-phase { font-size: 22px; font-weight: 300; margin-bottom: 8px; }
+  .breath-rounds { font-size: 13px; opacity: .45; margin-bottom: 32px; }
+  .breath-close { background: none; border: 1px solid rgba(255,255,255,.2);
+    color: rgba(255,255,255,.55); border-radius: 20px; padding: 8px 22px;
+    cursor: pointer; font-family: 'DM Sans', sans-serif; font-size: 14px; }
+  .breath-close:hover { color: #fff; }
+
+  /* TCM modal */
+  #wellness-tcm-modal {
+    display: none; position: fixed; inset: 0; background: rgba(4,10,22,0.85);
+    backdrop-filter: blur(10px); z-index: 700;
+    align-items: center; justify-content: center;
+  }
+  #wellness-tcm-modal.visible { display: flex; }
+  .tcm-inner {
+    background: rgba(12,18,34,0.98); border: 1px solid rgba(255,255,255,.10);
+    border-radius: 20px; padding: 28px; width: min(380px, 92vw);
+    color: #e8edf8; font-size: 14px;
+  }
+  .tcm-header { font-size: 16px; font-weight: 600; margin-bottom: 6px; }
+  .tcm-sub { font-size: 12px; opacity: .5; margin-bottom: 20px; }
+  .wellness-tcm-opt {
+    width: 100%; text-align: left; padding: 10px 14px;
+    background: rgba(255,255,255,.05); border: 1px solid rgba(255,255,255,.08);
+    border-radius: 10px; color: #e8edf8; font-size: 14px; cursor: pointer;
+    font-family: 'DM Sans', sans-serif; transition: background .15s, border-color .15s;
+  }
+  .wellness-tcm-opt:hover { background: rgba(126,212,168,.12); border-color: rgba(126,212,168,.3); }
+
   /* ── Cinema mode ── */
   body.cinema-mode > *:not(#cinema-overlay):not(#bg-canvas) { display: none !important; }
   #bg-canvas { z-index: 0; }
@@ -287,6 +390,78 @@
         onclick="typeof Favorites!=='undefined'&&Favorites.toggle(this.dataset.src,this.dataset.title,this.dataset.artist,this.dataset.channel)">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>
       </button>
+
+      <!-- Wellness button + panel -->
+      <div style="position:relative">
+        <button class="ctrl-btn" id="wellness-btn"
+          onclick="Wellness.togglePanel()"
+          title="Wellness reminders — all off by default, opt-in"
+          style="font-size:12px;display:flex;align-items:center;gap:5px;padding:0 10px">
+          🌿 <span>Wellness</span>
+        </button>
+
+        <div id="wellness-panel">
+          <div class="wp-title">🌿 Wellness Reminders
+            <span style="font-size:11px;opacity:.4;font-weight:400;margin-left:auto">All opt-in</span>
+          </div>
+
+          <div class="wp-divider">Screen & Body</div>
+
+          <div class="wp-row">
+            <div class="wp-label">Break reminder
+              <span>Nudge to step away &amp; stretch</span>
+            </div>
+            <label class="wp-toggle"><input type="checkbox" id="wp-breaks"><span class="wp-slider"></span></label>
+          </div>
+          <div class="wp-sub-row" id="wp-break-row" style="display:none">
+            Every
+            <select id="wp-break-interval">
+              <option value="20">20 min</option>
+              <option value="30" selected>30 min</option>
+              <option value="45">45 min</option>
+              <option value="60">60 min</option>
+              <option value="90">90 min</option>
+            </select>
+          </div>
+
+          <div class="wp-row">
+            <div class="wp-label">Eye rest (20-20-20)
+              <span>Look 20 ft away for 20 s every 20 min</span>
+            </div>
+            <label class="wp-toggle"><input type="checkbox" id="wp-eyes"><span class="wp-slider"></span></label>
+          </div>
+
+          <div class="wp-row">
+            <div class="wp-label">Breathing guide
+              <span>4-7-8 guided breath on break nudge</span>
+            </div>
+            <label class="wp-toggle"><input type="checkbox" id="wp-breathe"><span class="wp-slider"></span></label>
+          </div>
+
+          <div class="wp-divider">Sleep</div>
+
+          <div class="wp-row">
+            <div class="wp-label">Sleep wind-down
+              <span>Gentle reminder to rest at your set time</span>
+            </div>
+            <label class="wp-toggle"><input type="checkbox" id="wp-sleep"><span class="wp-slider"></span></label>
+          </div>
+          <div class="wp-sub-row" id="wp-sleep-row" style="display:none">
+            Wind down at <input type="time" id="wp-sleep-time" value="22:30">
+          </div>
+
+          <div class="wp-divider">Personalisation</div>
+
+          <div class="wp-row">
+            <div class="wp-label">TCM body type profile
+              <div class="wp-tcm-result" id="wp-tcm-status">Not done yet</div>
+            </div>
+            <button id="wp-tcm-btn" class="wellness-action-btn" style="margin-top:0;padding:5px 12px;font-size:12px">
+              Start survey
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
     <div class="volume-row">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="color:var(--text-muted)"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02z"/></svg>
@@ -1190,5 +1365,49 @@ function toggleAmbient(btn) {
 <div style="text-align:center;padding:2rem 0 1rem;opacity:.2;font-size:11px;">
   <a href="/admin" style="color:var(--text-muted);text-decoration:none;letter-spacing:.08em">⚙ admin</a>
 </div>
+
+<!-- ── Wellness: Breathing overlay ── -->
+<div id="wellness-breath-overlay">
+  <div class="breath-title" id="breath-title">4 · 7 · 8  Breathing</div>
+  <div class="breath-ring">
+    <div class="breath-count" id="breath-count">·</div>
+  </div>
+  <div class="breath-phase" id="breath-phase">Get comfortable…</div>
+  <div class="breath-rounds" id="breath-rounds"></div>
+  <button class="breath-close" onclick="document.getElementById('wellness-breath-overlay').classList.remove('visible')">
+    End session
+  </button>
+</div>
+
+<!-- ── Wellness: TCM survey modal ── -->
+<div id="wellness-tcm-modal">
+  <div class="tcm-inner">
+    <div class="tcm-header">🌿 TCM Body Constitution</div>
+    <div class="tcm-sub">5 quick questions · takes about 1 minute · stored only on your device</div>
+    <div class="tcm-body"></div>
+  </div>
+</div>
+
+<!-- Wellness module -->
+<script src="/static/js/wellness.js"></script>
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
+    Wellness.init();
+    // Attach breathe objects to overlay elements
+    const o = document.getElementById('wellness-breath-overlay');
+    o.querySelector = o.querySelector.bind(o);
+    // Map overlay child elements by class for wellness.js
+    const _map = {
+      '.breath-title':  document.getElementById('breath-title'),
+      '.breath-ring':   document.querySelector('.breath-ring'),
+      '.breath-phase':  document.querySelector('.breath-phase'),
+      '.breath-count':  document.querySelector('.breath-count'),
+      '.breath-rounds': document.querySelector('.breath-rounds'),
+    };
+    // Patch overlay querySelector to work on id-less elements
+    const origQS = o.querySelector;
+    o.querySelector = (sel) => _map[sel] || origQS.call(o, sel);
+  });
+</script>
 </body>
 </html>
