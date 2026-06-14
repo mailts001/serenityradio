@@ -97,23 +97,26 @@ const CanvasScenes = (() => {
   // ── Sky ────────────────────────────────────────────────────
   function _drawSky(hr, mode) {
     const w = _canvas.width, h = _canvas.height;
-    const hy = h * (mode === 'sleep' ? 0.60 : 0.65);  // horizon Y — same as water
+    // Tilt-aware horizon — same formula as _drawWater so they always match
+    const hyBase = h * (mode === 'sleep' ? 0.60 : 0.65);
+    const hy = Math.min(h * 0.92, Math.max(h * 0.20,
+      hyBase + _panAlt * (hyBase / 90)));
+    const hyF = hy / h;   // horizon as fraction of canvas height
+
     const p = _skyPalette(hr, mode);
 
-    // Fill ONLY the sky area (0..hy). Water fills below independently.
-    // Never fill past the horizon — any colour held below will bleed through
-    // the semi-transparent water gradient and create a coloured block.
-    const g = _ctx.createLinearGradient(0, 0, 0, hy);
-    g.addColorStop(0,    p.top);
-    g.addColorStop(0.55, p.mid);
-    g.addColorStop(1,    p.bot);   // ends exactly at horizon
+    // Single full-canvas gradient — sky colours down to horizon, then fade
+    // smoothly to near-black. Never hold a bright sky colour past the horizon;
+    // the water gradient starts transparent there, so any held colour bleeds
+    // through as a visible block.
+    const g = _ctx.createLinearGradient(0, 0, 0, h);
+    g.addColorStop(0,                          p.top);
+    g.addColorStop(hyF * 0.50,                 p.mid);
+    g.addColorStop(hyF,                        p.bot);
+    g.addColorStop(Math.min(1, hyF + 0.08),   '#010508'); // quick fade past horizon
+    g.addColorStop(1,                          '#010508');
     _ctx.fillStyle = g;
-    _ctx.fillRect(0, 0, w, hy);
-
-    // Below horizon: fill with near-black so water gradient blends into darkness
-    // (not into sky colour). This is invisible once water is drawn on top.
-    _ctx.fillStyle = '#010508';
-    _ctx.fillRect(0, hy, w, h - hy);
+    _ctx.fillRect(0, 0, w, h);
 
     // Horizon glow — dawn, full day atmospheric haze, dusk
     if (hr >= 5.5 && hr < 8) {
@@ -977,6 +980,9 @@ const CanvasScenes = (() => {
 
   function _drawWeather(t, hr, mode) {
     const w = _canvas.width, h = _canvas.height;
+    const hyBase = h * (mode === 'sleep' ? 0.60 : 0.65);
+    const hy = Math.min(h * 0.92, Math.max(h * 0.20,
+      hyBase + _panAlt * (hyBase / 90)));
     const type = _weatherType(hr);
 
     // Move clouds slowly across sky
@@ -1001,7 +1007,6 @@ const CanvasScenes = (() => {
     } else if (type === 'shower') {
       // Afternoon tropical shower — "advancing like a slow-motion avalanche"
       // Dark overcast veil + towering cumulonimbus + backlit drama + rain
-      const hy = h * 0.65;
       const cg = _ctx.createLinearGradient(0, 0, 0, hy);
       cg.addColorStop(0,   'rgba(50,58,82,0.52)');
       cg.addColorStop(0.7, 'rgba(28,36,58,0.25)');
@@ -1035,14 +1040,14 @@ const CanvasScenes = (() => {
       _ctx.restore();
 
     } else if (type === 'overcast') {
-      // Overcast — "a labyrinth of vapour and shadow, endless and deliberate"
-      // Dense layered cloud cover, advancing uniformly
-      const og = _ctx.createLinearGradient(0, 0, 0, h * 0.65);
-      og.addColorStop(0,   'rgba(72,80,102,0.38)');
-      og.addColorStop(0.6, 'rgba(48,56,78,0.18)');
-      og.addColorStop(1,   'rgba(35,42,62,0.06)');
+      // Overcast — dense layered cloud cover. Use gradient that fades to 0
+      // before the horizon so no solid block appears at the sky/sea boundary.
+      const og = _ctx.createLinearGradient(0, 0, 0, hy);
+      og.addColorStop(0,   'rgba(72,80,102,0.35)');
+      og.addColorStop(0.5, 'rgba(48,56,78,0.14)');
+      og.addColorStop(1,   'rgba(35,42,62,0)');   // fade to 0 at horizon
       _ctx.fillStyle = og;
-      _ctx.fillRect(0, 0, w, h * 0.65);
+      _ctx.fillRect(0, 0, w, hy);
       // All cloud types layered — backlit gives lavender pearl shadows
       _clouds.filter(c => c.type === 'cumulus').forEach(c  => _drawCloud(c, w, h, 0.52));
       _clouds.filter(c => c.type === 'backlit').forEach(c  => _drawCloud(c, w, h, 0.45));
