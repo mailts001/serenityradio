@@ -110,10 +110,11 @@ const CanvasScenes = (() => {
     // the water gradient starts transparent there, so any held colour bleeds
     // through as a visible block.
     const g = _ctx.createLinearGradient(0, 0, 0, h);
-    g.addColorStop(0,                          p.top);
-    g.addColorStop(hyF * 0.50,                 p.mid);
+    g.addColorStop(0,                          '#010508'); // zenith = deep space, no flat colour block
+    g.addColorStop(hyF * 0.22,                 p.top);    // sky colour builds in naturally
+    g.addColorStop(hyF * 0.60,                 p.mid);
     g.addColorStop(hyF,                        p.bot);
-    g.addColorStop(Math.min(1, hyF + 0.08),   '#010508'); // quick fade past horizon
+    g.addColorStop(Math.min(1, hyF + 0.08),   '#010508'); // quick fade below horizon
     g.addColorStop(1,                          '#010508');
     _ctx.fillStyle = g;
     _ctx.fillRect(0, 0, w, h);
