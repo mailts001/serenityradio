@@ -140,20 +140,19 @@ const CanvasScenes = (() => {
       _ctx.fillRect(0, h * 0.35, w, h * 0.28);
 
       // Noon glare — warm yellow-white bloom at high noon (11:30–14:30)
-      // Peaks at 13:00 SGT (sun is almost exactly overhead in Singapore)
+      // Tracks the sun's actual screen position via _sunScreenPos
       if (hr >= 11.5 && hr < 14.5) {
         const noonT = Math.sin(((hr - 11.5) / 3.0) * Math.PI);  // 0→1→0 bell
         const glare = noonT * 0.18;
-        // Wide radial from sun position (upper-middle sky)
-        const sunX = w * 0.5;
-        const sunY = h * 0.18;
+        const sun = _sunScreenPos(hr, w, h);
+        const sunX = sun ? sun.sx : w * 0.5;
+        const sunY = sun ? sun.sy : h * 0.18;
         const ng = _ctx.createRadialGradient(sunX, sunY, 0, sunX, sunY, w * 0.65);
         ng.addColorStop(0,   `rgba(255,248,200,${glare * 0.9})`);
         ng.addColorStop(0.3, `rgba(255,230,140,${glare * 0.4})`);
         ng.addColorStop(0.6, `rgba(255,210,80,${glare * 0.10})`);
-        ng.addColorStop(1,   'rgba(255,200,60,0)');   // fades to 0 — no edge
+        ng.addColorStop(1,   'rgba(255,200,60,0)');
         _ctx.fillStyle = ng;
-        // Draw as a circle arc so no rectangular edge is visible
         _ctx.beginPath();
         _ctx.arc(sunX, sunY, w * 0.65, 0, Math.PI * 2);
         _ctx.fill();
@@ -170,52 +169,56 @@ const CanvasScenes = (() => {
     }
   }
 
-  // ── Sun arc ────────────────────────────────────────────────
-  // Sun travels a semicircle: rises right-horizon at ~6am, peaks at noon, sets left at ~18:30
-  function _drawSun(hr) {
-    const w = _canvas.width, h = _canvas.height;
-
-    // Sun visible 5.5 – 19 h; fade at edges
-    if (hr < 5.5 || hr > 19.2) return;
-    const fade = hr < 6.5  ? (hr - 5.5)        // fade in over 1 h at dawn
-               : hr > 18.2 ? (19.2 - hr)        // fade out over 1 h at dusk
+  // ── Sun arc — tracks azimuth relative to _panAz ──────────────
+  // Sun rises east (az≈90°), transits south at noon (az≈180°), sets west (az≈270°).
+  // As the user pans, the sun shifts across the screen naturally.
+  function _sunScreenPos(hr, w, h) {
+    // Returns {sx, sy, altitude, alpha} or null if sun off-screen / below horizon
+    if (hr < 5.5 || hr > 19.2) return null;
+    const fade = hr < 6.5  ? (hr - 5.5)
+               : hr > 18.2 ? (19.2 - hr)
                : 1.0;
     const alpha = Math.max(0, Math.min(1, fade));
 
-    // Map hour → angle along a semicircle (0 = right horizon, π = left horizon)
-    // 6.0 h → angle 0 (east), 12.75 h → angle π/2 (zenith), 19.5 h → angle π (west)
     const dayStart = 6.0, dayEnd = 19.5;
     const progress = Math.max(0, Math.min(1, (hr - dayStart) / (dayEnd - dayStart)));
-    const angle    = progress * Math.PI;  // 0 → π
+    const altitude = Math.sin(progress * Math.PI);  // 0 at horizon, 1 at zenith
 
-    // Arc: centre below bottom of screen so it curves naturally
-    const arcCx = w * 0.5;
-    const arcCy = h * 0.94;                 // arc centre near bottom
-    const arcR  = h * 0.88;
+    // Sun azimuth: rises east (90°) → south (180°) → sets west (270°)
+    const sunAz  = 90 + progress * 180;
+    const relAz  = ((sunAz - _panAz + 540) % 360) - 180;
+    if (Math.abs(relAz) > 95) return null;   // sun panned off-screen
 
-    const sx = arcCx - Math.cos(angle) * arcR * 0.92;  // flip: cos(0)=1 → right
-    const sy = arcCy - Math.sin(angle) * arcR;
+    const hyBase = h * 0.65;
+    const hy = Math.min(h * 0.92, Math.max(h * 0.20, hyBase + _panAlt * (hyBase / 90)));
 
-    // Only draw if above visible area
-    if (sy > h * 0.96) return;
+    const sx = w * 0.5 + (relAz / 90) * w * 0.5;
+    // Sun Y: horizon minus altitude fraction of sky height; tilt shifts hy
+    const sy = hy - altitude * (hy * 0.88);
+    if (sy > h * 0.96 || sy < 0) return null;
 
-    // Sun size — smaller near horizon (atmospheric), bigger at altitude
-    const altitude = Math.sin(angle);  // 0 at horizon, 1 at zenith
-    const radius   = 10 + altitude * 8;
+    return { sx, sy, altitude, alpha };
+  }
 
-    // Colour: white-yellow at altitude, warm orange near horizon
-    const sunR = Math.round(255);
+  function _drawSun(hr) {
+    const w = _canvas.width, h = _canvas.height;
+    const sun = _sunScreenPos(hr, w, h);
+    if (!sun) return;
+    const { sx, sy, altitude, alpha } = sun;
+
+    const radius = 10 + altitude * 8;
+    const sunR = 255;
     const sunG = Math.round(200 + altitude * 50);
     const sunB = Math.round(80  + altitude * 120);
     const col  = `rgba(${sunR},${sunG},${sunB},${alpha})`;
 
-    // Outer atmospheric halo
+    // Atmospheric halo
     const haloR = radius * (altitude < 0.15 ? 5 : 3.5);
-    const halo  = _ctx.createRadialGradient(sx, sy, 0, sx, sy, haloR);
     const haloAlpha = alpha * (altitude < 0.15 ? 0.22 : 0.14);
+    const halo = _ctx.createRadialGradient(sx, sy, 0, sx, sy, haloR);
     halo.addColorStop(0,   `rgba(${sunR},${sunG},${sunB},${haloAlpha})`);
     halo.addColorStop(0.4, `rgba(${sunR},${Math.round(sunG*0.8)},${Math.round(sunB*0.5)},${haloAlpha * 0.4})`);
-    halo.addColorStop(1,   `rgba(255,160,60,0)`);
+    halo.addColorStop(1,   'rgba(255,160,60,0)');
     _ctx.fillStyle = halo;
     _ctx.fillRect(sx - haloR, sy - haloR, haloR * 2, haloR * 2);
 
@@ -225,7 +228,7 @@ const CanvasScenes = (() => {
     _ctx.fillStyle = col;
     _ctx.fill();
 
-    // Thin horizon reflection column on water (when near horizon)
+    // Water reflection column when near horizon
     if (altitude < 0.25 && sy < h * 0.88) {
       const waterY = h * 0.82;
       const rg = _ctx.createLinearGradient(sx, waterY, sx, h);
@@ -251,28 +254,34 @@ const CanvasScenes = (() => {
       _drawRealStars(t, hr, mode, nightness);
     }
 
-    // Moon arc — rises right ~20h, peaks ~1am, sets left ~6am
+    // Moon arc — rises east ~20h, transits south ~1am, sets west ~6am
+    // Tracks azimuth relative to _panAz just like the sun.
     const showMoon = mode === 'sleep' || nightness > 0.25;
     if (showMoon) {
       const moonAlpha = Math.min(0.92, (mode === 'sleep' ? 0.35 : 0) + nightness * 0.82);
       if (moonAlpha > 0.04) {
-        // Map night hours → arc progress
-        // 20h → 0, 1h (=25h) → 0.5, 6h → 1
-        const nightHr = hr < 8 ? hr + 24 : hr;  // 20..30 range
-        const progress = Math.max(0, Math.min(1, (nightHr - 20) / 10));
-        const angle    = progress * Math.PI;
+        const nightHr   = hr < 8 ? hr + 24 : hr;  // 20..30 range
+        const progress  = Math.max(0, Math.min(1, (nightHr - 20) / 10));
+        const altitude  = Math.sin(progress * Math.PI);
 
-        const arcCx = w * 0.5, arcCy = h * 0.94, arcR = h * 0.82;
-        const mx = arcCx - Math.cos(angle) * arcR * 0.80;
-        const my = arcCy - Math.sin(angle) * arcR;
-        if (my > h * 0.95) return;
+        // Moon azimuth: rises east (90°) → south (180°) → sets west (270°)
+        const moonAz = 90 + progress * 180;
+        const relAzM = ((moonAz - _panAz + 540) % 360) - 180;
+        if (Math.abs(relAzM) > 95) { /* moon off-screen */ } else {
+        const hyBase2 = h * 0.65;
+        const hy2 = Math.min(h * 0.92, Math.max(h * 0.20, hyBase2 + _panAlt * (hyBase2 / 90)));
+        const mx = w * 0.5 + (relAzM / 90) * w * 0.5;
+        const my = hy2 - altitude * (hy2 * 0.88);
+        if (my > h * 0.95) { /* below visible */ } else {
 
+        const mr = Math.min(w, h) * 0.048;
         const mr = Math.min(w, h) * 0.048;
         // Glow
         const mg = _ctx.createRadialGradient(mx, my, 0, mx, my, mr * 4);
         mg.addColorStop(0, `rgba(200,215,255,${moonAlpha * 0.18})`);
         mg.addColorStop(1, 'rgba(200,215,255,0)');
-        _ctx.fillStyle = mg; _ctx.fillRect(0, 0, w, h);
+        _ctx.fillStyle = mg;
+        _ctx.beginPath(); _ctx.arc(mx, my, mr * 4, 0, Math.PI * 2); _ctx.fill();
         // Disc
         _ctx.beginPath(); _ctx.arc(mx, my, mr, 0, Math.PI * 2);
         _ctx.fillStyle = `rgba(228,235,255,${moonAlpha})`;
@@ -282,7 +291,6 @@ const CanvasScenes = (() => {
         _ctx.fillStyle = _skyPalette(hr, mode).top;
         _ctx.fill();
         // Moon reflection on water at low altitude
-        const altitude = Math.sin(angle);
         if (altitude < 0.3 && my < h * 0.85) {
           const waterY = h * 0.84;
           const rg = _ctx.createLinearGradient(mx, waterY, mx, h);
@@ -291,6 +299,8 @@ const CanvasScenes = (() => {
           _ctx.fillStyle = rg;
           _ctx.fillRect(mx - mr * 1.2, waterY, mr * 2.4, h - waterY);
         }
+        } // end relAzM check
+        } // end my check
       }
     }
   }
@@ -1193,17 +1203,16 @@ const CanvasScenes = (() => {
     document.addEventListener('touchend',   onUp);
   }
 
-  // Cache star positions — recompute every 60 s (stars move slowly)
+  // Cache star positions — recompute on pan (nulled in onMove) or every 60 s
   let _starPositions = null, _starPosTime = 0;
   function _getStarPositions(w, h) {
-    if (Date.now() - _starPosTime > 60000) {
+    if (!_starPositions || Date.now() - _starPosTime > 60000) {
       _starPositions = _starCat.map(([ra, dec, mag, name]) => {
         const pos = _starScreen(ra, dec, _panAz, w, h);
         return pos ? { sx: pos.sx, sy: pos.sy, mag, name } : null;
       }).filter(Boolean);
       _starPosTime = Date.now();
     }
-    // Re-apply pan to cached positions cheaply (pan changes sx only)
     return _starPositions;
   }
 
@@ -1211,8 +1220,7 @@ const CanvasScenes = (() => {
   function _drawRealStars(t, hr, mode, nightness) {
     if (nightness < 0.05 && mode !== 'sleep') return;
     const w = _canvas.width, h = _canvas.height;
-    // Invalidate cache on pan change so stars re-project immediately
-    _starPositions = null;
+    // Cache is invalidated by _initPan onMove; no need to null it here every frame
     const stars = _getStarPositions(w, h);
     const alpha = Math.min(0.98, nightness * 1.1 + (mode === 'sleep' ? 0.3 : 0));
 
