@@ -874,35 +874,34 @@ const CanvasScenes = (() => {
 
     } else if (type === 'cumulus') {
       // Cumulus: cluster of overlapping soft radial blobs — no hard outlines.
-      // 4-6 blobs arranged in a low wide arc; each blob is a radial gradient.
+      // Blob radius derived from cw so blobs stay roughly as wide as they are tall.
       const nBlob = 4 + Math.round(c.seed * 2);
-      const bRx   = cw * 0.30;   // blob x-radius
-      const bRy   = ch * 0.80;   // blob y-radius (taller than wide for puffiness)
+      const bR    = cw * 0.22;   // base blob radius — same scale in x and y
       for (let b = 0; b < nBlob; b++) {
-        const t   = b / (nBlob - 1);                          // 0→1 left to right
-        const bx  = cx + (t - 0.5) * cw * 0.88;
-        const by  = cy - bRy * 0.15 * Math.sin(t * Math.PI); // gentle arc top
-        const br  = bRx * (0.75 + Math.sin(b * 1.8 + c.seed * 5) * 0.25);
-        const lum = b === 0 || b === nBlob-1 ? 235 : 252;    // edge blobs slightly darker
-        const gr  = _ctx.createRadialGradient(bx, by, 0, bx, by, br * 2.2);
-        gr.addColorStop(0,   `rgba(${lum},${lum+2},255,${alpha * 0.62})`);
-        gr.addColorStop(0.5, `rgba(${lum},${lum},252,${alpha * 0.28})`);
+        const t   = b / (nBlob - 1);
+        const bx  = cx + (t - 0.5) * cw * 0.80;
+        const by  = cy - bR * 0.55 * Math.sin(t * Math.PI); // gentle arc
+        const br  = bR * (0.80 + Math.sin(b * 1.8 + c.seed * 5) * 0.20);
+        const lum = b === 0 || b === nBlob-1 ? 232 : 250;
+        const gr  = _ctx.createRadialGradient(bx, by, 0, bx, by, br * 2.0);
+        gr.addColorStop(0,   `rgba(${lum},${lum+2},255,${alpha * 0.58})`);
+        gr.addColorStop(0.5, `rgba(${lum},${lum},252,${alpha * 0.24})`);
         gr.addColorStop(1,   'rgba(240,244,255,0)');
         _ctx.fillStyle = gr;
-        _ctx.fillRect(bx - br*2.2, by - bRy*1.1, br*4.4, bRy*2.2);
+        _ctx.fillRect(bx - br*2.0, by - br*2.0, br*4.0, br*4.0);
       }
-      // Subtle shadow underside — wide flat radial blob shifted down
-      const sg = _ctx.createRadialGradient(cx, cy + ch*0.6, 0, cx, cy + ch*0.6, cw*0.45);
-      sg.addColorStop(0,   `rgba(160,175,210,${alpha * 0.22})`);
+      // Subtle flat shadow underside
+      const sg = _ctx.createRadialGradient(cx, cy + bR*0.8, 0, cx, cy + bR*0.8, cw*0.40);
+      sg.addColorStop(0,   `rgba(160,175,210,${alpha * 0.18})`);
       sg.addColorStop(1,   'rgba(160,175,210,0)');
       _ctx.fillStyle = sg;
-      _ctx.fillRect(cx - cw*0.45, cy, cw*0.9, ch*1.2);
+      _ctx.fillRect(cx - cw*0.40, cy, cw*0.80, bR*2.0);
 
     } else if (type === 'backlit') {
       // Backlit: 3-5 overlapping radial blobs. Warm cream cores, lavender halos.
       // Each blob offset slightly — looks like light punching through cloud mass.
       const nBlob = 3 + Math.round(c.seed * 2);
-      const bR    = Math.min(cw * 0.38, ch * 1.4);
+      const bR    = cw * 0.32;   // radius based only on cloud width, not height
       for (let b = 0; b < nBlob; b++) {
         const t   = b / (nBlob - 1);
         const bx  = cx + (t - 0.5) * cw * 0.72;
@@ -926,16 +925,19 @@ const CanvasScenes = (() => {
     } else if (type === 'cumulonimbus') {
       // Thunderhead — all radial gradients, no filled paths, no hard edges.
       // Dark base blob → stacked lighter tower blobs → wide anvil blob at top.
-      const base  = cy + ch * 0.5;
-      const tower = ch * 3.6;
-      const tW    = cw * 0.35;
+      // Tower height capped to avoid massive blobs on tall screens.
+      // Use cw (cloud width) as the primary scale reference — width is
+      // already sensibly bounded by canvas width fraction.
+      const base  = cy + Math.min(ch, cw * 0.3) * 0.5;
+      const tower = Math.min(ch * 1.8, cw * 1.2);  // cap at ~1× cloud width tall
+      const tW    = cw * 0.30;
 
       // Dark base: wide flat radial blob
       const bg = _ctx.createRadialGradient(cx, base, 0, cx, base, cw * 0.55);
       bg.addColorStop(0,   `rgba(48,55,80,${alpha * 0.82})`);
       bg.addColorStop(0.5, `rgba(35,42,65,${alpha * 0.45})`);
       bg.addColorStop(1,   'rgba(30,38,60,0)');
-      _ctx.fillStyle = bg; _ctx.fillRect(cx - cw*0.55, base - ch*0.4, cw*1.1, ch*0.8);
+      _ctx.fillStyle = bg; _ctx.fillRect(cx - cw*0.55, base - cw*0.15, cw*1.1, cw*0.30);
 
       // Tower: 6 stacked radial blobs, narrowing and brightening upward
       for (let ti = 0; ti < 6; ti++) {
@@ -961,7 +963,7 @@ const CanvasScenes = (() => {
       av.addColorStop(0,   `rgba(248,250,255,${alpha*0.55})`);
       av.addColorStop(0.4, `rgba(240,245,255,${alpha*0.22})`);
       av.addColorStop(1,   'rgba(240,244,255,0)');
-      _ctx.fillStyle = av; _ctx.fillRect(cx - cw*0.65, base - tower*0.80 - ch*0.3, cw*1.3, ch*0.6);
+      _ctx.fillStyle = av; _ctx.fillRect(cx - cw*0.65, base - tower*0.80 - cw*0.12, cw*1.3, cw*0.24);
     }
   }
 
