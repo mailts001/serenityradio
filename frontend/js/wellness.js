@@ -112,11 +112,11 @@ const Wellness = (() => {
     const ROUNDS = 4;
     let round = 0, phaseIdx = 0;
 
-    const titleEl   = overlay.querySelector('.breath-title');
-    const phaseEl   = overlay.querySelector('.breath-phase');
-    const countEl   = overlay.querySelector('.breath-count');
-    const ringEl    = overlay.querySelector('.breath-ring');
-    const roundsEl  = overlay.querySelector('.breath-rounds');
+    const titleEl   = document.getElementById('breath-title');
+    const phaseEl   = document.getElementById('breath-phase');
+    const countEl   = document.getElementById('breath-count');
+    const ringEl    = document.querySelector('.breath-ring');
+    const roundsEl  = document.getElementById('breath-rounds');
 
     function runPhase() {
       if (!overlay.classList.contains('visible')) return;   // dismissed early

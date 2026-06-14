@@ -1260,6 +1260,7 @@ setInterval(() => {
 <script src="/js/favorites.js"></script>
 <script src="/js/canvas_scenes.js"></script>
 <script src="/js/ambient_audio.js"></script>
+<script src="/js/wellness.js"></script>
 <script>
 // ── Wire account section to auth state ──
 document.addEventListener('auth:changed', function(e) {
@@ -1388,26 +1389,9 @@ function toggleAmbient(btn) {
   </div>
 </div>
 
-<!-- Wellness module -->
-<script src="/static/js/wellness.js"></script>
+<!-- Wellness init (script loaded earlier with other /js/ modules) -->
 <script>
-  document.addEventListener('DOMContentLoaded', () => {
-    Wellness.init();
-    // Attach breathe objects to overlay elements
-    const o = document.getElementById('wellness-breath-overlay');
-    o.querySelector = o.querySelector.bind(o);
-    // Map overlay child elements by class for wellness.js
-    const _map = {
-      '.breath-title':  document.getElementById('breath-title'),
-      '.breath-ring':   document.querySelector('.breath-ring'),
-      '.breath-phase':  document.querySelector('.breath-phase'),
-      '.breath-count':  document.querySelector('.breath-count'),
-      '.breath-rounds': document.querySelector('.breath-rounds'),
-    };
-    // Patch overlay querySelector to work on id-less elements
-    const origQS = o.querySelector;
-    o.querySelector = (sel) => _map[sel] || origQS.call(o, sel);
-  });
+  document.addEventListener('DOMContentLoaded', () => { Wellness.init(); });
 </script>
 </body>
 </html>
