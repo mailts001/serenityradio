@@ -97,15 +97,23 @@ const CanvasScenes = (() => {
   // ── Sky ────────────────────────────────────────────────────
   function _drawSky(hr, mode) {
     const w = _canvas.width, h = _canvas.height;
+    const hy = h * (mode === 'sleep' ? 0.60 : 0.65);  // horizon Y — same as water
     const p = _skyPalette(hr, mode);
-    // Sky gradient fills entire canvas — water is drawn ON TOP, not adjacent
-    const g = _ctx.createLinearGradient(0, 0, 0, h);
+
+    // Fill ONLY the sky area (0..hy). Water fills below independently.
+    // Never fill past the horizon — any colour held below will bleed through
+    // the semi-transparent water gradient and create a coloured block.
+    const g = _ctx.createLinearGradient(0, 0, 0, hy);
     g.addColorStop(0,    p.top);
-    g.addColorStop(0.36, p.mid);
-    g.addColorStop(0.65, p.bot);   // horizon at 65% — more sky, less mid-screen seam
-    g.addColorStop(1,    p.bot);   // hold colour to bottom (water covers this)
+    g.addColorStop(0.55, p.mid);
+    g.addColorStop(1,    p.bot);   // ends exactly at horizon
     _ctx.fillStyle = g;
-    _ctx.fillRect(0, 0, w, h);
+    _ctx.fillRect(0, 0, w, hy);
+
+    // Below horizon: fill with near-black so water gradient blends into darkness
+    // (not into sky colour). This is invisible once water is drawn on top.
+    _ctx.fillStyle = '#010508';
+    _ctx.fillRect(0, hy, w, h - hy);
 
     // Horizon glow — dawn, full day atmospheric haze, dusk
     if (hr >= 5.5 && hr < 8) {
