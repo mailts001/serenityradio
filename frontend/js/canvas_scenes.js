@@ -827,15 +827,24 @@ const CanvasScenes = (() => {
   const _cloudTypes = ['wispy','wispy','cumulus','cumulus','cumulus','backlit','cumulonimbus'];
   const _clouds = Array.from({length: 14}, (_, i) => {
     const t = _cloudTypes[i % _cloudTypes.length];
+    // elev: elevation angle above horizon in degrees.
+    // Low elevation (5-15°) = near horizon; higher (25-45°) = mid sky.
+    // When user tilts up past this elevation, cloud scrolls below horizon and vanishes.
+    const elev = t === 'cumulonimbus' ? 8 + Math.random() * 10
+               : t === 'wispy'        ? 30 + Math.random() * 20
+               :                        12 + Math.random() * 22;
     return {
       x:     (i / 14) * 1.6 - 0.15,
-      y:     0.04 + Math.random() * (t === 'cumulonimbus' ? 0.12 : 0.26),
+      elev,                              // world elevation above horizon (degrees)
       w:     (t === 'cumulonimbus' ? 0.10 : 0.16) + Math.random() * 0.18,
       h:     (t === 'cumulonimbus' ? 0.10 : 0.04) + Math.random() * 0.05,
-      speed: 0.000018 + Math.random() * 0.000025,
+      // Higher clouds (wispy at high elev) drift faster — parallax effect
+      speed: t === 'wispy' ? 0.00004 + Math.random() * 0.00003
+                           : 0.000015 + Math.random() * 0.000020,
       alpha: (t === 'backlit' ? 0.45 : 0.32) + Math.random() * 0.28,
       type:  t,
-      seed:  Math.random(),  // per-cloud random seed for shape variation
+      seed:  Math.random(),
+      phase: Math.random() * Math.PI * 2,  // per-cloud drift phase
     };
   });
 
@@ -853,12 +862,19 @@ const CanvasScenes = (() => {
     _ctx.restore();
   }
 
-  function _drawCloud(c, w, h, alpha) {
-    const cx = c.x * w, cy = c.y * h;
+  // hy = tilt-aware horizon Y (pixels). Cloud screen Y derived from world elevation.
+  function _drawCloud(c, w, h, alpha, hy) {
+    if (!hy) hy = h * 0.65;
+    // World elevation (degrees above horizon) → screen Y.
+    // relAlt = how far above current view centre this cloud is.
+    // Positive relAlt → above centre → smaller screen Y (higher up).
+    const relAlt = (c.elev || 20) - _panAlt;
+    const cy = hy - (relAlt / 90) * hy;
+    // Clip: below horizon or above screen top
+    if (cy > hy || cy < -h * 0.15) return;
+    const cx = c.x * w;
     const cw = c.w * w, ch = c.h * h;
     const type = c.type || 'cumulus';
-    const hy   = h * 0.65;
-    if (cy > hy) return;  // never render into water
 
     if (type === 'wispy') {
       // Cirrus: 2-3 overlapping elongated gradient blobs, slight tilt each
@@ -892,14 +908,13 @@ const CanvasScenes = (() => {
       _ctx.restore();
 
     } else if (type === 'cumulus') {
-      // Cumulus: cluster of overlapping soft radial blobs — no hard outlines.
-      // Blob radius derived from cw so blobs stay roughly as wide as they are tall.
+      // Cumulus: cluster of overlapping soft radial blobs drawn as arcs (no rect edges).
       const nBlob = 4 + Math.round(c.seed * 2);
-      const bR    = cw * 0.22;   // base blob radius — same scale in x and y
+      const bR    = cw * 0.22;
       for (let b = 0; b < nBlob; b++) {
-        const t   = b / (nBlob - 1);
-        const bx  = cx + (t - 0.5) * cw * 0.80;
-        const by  = cy - bR * 0.55 * Math.sin(t * Math.PI); // gentle arc
+        const tb  = b / (nBlob - 1);
+        const bx  = cx + (tb - 0.5) * cw * 0.80;
+        const by  = cy - bR * 0.55 * Math.sin(tb * Math.PI);
         const br  = bR * (0.80 + Math.sin(b * 1.8 + c.seed * 5) * 0.20);
         const lum = b === 0 || b === nBlob-1 ? 232 : 250;
         const gr  = _ctx.createRadialGradient(bx, by, 0, bx, by, br * 2.0);
@@ -907,38 +922,35 @@ const CanvasScenes = (() => {
         gr.addColorStop(0.5, `rgba(${lum},${lum},252,${alpha * 0.24})`);
         gr.addColorStop(1,   'rgba(240,244,255,0)');
         _ctx.fillStyle = gr;
-        _ctx.fillRect(bx - br*2.0, by - br*2.0, br*4.0, br*4.0);
+        _ctx.beginPath(); _ctx.arc(bx, by, br * 2.0, 0, Math.PI * 2); _ctx.fill();
       }
-      // Subtle flat shadow underside
+      // Shadow underside — arc not rect
       const sg = _ctx.createRadialGradient(cx, cy + bR*0.8, 0, cx, cy + bR*0.8, cw*0.40);
       sg.addColorStop(0,   `rgba(160,175,210,${alpha * 0.18})`);
       sg.addColorStop(1,   'rgba(160,175,210,0)');
       _ctx.fillStyle = sg;
-      _ctx.fillRect(cx - cw*0.40, cy, cw*0.80, bR*2.0);
+      _ctx.beginPath(); _ctx.arc(cx, cy + bR*0.8, cw*0.40, 0, Math.PI * 2); _ctx.fill();
 
     } else if (type === 'backlit') {
-      // Backlit: 3-5 overlapping radial blobs. Warm cream cores, lavender halos.
-      // Each blob offset slightly — looks like light punching through cloud mass.
+      // Backlit: warm cream cores, lavender halos — all drawn as arcs
       const nBlob = 3 + Math.round(c.seed * 2);
-      const bR    = cw * 0.32;   // radius based only on cloud width, not height
+      const bR    = cw * 0.32;
       for (let b = 0; b < nBlob; b++) {
-        const t   = b / (nBlob - 1);
-        const bx  = cx + (t - 0.5) * cw * 0.72;
-        const by  = cy + Math.sin(t * Math.PI + c.seed) * ch * 0.3;
-        // Lavender halo
+        const tb  = b / (nBlob - 1);
+        const bx  = cx + (tb - 0.5) * cw * 0.72;
+        const by  = cy + Math.sin(tb * Math.PI + c.seed) * ch * 0.3;
         const lg  = _ctx.createRadialGradient(bx + bR*0.1, by + bR*0.1, 0, bx, by, bR * 2.0);
         lg.addColorStop(0,   `rgba(185,165,230,${alpha * 0.38})`);
         lg.addColorStop(0.6, `rgba(175,155,225,${alpha * 0.12})`);
         lg.addColorStop(1,   'rgba(180,160,228,0)');
         _ctx.fillStyle = lg;
-        _ctx.fillRect(bx - bR*2, by - bR*2, bR*4, bR*4);
-        // Cream pearl core
+        _ctx.beginPath(); _ctx.arc(bx, by, bR * 2.0, 0, Math.PI * 2); _ctx.fill();
         const cg  = _ctx.createRadialGradient(bx, by, 0, bx, by, bR * 1.1);
         cg.addColorStop(0,   `rgba(255,252,248,${alpha * 0.65})`);
         cg.addColorStop(0.4, `rgba(250,248,255,${alpha * 0.30})`);
         cg.addColorStop(1,   'rgba(248,246,255,0)');
         _ctx.fillStyle = cg;
-        _ctx.fillRect(bx - bR*1.1, by - bR*1.1, bR*2.2, bR*2.2);
+        _ctx.beginPath(); _ctx.arc(bx, by, bR * 1.1, 0, Math.PI * 2); _ctx.fill();
       }
 
     } else if (type === 'cumulonimbus') {
@@ -993,10 +1005,12 @@ const CanvasScenes = (() => {
       hyBase + _panAlt * (hyBase / 90)));
     const type = _weatherType(hr);
 
-    // Move clouds slowly across sky
+    // Move clouds: drift right + gentle vertical bob per cloud
     _clouds.forEach(c => {
       c.x += c.speed;
       if (c.x > 1.35) c.x = -0.35;
+      // Subtle elevation wobble — each cloud bobs ±0.8° on its own phase
+      c.elev += Math.sin(t * 0.0004 + (c.phase || 0)) * 0.003;
     });
 
     if (type === 'haze') {
@@ -1009,12 +1023,11 @@ const CanvasScenes = (() => {
       _ctx.fillStyle = hg;
       _ctx.fillRect(0, h * 0.32, w, h * 0.40);
       // Backlit wisps — dawn light gives pearl-lavender tones
-      _clouds.slice(0, 4).forEach(c => _drawCloud({...c, type:'wispy'}, w, h, fade * 0.40));
-      _clouds.slice(4, 6).forEach(c => _drawCloud({...c, type:'backlit'}, w, h, fade * 0.28));
+      _clouds.slice(0, 4).forEach(c => _drawCloud({...c, type:'wispy'}, w, h, fade * 0.40, hy));
+      _clouds.slice(4, 6).forEach(c => _drawCloud({...c, type:'backlit'}, w, h, fade * 0.28, hy));
 
     } else if (type === 'shower') {
-      // Afternoon tropical shower — "advancing like a slow-motion avalanche"
-      // Dark overcast veil + towering cumulonimbus + backlit drama + rain
+      // Afternoon tropical shower — dark overcast veil + cumulonimbus + rain
       const cg = _ctx.createLinearGradient(0, 0, 0, hy);
       cg.addColorStop(0,   'rgba(50,58,82,0.52)');
       cg.addColorStop(0.7, 'rgba(28,36,58,0.25)');
@@ -1022,15 +1035,12 @@ const CanvasScenes = (() => {
       _ctx.fillStyle = cg;
       _ctx.fillRect(0, 0, w, hy);
 
-      // Cumulonimbus thunderheads — the "white-hot mountains"
       _clouds.filter(c => c.type === 'cumulonimbus').forEach(c =>
-        _drawCloud(c, w, h, 0.80));
-      // Dense cumulus advancing like avalanche — packed left-to-right
+        _drawCloud(c, w, h, 0.80, hy));
       _clouds.filter(c => c.type === 'cumulus').slice(0, 5).forEach(c =>
-        _drawCloud({...c, y: c.y * 0.8}, w, h, 0.68));
-      // A few backlit patches where light breaks through
+        _drawCloud(c, w, h, 0.68, hy));
       _clouds.filter(c => c.type === 'backlit').slice(0, 2).forEach(c =>
-        _drawCloud(c, w, h, 0.42));
+        _drawCloud(c, w, h, 0.42, hy));
 
       // Rain streaks — diagonal, wind-driven
       _ctx.save();
@@ -1057,29 +1067,27 @@ const CanvasScenes = (() => {
       _ctx.fillStyle = og;
       _ctx.fillRect(0, 0, w, hy);
       // All cloud types layered — backlit gives lavender pearl shadows
-      _clouds.filter(c => c.type === 'cumulus').forEach(c  => _drawCloud(c, w, h, 0.52));
-      _clouds.filter(c => c.type === 'backlit').forEach(c  => _drawCloud(c, w, h, 0.45));
+      _clouds.filter(c => c.type === 'cumulus').forEach(c  => _drawCloud(c, w, h, 0.52, hy));
+      _clouds.filter(c => c.type === 'backlit').forEach(c  => _drawCloud(c, w, h, 0.45, hy));
       _clouds.filter(c => c.type === 'wispy').slice(0, 3).forEach(c =>
-        _drawCloud(c, w, h, 0.28));
+        _drawCloud(c, w, h, 0.28, hy));
 
     } else if (type === 'clouds') {
-      // Scattered afternoon/evening — mix of fair cumulus + occasional drama
       const count = Math.floor(4 + _weatherSeed * 3);
       _clouds.filter(c => c.type === 'cumulus').slice(0, count).forEach(c =>
-        _drawCloud(c, w, h, 0.42));
-      // Occasional backlit where sun catches cloud edge
+        _drawCloud(c, w, h, 0.42, hy));
       _clouds.filter(c => c.type === 'backlit').slice(0, 2).forEach(c =>
-        _drawCloud(c, w, h, 0.35));
+        _drawCloud(c, w, h, 0.35, hy));
       _clouds.filter(c => c.type === 'wispy').slice(0, 2).forEach(c =>
-        _drawCloud(c, w, h, 0.22));
+        _drawCloud(c, w, h, 0.22, hy));
 
     } else {
-      // Clear / light-cloud — distant wisps + maybe one cumulus on the horizon
+      // Clear / light-cloud — distant wisps only
       _clouds.filter(c => c.type === 'wispy').slice(0, 3).forEach(c =>
-        _drawCloud(c, w, h, 0.20));
+        _drawCloud(c, w, h, 0.20, hy));
       if (_weatherSeed > 0.6) {
         _clouds.filter(c => c.type === 'cumulus').slice(0, 2).forEach(c =>
-          _drawCloud(c, w, h, 0.25));
+          _drawCloud(c, w, h, 0.25, hy));
       }
     }
   }
