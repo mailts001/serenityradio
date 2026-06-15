@@ -17,18 +17,20 @@ const Forest3D = (() => {
   const TOTAL_FLOW = 80;           // luminous flowers
 
   // Plant archetypes: [hMin, hRange, trunkWidthMult, crXZmult, crYmult, r, g, b]
+  // Colors are for MeshBasicMaterial (unlit) — use vivid values
   const PTYPES = [
-    [14, 26, 1.0, 0.65, 1.8,  0.10, 0.35, 0.10],  // 0: tall conifer
-    [7,  12, 2.4, 1.7,  0.65, 0.22, 0.46, 0.14],  // 1: broad oak
-    [2,   4, 0.5, 2.4,  0.45, 0.28, 0.52, 0.18],  // 2: ground shrub
-    [9,  14, 0.8, 1.0,  1.3,  0.18, 0.48, 0.12],  // 3: palm-like
-    [12, 14, 0.4, 0.65, 1.0,  0.36, 0.56, 0.24],  // 4: slim birch
+    [14, 26, 1.0, 0.65, 1.8,  0.15, 0.60, 0.18],  // 0: tall conifer   — deep forest green
+    [7,  12, 2.4, 1.7,  0.65, 0.32, 0.68, 0.20],  // 1: broad oak      — bright medium green
+    [2,   4, 0.5, 2.4,  0.45, 0.42, 0.72, 0.28],  // 2: ground shrub   — lime green
+    [9,  14, 0.8, 1.0,  1.3,  0.28, 0.65, 0.18],  // 3: palm-like      — tropical green
+    [12, 14, 0.4, 0.65, 1.0,  0.58, 0.80, 0.38],  // 4: slim birch     — light yellow-green
   ];
 
   // ── Module state ─────────────────────────────────────────────
   let _R, _scene, _cam, _raf;
   let _trunkMesh, _canopyMesh, _cloudMesh, _fireMesh, _mushMesh, _flowMesh;
-  let _sunLight, _ambLight, _hemiLight;
+  let _sunLight, _moonLight, _ambLight, _hemiLight;
+  let _lastW = 0, _lastH = 0;   // for per-frame fullscreen resize check
   let _canvas2d = null;
   let _el = null;
   let _dummy = null;
@@ -356,37 +358,48 @@ const Forest3D = (() => {
     _isDusk    = !_nightMode && (hr < 7.5 || hr >= 17.5);
 
     if (_nightMode) {
-      _scene.background.setStyle('#0b1612');
-      _scene.fog.color.setStyle('#0b1612');
-      _ambLight.color.setStyle('#1e3828');  _ambLight.intensity = 0.9;
-      _sunLight.color.setStyle('#4060ff');  _sunLight.intensity = 0.5;
-      _sunLight.position.set(-40, 60, -50);
-      _hemiLight.color.setStyle('#1e4028'); _hemiLight.groundColor.setStyle('#0a200a');
-      _hemiLight.intensity = 0.6;
-      _cloudMesh.material.opacity = 0.30;
+      // Night: deep blue sky, bright MOON as key light, ambient fill so forest is visible
+      _scene.background.setStyle('#0d1e2a');
+      _scene.fog.color.setStyle('#0d1e2a');
+      _ambLight.color.setStyle('#3a5878');  _ambLight.intensity = 1.2;  // blue ambient fill
+      _sunLight.intensity = 0;                                           // sun off
+      _moonLight.color.setStyle('#a0c8f0'); _moonLight.intensity = 2.0; // bright moon
+      _moonLight.position.set(-40, 80, -30);
+      _hemiLight.color.setStyle('#2a4860'); _hemiLight.groundColor.setStyle('#1a3020');
+      _hemiLight.intensity = 0.9;
+      _cloudMesh.material.color.setStyle('#334466');
+      _cloudMesh.material.opacity = 0.45;
+      // Night-tint canopy (dark teal-blue)
+      _canopyMesh.material.color = new THREE.Color(0.55, 0.75, 0.90);
     } else if (_isDusk) {
       _scene.background.setStyle('#e8905a');
       _scene.fog.color.setStyle('#c87840');
-      _ambLight.color.setStyle('#d09060');  _ambLight.intensity = 1.5;
-      _sunLight.color.setStyle('#ffb060');  _sunLight.intensity = 2.0;
+      _ambLight.color.setStyle('#e0b080');  _ambLight.intensity = 1.8;
+      _sunLight.color.setStyle('#ffb060');  _sunLight.intensity = 2.2;
       _sunLight.position.set(hr > 12 ? -80 : 80, 30, 40);
-      _hemiLight.color.setStyle('#e0a060'); _hemiLight.groundColor.setStyle('#503010');
-      _hemiLight.intensity = 0.8;
-      _cloudMesh.material.opacity = 0.85;
+      _moonLight.intensity = 0;
+      _hemiLight.color.setStyle('#e0a060'); _hemiLight.groundColor.setStyle('#704020');
+      _hemiLight.intensity = 1.0;
+      _cloudMesh.material.color.setStyle('#f0c090');
+      _cloudMesh.material.opacity = 0.88;
+      _canopyMesh.material.color = new THREE.Color(1, 1, 1);
     } else {
       // Bright daytime
-      _scene.background.setStyle('#5ab0e8');
-      _scene.fog.color.setStyle('#8ecce8');
-      _ambLight.color.setStyle('#d8f0e8');  _ambLight.intensity = 2.2;
-      _sunLight.color.setStyle('#fff8e0');  _sunLight.intensity = 2.5;
+      _scene.background.setStyle('#4eb8f0');
+      _scene.fog.color.setStyle('#88cce8');
+      _ambLight.color.setStyle('#ffffff');  _ambLight.intensity = 1.4;
+      _sunLight.color.setStyle('#fff8e0');  _sunLight.intensity = 2.8;
       _sunLight.position.set(60, 90, 50);
-      _hemiLight.color.setStyle('#90d8f0'); _hemiLight.groundColor.setStyle('#5a9c30');
-      _hemiLight.intensity = 1.0;
-      _cloudMesh.material.opacity = 0.95;
+      _moonLight.intensity = 0;
+      _hemiLight.color.setStyle('#b0e0ff'); _hemiLight.groundColor.setStyle('#60b030');
+      _hemiLight.intensity = 1.4;
+      _cloudMesh.material.color.setStyle('#ffffff');
+      _cloudMesh.material.opacity = 0.96;
+      _canopyMesh.material.color = new THREE.Color(1, 1, 1);  // full vertex colour
     }
 
     // Mushrooms & flowers glow stronger at night
-    _mushMesh.material.opacity = _nightMode ? 1.0 : (_isDusk ? 0.85 : 0.65);
+    _mushMesh.material.opacity = _nightMode ? 1.0 : (_isDusk ? 0.88 : 0.70);
   }
 
   // ── Camera ────────────────────────────────────────────────────
@@ -501,8 +514,8 @@ const Forest3D = (() => {
     const flowGeo   = new THREE.SphereGeometry(1, 4, 3);
 
     const trunkMat  = new THREE.MeshLambertMaterial({ vertexColors: true });
-    const canopyMat = new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true });
-    const cloudMat  = new THREE.MeshLambertMaterial({ color: 0xf5faf5, transparent: true, opacity: 0.95 });
+    const canopyMat = new THREE.MeshBasicMaterial({ vertexColors: true });  // unlit — always vivid
+    const cloudMat  = new THREE.MeshBasicMaterial({ color: 0xf5faf5, transparent: true, opacity: 0.95 });
     const fireMat   = new THREE.MeshBasicMaterial({ vertexColors: true });         // unlit = always bright
     const mushMat   = new THREE.MeshBasicMaterial({ vertexColors: true, transparent: true, opacity: 1.0 });
     const flowMat   = new THREE.MeshBasicMaterial({ vertexColors: true });         // unlit flowers
@@ -519,20 +532,22 @@ const Forest3D = (() => {
 
     _scene.add(_trunkMesh, _canopyMesh, _cloudMesh, _fireMesh, _mushMesh, _flowMesh);
 
-    // Ground
+    // Ground — MeshBasicMaterial so it's always vivid green
     const ground = new THREE.Mesh(
       new THREE.PlaneGeometry(CHUNK * GRID * 6, CHUNK * GRID * 6),
-      new THREE.MeshLambertMaterial({ color: 0x3c8a20 })
+      new THREE.MeshBasicMaterial({ color: 0x4a9c28 })
     );
     ground.rotation.x = -Math.PI / 2;
     _scene.add(ground);
 
     // Lights
-    _ambLight  = new THREE.AmbientLight(0xd8f0e8, 2.2);
+    _ambLight  = new THREE.AmbientLight(0xffffff, 1.0);   // base fill
     _sunLight  = new THREE.DirectionalLight(0xfff8e0, 2.5);
     _sunLight.position.set(60, 90, 50);
-    _hemiLight = new THREE.HemisphereLight(0x90d8f0, 0x5a9c30, 1.0);  // sky + ground bounce
-    _scene.add(_ambLight, _sunLight, _hemiLight);
+    _moonLight = new THREE.DirectionalLight(0x8ab4e8, 1.4); // cool blue moon
+    _moonLight.position.set(-40, 70, -30);
+    _hemiLight = new THREE.HemisphereLight(0x90d8f0, 0x5a9c30, 1.2);
+    _scene.add(_ambLight, _sunLight, _moonLight, _hemiLight);
 
     _fillGrid();
     _initClouds();
@@ -544,12 +559,24 @@ const Forest3D = (() => {
     setInterval(_applyTimeOfDay, 60000);
   }
 
+  // ── Per-frame resize check (handles fullscreen, orientation, etc.) ───
+  function _checkResize() {
+    const w = window.innerWidth, h = window.innerHeight;
+    if (w !== _lastW || h !== _lastH) {
+      _lastW = w; _lastH = h;
+      _R.setSize(w, h);
+      _cam.aspect = w / h;
+      _cam.updateProjectionMatrix();
+    }
+  }
+
   // ── Loop ─────────────────────────────────────────────────────
   function _loop(now) {
     _raf = requestAnimationFrame(_loop);
     const dt = Math.min(now - _lastT, 50);
     _lastT = now;
 
+    _checkResize();   // catch fullscreen / orientation changes every frame
     _updateCamera(dt, now);
     _updateClouds(dt);
     _updateFireflies(now, dt);
@@ -603,6 +630,7 @@ const Forest3D = (() => {
 
       _camPos.x = 0; _camPos.y = 5.2; _camPos.z = 0;
       _camAz = 0; _camAlt = 0.08; _camChunkX = 999; _camChunkZ = 999;
+      _lastW = window.innerWidth; _lastH = window.innerHeight;
 
       _build();
       _bindInput(_el);
