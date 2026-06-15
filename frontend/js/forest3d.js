@@ -1,167 +1,154 @@
 /* ══════════════════════════════════════════════════════════
    Forest3D — Three.js infinite procedural forest
-   Mobile-optimised: instancing, fog, ~15k triangles, 5 draw calls
+   Mobile-optimised: instancing, fog, ~15k triangles
+   Controls: drag to pan/tilt · pinch to zoom · scroll to walk
    ══════════════════════════════════════════════════════════ */
 
 const Forest3D = (() => {
   'use strict';
 
   // ── World constants ──────────────────────────────────────────
-  const CHUNK      = 48;               // world-unit size of one chunk
-  const GRID       = 5;                // 5×5 visible chunks
-  const HALF       = 2;                // floor(GRID/2)
-  const TREES      = 8;                // trees per chunk
-  const TOTAL_T    = GRID * GRID * TREES;        // 200 trunk instances
-  const TOTAL_C    = TOTAL_T * 3;                // 600 canopy instances
-  const CHUNKS_N   = GRID * GRID;               // 25
+  const CHUNK   = 48;
+  const GRID    = 5;
+  const HALF    = 2;
+  const TREES   = 8;
+  const TOTAL_T = GRID * GRID * TREES;
+  const TOTAL_C = TOTAL_T * 3;
 
   // ── Module state ─────────────────────────────────────────────
-  let _R, _scene, _cam, _raf;          // renderer, scene, camera, anim frame
+  let _R, _scene, _cam, _raf;
   let _trunkMesh, _canopyMesh, _cloudMesh, _fireMesh;
   let _sunLight, _ambLight;
-  let _canvas2d = null;                // original 2D canvas (hidden while 3D runs)
-  let _el = null;                      // WebGL canvas element
+  let _canvas2d = null;
+  let _el = null;
 
-  // Chunk grid: each slot has world chunk coords
-  let _slots = [];   // [{cx,cz}] length CHUNKS_N
-  let _camChunkX = 999, _camChunkZ = 999;  // force initial fill
+  let _slots = [];
+  let _camChunkX = 999, _camChunkZ = 999;
 
-  // Camera
-  const _camPos   = { x: 0, y: 5.2, z: 0 };
-  let   _camAz    = 0;               // horizontal look angle (radians)
-  let   _camAlt   = 0.08;            // slight downward tilt
-  let   _lastT    = 0;
-  let   _isDrag   = false, _dStartX = 0, _dStartAz = 0;
+  // Camera state
+  const _camPos = { x: 0, y: 5.2, z: 0 };
+  let _camAz   = 0;       // horizontal look (radians)
+  let _camAlt  = 0.08;    // vertical tilt (radians, + = look up)
+  let _camFov  = 62;      // field of view
+  let _walkSpd = 0;       // manual walk impulse (decays)
+  let _lastT   = 0;
+  let _nightMode = false;
 
-  // Day / night (driven by real clock)
-  let _nightMode  = false;
+  // Pointer state (mouse & touch)
+  let _ptr = { down: false, x: 0, y: 0, az0: 0, alt0: 0 };
+  let _pinch = { active: false, dist0: 0, fov0: 0 };
 
-  // Cloud state
   const _clouds   = [];
-
-  // Bird state (3 birds, simple path)
   const _birds    = [];
-  let _birdMeshes = [];
+  let   _birdMeshes = [];
+  let   _dummy = null;
 
-  // ── Seeded deterministic random ───────────────────────────────
+  // ── Seeded random ─────────────────────────────────────────────
   function rng(seed) {
     let s = ((seed * 9301 + 49297) | 0) % 233280;
     return () => { s = ((s * 9301 + 49297) | 0) % 233280; return s / 233280; };
   }
 
-  // ── Tree geometry & data ──────────────────────────────────────
+  // ── Tree data ─────────────────────────────────────────────────
   function _treeData(cx, cz) {
     const r = rng(cx * 9973 + cz * 9871 + 4567);
     const out = [];
     for (let i = 0; i < TREES; i++) {
-      // Keep trees away from chunk centre (leave a clearing path)
       const angle = r() * Math.PI * 2;
       const dist  = CHUNK * (0.18 + r() * 0.38);
       out.push({
-        lx : Math.cos(angle) * dist + (r() - 0.5) * CHUNK * 0.22,
-        lz : Math.sin(angle) * dist + (r() - 0.5) * CHUNK * 0.22,
-        h  : 12 + r() * 24,          // trunk height
-        cr : 2.4 + r() * 3.2,        // canopy radius
-        lean: (r() - 0.5) * 0.07,    // slight lean
-        gv : r(),                     // green variation 0..1
+        lx  : Math.cos(angle) * dist + (r() - 0.5) * CHUNK * 0.22,
+        lz  : Math.sin(angle) * dist + (r() - 0.5) * CHUNK * 0.22,
+        h   : 12 + r() * 24,
+        cr  : 2.4 + r() * 3.2,
+        lean: (r() - 0.5) * 0.07,
+        gv  : r(),
       });
     }
     return out;
   }
 
-  // ── Update one chunk's instance slice ────────────────────────
-  let _dummy = null;   // initialised after THREE loads in _realStart()
-
+  // ── Update one chunk ──────────────────────────────────────────
   function _updateSlot(slotIdx, cx, cz) {
-    const trees   = _treeData(cx, cz);
-    const tBase   = slotIdx * TREES;
-    const cBase   = slotIdx * TREES * 3;
-    const worldX  = cx * CHUNK;
-    const worldZ  = cz * CHUNK;
-    const c3      = new THREE.Color();
+    const trees  = _treeData(cx, cz);
+    const tBase  = slotIdx * TREES;
+    const cBase  = slotIdx * TREES * 3;
+    const worldX = cx * CHUNK;
+    const worldZ = cz * CHUNK;
+    const c3     = new THREE.Color();
 
     trees.forEach((tr, ti) => {
       const wx = worldX + tr.lx;
       const wz = worldZ + tr.lz;
 
-      // ── Trunk ──────────────────────────────────────────────
+      // Trunk
       _dummy.position.set(wx, tr.h * 0.5, wz);
       _dummy.scale.set(1, tr.h, 1);
       _dummy.rotation.set(0, 0, tr.lean);
       _dummy.updateMatrix();
       _trunkMesh.setMatrixAt(tBase + ti, _dummy.matrix);
-      // Warm brown trunk colour — vary per tree
-      const tv = 0.75 + tr.gv * 0.25;
-      c3.setRGB(0.38 * tv, 0.24 * tv, 0.10 * tv);
+      const tv = 0.85 + tr.gv * 0.2;
+      c3.setRGB(0.45 * tv, 0.30 * tv, 0.14 * tv);
       _trunkMesh.setColorAt(tBase + ti, c3);
 
-      // ── Canopy: 3 overlapping blobs ────────────────────────
+      // Canopy: 3 blobs
       const r2 = rng(cx * 71 + cz * 53 + ti * 17);
       for (let ci = 0; ci < 3; ci++) {
-        const offX  = (r2() - 0.5) * tr.cr * 0.7;
-        const offZ  = (r2() - 0.5) * tr.cr * 0.7;
-        const offY  = ci === 0 ? 0 : ci === 1 ? -tr.cr * 0.38 : tr.cr * 0.28;
-        const sxy   = tr.cr * (0.72 + r2() * 0.44);
-        const sy    = sxy * (0.58 + r2() * 0.36);
+        const offX = (r2() - 0.5) * tr.cr * 0.7;
+        const offZ = (r2() - 0.5) * tr.cr * 0.7;
+        const offY = ci === 0 ? 0 : ci === 1 ? -tr.cr * 0.38 : tr.cr * 0.28;
+        const sxy  = tr.cr * (0.72 + r2() * 0.44);
+        const sy   = sxy * (0.58 + r2() * 0.36);
         _dummy.position.set(wx + offX, tr.h + offY, wz + offZ);
         _dummy.scale.set(sxy, sy, sxy);
         _dummy.rotation.set(0, r2() * Math.PI, 0);
         _dummy.updateMatrix();
         _canopyMesh.setMatrixAt(cBase + ti * 3 + ci, _dummy.matrix);
-        // Green variation: dark inner, lighter outer
-        const gBase = 0.14 + tr.gv * 0.12;
-        const ghi   = ci === 2 ? 0.08 : 0;
-        c3.setRGB(gBase - 0.02 + ghi, gBase * 1.9 + ghi * 1.2, gBase * 0.65);
+        // Brighter, more vivid greens
+        const gBase = 0.30 + tr.gv * 0.18;
+        const ghi   = ci === 2 ? 0.10 : 0;
+        c3.setRGB(gBase * 0.42 + ghi * 0.2, gBase + ghi, gBase * 0.38 + ghi * 0.1);
         _canopyMesh.setColorAt(cBase + ti * 3 + ci, c3);
       }
     });
 
-    _trunkMesh.instanceMatrix.needsUpdate = true;
-    _trunkMesh.instanceColor.needsUpdate  = true;
+    _trunkMesh.instanceMatrix.needsUpdate  = true;
+    _trunkMesh.instanceColor.needsUpdate   = true;
     _canopyMesh.instanceMatrix.needsUpdate = true;
     _canopyMesh.instanceColor.needsUpdate  = true;
   }
 
-  // ── Check if camera crossed a chunk boundary ─────────────────
+  // ── Chunk management ──────────────────────────────────────────
   function _checkChunks() {
     const cx = Math.round(_camPos.x / CHUNK);
     const cz = Math.round(_camPos.z / CHUNK);
     if (cx === _camChunkX && cz === _camChunkZ) return;
-
-    const prevX = _camChunkX, prevZ = _camChunkZ;
     _camChunkX = cx; _camChunkZ = cz;
 
-    // Build the set of desired chunks
     const desired = new Map();
     for (let gz = -HALF; gz <= HALF; gz++)
       for (let gx = -HALF; gx <= HALF; gx++)
         desired.set(`${cx+gx},${cz+gz}`, { cx: cx+gx, cz: cz+gz });
 
-    // Find slots that are stale (outside desired set)
     const staleSlots = [];
     _slots.forEach((sl, idx) => {
-      const key = `${sl.cx},${sl.cz}`;
-      if (desired.has(key)) desired.delete(key);  // already present
+      if (desired.has(`${sl.cx},${sl.cz}`)) desired.delete(`${sl.cx},${sl.cz}`);
       else staleSlots.push(idx);
     });
 
-    // Assign remaining desired chunks to stale slots
     const missing = [...desired.values()];
     staleSlots.forEach((slotIdx, i) => {
       if (i >= missing.length) return;
-      const ch = missing[i];
-      _slots[slotIdx] = { cx: ch.cx, cz: ch.cz };
-      _updateSlot(slotIdx, ch.cx, ch.cz);
+      _slots[slotIdx] = { cx: missing[i].cx, cz: missing[i].cz };
+      _updateSlot(slotIdx, missing[i].cx, missing[i].cz);
     });
   }
 
-  // ── Initialise full 5×5 grid ─────────────────────────────────
   function _fillGrid() {
     _slots = [];
     for (let gz = -HALF; gz <= HALF; gz++)
       for (let gx = -HALF; gx <= HALF; gx++)
         _slots.push({ cx: gx, cz: gz });
-
     _slots.forEach((sl, i) => _updateSlot(i, sl.cx, sl.cz));
     _camChunkX = 0; _camChunkZ = 0;
   }
@@ -172,13 +159,11 @@ const Forest3D = (() => {
     _clouds.length = 0;
     for (let i = 0; i < 12; i++) {
       _clouds.push({
-        x:     (r() - 0.5) * CHUNK * GRID * 0.9,
-        y:     30 + r() * 22,
-        z:     (r() - 0.5) * CHUNK * GRID * 0.9,
-        sx:    10 + r() * 18,
-        sy:    2.2 + r() * 2.8,
-        sz:    6  + r() * 12,
-        vx:    0.006 + r() * 0.010,
+        x: (r() - 0.5) * CHUNK * GRID * 0.9,
+        y: 30 + r() * 22,
+        z: (r() - 0.5) * CHUNK * GRID * 0.9,
+        sx: 10 + r() * 18, sy: 2.2 + r() * 2.8, sz: 6 + r() * 12,
+        vx: 0.006 + r() * 0.010,
         phase: r() * Math.PI * 2,
       });
     }
@@ -198,29 +183,24 @@ const Forest3D = (() => {
 
   function _updateClouds(dt) {
     const worldW = CHUNK * GRID;
-    let changed = false;
     _clouds.forEach(cl => {
       cl.x += cl.vx * dt * 0.06;
-      if (cl.x > worldW * 0.6) { cl.x -= worldW * 1.2; changed = true; }
+      if (cl.x > worldW * 0.6) cl.x -= worldW * 1.2;
     });
-    if (changed || true) _refreshClouds();   // update every frame (cheap)
+    _refreshClouds();
   }
 
-  // ── Fireflies (30 tiny emissive instances) ───────────────────
+  // ── Fireflies ─────────────────────────────────────────────────
   const _fireData = [];
   function _initFireflies() {
     const r = rng(11111);
     _fireData.length = 0;
     for (let i = 0; i < 30; i++) {
       _fireData.push({
-        x: (r() - 0.5) * CHUNK * 2,
-        y: 0.8 + r() * 3.5,
+        x: (r() - 0.5) * CHUNK * 2, y: 0.8 + r() * 3.5,
         z: (r() - 0.5) * CHUNK * 2,
-        vx: (r() - 0.5) * 0.012,
-        vy: (r() - 0.5) * 0.006,
-        vz: (r() - 0.5) * 0.012,
-        phase: r() * Math.PI * 2,
-        speed: 0.8 + r() * 1.2,
+        vx: (r() - 0.5) * 0.012, vz: (r() - 0.5) * 0.012,
+        phase: r() * Math.PI * 2, speed: 0.8 + r() * 1.2,
       });
     }
   }
@@ -231,19 +211,15 @@ const Forest3D = (() => {
       f.x += f.vx * dt * 0.04;
       f.y += Math.sin(t * 0.0008 * f.speed + f.phase) * 0.008;
       f.z += f.vz * dt * 0.04;
-      // Wrap near camera
       const wrap = CHUNK * 1.5;
       if (f.x < _camPos.x - wrap) f.x += wrap * 2;
       if (f.x > _camPos.x + wrap) f.x -= wrap * 2;
       if (f.z < _camPos.z - wrap) f.z += wrap * 2;
       if (f.z > _camPos.z + wrap) f.z -= wrap * 2;
-
       _dummy.position.set(f.x, f.y, f.z);
       _dummy.scale.setScalar(0.18);
       _dummy.updateMatrix();
       _fireMesh.setMatrixAt(i, _dummy.matrix);
-
-      // Pulse brightness
       const bri = 0.4 + 0.6 * Math.sin(t * 0.003 * f.speed + f.phase);
       c3.setRGB(bri * 0.8, bri, bri * 0.3);
       _fireMesh.setColorAt(i, c3);
@@ -252,20 +228,18 @@ const Forest3D = (() => {
     _fireMesh.instanceColor.needsUpdate  = true;
   }
 
-  // ── Birds (3 simple path objects) ────────────────────────────
+  // ── Birds ─────────────────────────────────────────────────────
   function _initBirds() {
     const r = rng(22222);
     _birds.length = 0;
     _birdMeshes.forEach(m => _scene.remove(m));
     _birdMeshes = [];
-    const mat = new THREE.MeshBasicMaterial({ color: 0x222222 });
+    const mat = new THREE.MeshBasicMaterial({ color: 0x333322 });
     for (let i = 0; i < 3; i++) {
       _birds.push({
-        orbitR: 18 + r() * 24,
-        orbitY: 18 + r() * 16,
-        speed : 0.0004 + r() * 0.0006,
-        phase : r() * Math.PI * 2,
-        tilt  : (r() - 0.5) * 0.3,
+        orbitR: 18 + r() * 24, orbitY: 18 + r() * 16,
+        speed: 0.0004 + r() * 0.0006, phase: r() * Math.PI * 2,
+        tilt: (r() - 0.5) * 0.3,
       });
       const geo = new THREE.ConeGeometry(0.18, 0.6, 3);
       geo.rotateX(Math.PI / 2);
@@ -295,139 +269,214 @@ const Forest3D = (() => {
     const isDusk = !_nightMode && (hr < 7.5 || hr >= 17.5);
 
     if (_nightMode) {
-      _scene.background.setStyle('#090e0a');
-      _scene.fog.color.setStyle('#090e0a');
-      _ambLight.color.setStyle('#1a2a1e');
-      _ambLight.intensity = 0.5;
-      _sunLight.color.setStyle('#3050ff');
-      _sunLight.intensity = 0.25;
+      _scene.background.setStyle('#0d1a10');
+      _scene.fog.color.setStyle('#0d1a10');
+      _ambLight.color.setStyle('#203830');
+      _ambLight.intensity = 0.7;
+      _sunLight.color.setStyle('#4060ff');
+      _sunLight.intensity = 0.4;
       _sunLight.position.set(-40, 60, -50);
     } else if (isDusk) {
-      _scene.background.setStyle('#d47a40');
-      _scene.fog.color.setStyle('#c86838');
-      _ambLight.color.setStyle('#c07040');
-      _ambLight.intensity = 0.8;
-      _sunLight.color.setStyle('#ff9040');
-      _sunLight.intensity = 1.4;
+      _scene.background.setStyle('#e8905a');
+      _scene.fog.color.setStyle('#d07844');
+      _ambLight.color.setStyle('#d08858');
+      _ambLight.intensity = 1.2;
+      _sunLight.color.setStyle('#ffb060');
+      _sunLight.intensity = 1.8;
       _sunLight.position.set(hr > 12 ? -80 : 80, 30, 40);
     } else {
-      _scene.background.setStyle('#b8d2c0');
-      _scene.fog.color.setStyle('#b8d2c0');
-      _ambLight.color.setStyle('#88b8a0');
-      _ambLight.intensity = 0.9;
-      _sunLight.color.setStyle('#fff4d0');
-      _sunLight.intensity = 1.3;
+      // Bright daytime — vivid blue sky
+      _scene.background.setStyle('#74b8e8');
+      _scene.fog.color.setStyle('#a8d0ea');
+      _ambLight.color.setStyle('#c8e8d8');
+      _ambLight.intensity = 1.6;
+      _sunLight.color.setStyle('#fff8e8');
+      _sunLight.intensity = 2.0;
       _sunLight.position.set(60, 90, 50);
     }
 
-    // Cloud opacity: dimmer at night
-    _cloudMesh.material.opacity = _nightMode ? 0.35 : 0.80;
-    // Fireflies: visible only dusk + night
+    _cloudMesh.material.opacity = _nightMode ? 0.45 : 0.92;
     _fireMesh.visible = _nightMode || isDusk;
   }
 
-  // ── Camera ────────────────────────────────────────────────────
+  // ── Camera update ─────────────────────────────────────────────
   function _updateCamera(dt, t) {
-    // Slow auto-drift forward
-    const speed = 0.016;
-    _camPos.x += Math.sin(_camAz) * speed * dt;
-    _camPos.z -= Math.cos(_camAz) * speed * dt;
-    // Gentle breathing sway
-    _camPos.y = 5.2 + Math.sin(t * 0.00028) * 0.55;
+    // Auto-drift forward (slow)
+    const autoSpd = 0.008;
+    _camPos.x += Math.sin(_camAz) * autoSpd * dt;
+    _camPos.z -= Math.cos(_camAz) * autoSpd * dt;
 
-    // Collective canopy sway (nearly free — single uniform)
+    // Manual walk impulse (from scroll/pinch)
+    if (Math.abs(_walkSpd) > 0.001) {
+      _camPos.x += Math.sin(_camAz) * _walkSpd * dt;
+      _camPos.z -= Math.cos(_camAz) * _walkSpd * dt;
+      _walkSpd *= Math.pow(0.88, dt / 16);  // decay
+    }
+
+    // Gentle breathing height
+    _camPos.y = 5.2 + Math.sin(t * 0.00028) * 0.45;
+
+    // Canopy gentle sway
     _canopyMesh.rotation.z = Math.sin(t * 0.00055) * 0.012;
 
-    const lookX = _camPos.x + Math.sin(_camAz)  * 25;
-    const lookY = _camPos.y + Math.sin(_camAlt)  * 25;
-    const lookZ = _camPos.z - Math.cos(_camAz)  * 25;
+    // Clamp tilt
+    _camAlt = Math.max(-0.55, Math.min(0.55, _camAlt));
+
+    const lookX = _camPos.x + Math.sin(_camAz) * Math.cos(_camAlt) * 25;
+    const lookY = _camPos.y + Math.sin(_camAlt) * 25;
+    const lookZ = _camPos.z - Math.cos(_camAz) * Math.cos(_camAlt) * 25;
     _cam.position.set(_camPos.x, _camPos.y, _camPos.z);
     _cam.lookAt(lookX, lookY, lookZ);
   }
 
-  // ── Touch / mouse input ───────────────────────────────────────
+  // ── Input binding ─────────────────────────────────────────────
+  function _dist2(t1, t2) {
+    const dx = t1.clientX - t2.clientX, dy = t1.clientY - t2.clientY;
+    return Math.sqrt(dx * dx + dy * dy);
+  }
+
   function _bindInput(el) {
-    // Mouse drag
+    // ── Mouse ──────────────────────────────────────────────────
     el.addEventListener('mousedown', e => {
-      _isDrag = true; _dStartX = e.clientX; _dStartAz = _camAz;
+      _ptr.down = true;
+      _ptr.x = e.clientX; _ptr.y = e.clientY;
+      _ptr.az0 = _camAz; _ptr.alt0 = _camAlt;
     });
     window.addEventListener('mousemove', e => {
-      if (!_isDrag) return;
-      _camAz = _dStartAz - (e.clientX - _dStartX) * 0.0028;
+      if (!_ptr.down) return;
+      const dx = e.clientX - _ptr.x;
+      const dy = e.clientY - _ptr.y;
+      _camAz  = _ptr.az0  - dx * 0.0030;
+      _camAlt = _ptr.alt0 + dy * 0.0025;
     });
-    window.addEventListener('mouseup', () => { _isDrag = false; });
+    window.addEventListener('mouseup', () => { _ptr.down = false; });
 
-    // Touch drag (single finger = pan)
+    // Scroll wheel → walk forward/back
+    el.addEventListener('wheel', e => {
+      e.preventDefault();
+      _walkSpd -= e.deltaY * 0.0008;
+      _walkSpd = Math.max(-0.35, Math.min(0.35, _walkSpd));
+    }, { passive: false });
+
+    // Double-click → cycle time of day (for fun)
+    el.addEventListener('dblclick', _applyTimeOfDay);
+
+    // ── Touch ──────────────────────────────────────────────────
     el.addEventListener('touchstart', e => {
-      _isDrag = true;
-      _dStartX = e.touches[0].clientX; _dStartAz = _camAz;
-    }, { passive: true });
-    el.addEventListener('touchmove', e => {
-      if (!_isDrag || e.touches.length !== 1) return;
-      _camAz = _dStartAz - (e.touches[0].clientX - _dStartX) * 0.0035;
-    }, { passive: true });
-    el.addEventListener('touchend', () => { _isDrag = false; });
+      e.preventDefault();
+      if (e.touches.length === 1) {
+        _ptr.down = true;
+        _ptr.x = e.touches[0].clientX; _ptr.y = e.touches[0].clientY;
+        _ptr.az0 = _camAz; _ptr.alt0 = _camAlt;
+        _pinch.active = false;
+      } else if (e.touches.length === 2) {
+        _ptr.down = false;
+        _pinch.active = true;
+        _pinch.dist0 = _dist2(e.touches[0], e.touches[1]);
+        _pinch.fov0  = _camFov;
+        // mid-point Y for two-finger swipe
+        _ptr.y = (e.touches[0].clientY + e.touches[1].clientY) * 0.5;
+        _ptr.alt0 = _camAlt;
+      }
+    }, { passive: false });
 
-    // Double-tap / double-click: toggle day-night colour
+    el.addEventListener('touchmove', e => {
+      e.preventDefault();
+      if (e.touches.length === 1 && _ptr.down) {
+        const dx = e.touches[0].clientX - _ptr.x;
+        const dy = e.touches[0].clientY - _ptr.y;
+        _camAz  = _ptr.az0  - dx * 0.0035;
+        _camAlt = _ptr.alt0 + dy * 0.0028;
+      } else if (e.touches.length === 2 && _pinch.active) {
+        // Pinch to zoom (FOV)
+        const d = _dist2(e.touches[0], e.touches[1]);
+        const scale = _pinch.dist0 / Math.max(d, 10);
+        _camFov = Math.max(28, Math.min(90, _pinch.fov0 * scale));
+        _cam.fov = _camFov;
+        _cam.updateProjectionMatrix();
+
+        // Two-finger swipe up/down → walk
+        const midY = (e.touches[0].clientY + e.touches[1].clientY) * 0.5;
+        const dy   = _ptr.y - midY;
+        _walkSpd = dy * 0.0018;
+      }
+    }, { passive: false });
+
+    el.addEventListener('touchend', e => {
+      if (e.touches.length < 2) _pinch.active = false;
+      if (e.touches.length === 0) _ptr.down = false;
+    }, { passive: true });
+
+    // Double-tap → cycle time of day
     let _lastTap = 0;
     el.addEventListener('touchend', () => {
       const now = Date.now();
       if (now - _lastTap < 300) _applyTimeOfDay();
       _lastTap = now;
-    });
-    el.addEventListener('dblclick', _applyTimeOfDay);
+    }, { passive: true });
+
+    // ── Keyboard (desktop) ─────────────────────────────────────
+    const _keys = {};
+    window.addEventListener('keydown', e => { _keys[e.code] = true; });
+    window.addEventListener('keyup',   e => { _keys[e.code] = false; });
+    // Expose keys for camera update
+    _bindInput._keys = _keys;
+  }
+
+  // ── Handle keyboard walk in camera update ─────────────────────
+  function _applyKeys(dt) {
+    const keys = _bindInput._keys;
+    if (!keys) return;
+    const spd = 0.024;
+    if (keys['KeyW'] || keys['ArrowUp'])    { _camPos.x += Math.sin(_camAz) * spd * dt; _camPos.z -= Math.cos(_camAz) * spd * dt; }
+    if (keys['KeyS'] || keys['ArrowDown'])  { _camPos.x -= Math.sin(_camAz) * spd * dt; _camPos.z += Math.cos(_camAz) * spd * dt; }
+    if (keys['KeyA'] || keys['ArrowLeft'])  { _camPos.x -= Math.cos(_camAz) * spd * dt * 0.7; _camPos.z -= Math.sin(_camAz) * spd * dt * 0.7; }
+    if (keys['KeyD'] || keys['ArrowRight']) { _camPos.x += Math.cos(_camAz) * spd * dt * 0.7; _camPos.z += Math.sin(_camAz) * spd * dt * 0.7; }
   }
 
   // ── Build scene ───────────────────────────────────────────────
   function _build() {
-    // Geometries — very low poly
     const trunkGeo  = new THREE.CylinderGeometry(0.13, 0.35, 1, 5, 1);
     const canopyGeo = new THREE.SphereGeometry(1, 5, 4);
     const cloudGeo  = new THREE.SphereGeometry(1, 6, 4);
     const fireGeo   = new THREE.SphereGeometry(1, 3, 2);
 
-    // Materials
     const trunkMat  = new THREE.MeshLambertMaterial({ vertexColors: true });
     const canopyMat = new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true });
-    const cloudMat  = new THREE.MeshLambertMaterial({ color: 0xeef5ee, transparent: true, opacity: 0.80 });
+    const cloudMat  = new THREE.MeshLambertMaterial({ color: 0xf0f8f0, transparent: true, opacity: 0.92 });
     const fireMat   = new THREE.MeshBasicMaterial({ vertexColors: true });
 
-    // Instanced meshes
     _trunkMesh  = new THREE.InstancedMesh(trunkGeo,  trunkMat,  TOTAL_T);
     _canopyMesh = new THREE.InstancedMesh(canopyGeo, canopyMat, TOTAL_C);
     _cloudMesh  = new THREE.InstancedMesh(cloudGeo,  cloudMat,  12);
     _fireMesh   = new THREE.InstancedMesh(fireGeo,   fireMat,   30);
 
-    _trunkMesh.frustumCulled  = false;   // we manage visibility via chunks
+    _trunkMesh.frustumCulled  = false;
     _canopyMesh.frustumCulled = false;
     _cloudMesh.frustumCulled  = false;
     _fireMesh.frustumCulled   = false;
-    _fireMesh.visible = false;           // off until dusk/night
+    _fireMesh.visible = false;
 
     _scene.add(_trunkMesh, _canopyMesh, _cloudMesh, _fireMesh);
 
-    // Ground — single large plane
+    // Ground — bright lush green
     const ground = new THREE.Mesh(
       new THREE.PlaneGeometry(CHUNK * GRID * 5, CHUNK * GRID * 5),
-      new THREE.MeshLambertMaterial({ color: 0x2a5018 })
+      new THREE.MeshLambertMaterial({ color: 0x3a8020 })
     );
     ground.rotation.x = -Math.PI / 2;
     _scene.add(ground);
 
-    // Lighting
-    _ambLight = new THREE.AmbientLight(0x88b8a0, 0.9);
-    _sunLight = new THREE.DirectionalLight(0xfff4d0, 1.3);
+    _ambLight = new THREE.AmbientLight(0xc8e8d8, 1.6);
+    _sunLight = new THREE.DirectionalLight(0xfff8e8, 2.0);
     _sunLight.position.set(60, 90, 50);
     _scene.add(_ambLight, _sunLight);
 
-    // Init data
     _fillGrid();
     _initClouds();
     _initFireflies();
     _initBirds();
     _applyTimeOfDay();
-
-    // Refresh time-of-day every minute
     setInterval(_applyTimeOfDay, 60000);
   }
 
@@ -437,6 +486,7 @@ const Forest3D = (() => {
     const dt = Math.min(now - _lastT, 50);
     _lastT = now;
 
+    _applyKeys(dt);
     _updateCamera(dt, now);
     _updateClouds(dt);
     _updateFireflies(now, dt);
@@ -448,11 +498,10 @@ const Forest3D = (() => {
 
   // ── Public: start ─────────────────────────────────────────────
   function start(canvas2d) {
-    if (_R) return;                    // already running
+    if (_R) return;
     _canvas2d = canvas2d;
 
     function _launch() {
-      // Create WebGL canvas
       _el = document.createElement('canvas');
       _el.id = 'forest3d-canvas';
       _el.style.cssText =
@@ -470,17 +519,17 @@ const Forest3D = (() => {
       _R.setSize(window.innerWidth, window.innerHeight);
 
       _scene = new THREE.Scene();
-      _scene.background = new THREE.Color(0xb8d2c0);
-      _scene.fog = new THREE.FogExp2(0xb8d2c0, 0.011);
+      _scene.background = new THREE.Color(0x74b8e8);
+      _scene.fog = new THREE.FogExp2(0xa8d0ea, 0.008);  // lighter, less dense
 
       _cam = new THREE.PerspectiveCamera(
-        62, window.innerWidth / window.innerHeight, 0.4, 280
+        _camFov, window.innerWidth / window.innerHeight, 0.4, 320
       );
 
-      _dummy = new THREE.Object3D();   // safe now — THREE is loaded
+      _dummy = new THREE.Object3D();  // safe: THREE is loaded
 
       _camPos.x = 0; _camPos.y = 5.2; _camPos.z = 0;
-      _camAz = 0; _camChunkX = 999; _camChunkZ = 999;
+      _camAz = 0; _camAlt = 0.08; _camChunkX = 999; _camChunkZ = 999;
 
       _build();
       _bindInput(_el);
@@ -519,7 +568,6 @@ const Forest3D = (() => {
     _cam.updateProjectionMatrix();
   }
 
-  // ── Public: sync azimuth from existing 2D pan state ──────────
   function syncPan(azDeg) {
     _camAz = azDeg * Math.PI / 180;
   }
