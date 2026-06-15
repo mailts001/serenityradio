@@ -333,6 +333,7 @@ const CanvasScenes = (() => {
 
   // ── Mist / atmosphere ──────────────────────────────────────
   function _drawMist(t, hr, mode) {
+    if (mode === 'default') return;   // sea scene: mist doesn't pan → looks like static block
     const w = _canvas.width, h = _canvas.height;
     const layers = mode === 'nature' ? 5 : mode === 'sleep' ? 4 : 3;
     const baseDensity = mode === 'nature' ? 0.055 : mode === 'sleep' ? 0.05 : 0.032;
@@ -1524,13 +1525,23 @@ const CanvasScenes = (() => {
     c.fillStyle = `rgb(${tR},${tG},${tB})`;
     c.fill();
 
-    // ── Lateral light (3D roundness) ───────────────────────────────
+    // ── Lateral light (3D roundness) — clipped to trunk shape ────
+    c.save();
+    // Re-trace trunk path as clip region
+    c.beginPath();
+    c.moveTo(cx - wBottom, bottomY);
+    c.bezierCurveTo(cx - trunkRad * 2.0, canvasH * 0.70, trunkTopX - trunkRad * 1.2, canvasH * 0.35, trunkTopX - wTop, trunkTopY);
+    c.lineTo(trunkTopX + wTop, trunkTopY);
+    c.bezierCurveTo(trunkTopX + trunkRad * 1.2, canvasH * 0.35, cx + trunkRad * 2.0, canvasH * 0.70, cx + wBottom, bottomY);
+    c.closePath();
+    c.clip();
     const lg = c.createLinearGradient(cx - wBottom, 0, cx + wBottom, 0);
     lg.addColorStop(0,    `rgba(${tR-20},${tG-14},${tB-8},0.50)`);
     lg.addColorStop(0.32, `rgba(${tR+28},${tG+18},${tB+10},0.28)`);
     lg.addColorStop(1,    `rgba(${tR-26},${tG-18},${tB-9},0.46)`);
     c.fillStyle = lg;
     c.fillRect(cx - wBottom - 2, trunkTopY, wBottom * 2 + 4, bottomY - trunkTopY);
+    c.restore();
 
     // ── Bark texture lines ─────────────────────────────────────────
     c.save();
@@ -1713,12 +1724,12 @@ const CanvasScenes = (() => {
 
     // 3 layers matching the 3 hills; trees root exactly on their hill
     const TREE_LAYERS = [
-      // far hill: tiny silhouettes, many, very distant feel
-      { hi: 0, count: 6, rMin: 0.004, rMax: 0.007, hFrac: 0.38, pMul: 0.22 },
+      // far hill: tiny ghost silhouettes, very distant
+      { hi: 0, count: 3, rMin: 0.004, rMax: 0.007, hFrac: 0.40, pMul: 0.22 },
       // mid hill: small, clear
-      { hi: 1, count: 5, rMin: 0.006, rMax: 0.011, hFrac: 0.52, pMul: 0.50 },
-      // near hill: slightly larger, fewer — majestic anchors
-      { hi: 2, count: 4, rMin: 0.009, rMax: 0.016, hFrac: 0.70, pMul: 0.88 },
+      { hi: 1, count: 3, rMin: 0.007, rMax: 0.012, hFrac: 0.55, pMul: 0.50 },
+      // near hill: 2 large majestic anchors rising into sky
+      { hi: 2, count: 2, rMin: 0.011, rMax: 0.018, hFrac: 0.75, pMul: 0.88 },
     ];
 
     TREE_LAYERS.forEach((L, li) => {
