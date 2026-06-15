@@ -22,7 +22,7 @@ except ImportError:
     print("⚠️  mutagen not installed. Install with: pip install mutagen")
 
 # ── Backend imports ──
-from backend.db import init_db
+from backend.db import init_db, get_connection
 from backend.api.donate import (
     get_donation_stats,
     handle_bmc_webhook,
@@ -401,7 +401,7 @@ def api_admin_set_plan():
         return jsonify({'error': 'plan must be free, pro, or pro_teacher'}), 400
     if not email:
         return jsonify({'error': 'email required'}), 400
-    conn = get_db()
+    conn = get_connection()
     row  = conn.execute('SELECT id FROM users WHERE email=?', (email,)).fetchone()
     if not row:
         return jsonify({'error': f'No user with email {email}'}), 404
