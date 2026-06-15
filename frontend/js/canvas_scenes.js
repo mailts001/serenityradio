@@ -1419,101 +1419,102 @@ const CanvasScenes = (() => {
   // ══════════════════════════════════════════════════════════
   //  SCENE: FOREST — layered tree silhouettes, mist, fireflies
   // ══════════════════════════════════════════════════════════
-  // Returns screen x of a world-space tree (world coords 0–WORLD_W), wrapping seamlessly
+  // Returns screen x of a world-space coordinate, wrapping seamlessly
   function _treeScreenX(worldX, panOff, worldW) {
     const raw = worldX - panOff;
     const mod = ((raw % worldW) + worldW) % worldW;
     return mod > worldW * 0.75 ? mod - worldW : mod;
   }
 
-  // Draw a majestic giant tree — trunk + massive spreading canopy
-  // cx=screen centre x, groundY=ground line, tw=trunk half-width, th=total height, seed=0-1
-  function _drawGiantTree(cx, groundY, tw, th, seed) {
-    const c   = _ctx;
-    const s2  = (seed * 137.5) % 1;
-    const s3  = (seed * 97.3)  % 1;
-    const typ = seed < 0.38 ? 'emergent' : seed < 0.68 ? 'broad' : 'conical';
+  // Draw a semi-transparent leaf cluster at (cx,cy) radius r, colour rgb string
+  function _leafCluster(cx, cy, r, rgb, alpha) {
+    _ctx.beginPath(); _ctx.arc(cx, cy, r, 0, Math.PI * 2);
+    _ctx.fillStyle = `rgba(${rgb},${alpha})`; _ctx.fill();
+  }
 
-    // Trunk — thick, tapered, buttressed
-    const trunkW  = tw * (typ === 'emergent' ? 0.22 : 0.17);
-    const trunkH  = th * (typ === 'conical'  ? 0.28 : 0.35);
-    const trunkTop = groundY - trunkH;
+  // Draw a majestic tree: refined trunk visible from ground, translucent leaf canopy
+  // Trunks extend far above canvas top; foliage is semi-transparent overlapping clusters
+  function _drawGiantTree(cx, groundY, trunkRad, totalH, seed, leafRgb, trunkRgb, isNight) {
+    const c  = _ctx;
+    const s2 = (seed * 137.5) % 1;
+    const s3 = (seed * 97.3)  % 1;
+    // Trunk goes from groundY to well above canvas
+    const trunkTop = groundY - totalH;
+
+    // ── Trunk: tapered with buttress roots ──
     c.beginPath();
-    c.moveTo(cx - trunkW * 2.2, groundY);          // wide buttress base left
-    c.bezierCurveTo(cx - trunkW * 1.6, groundY - trunkH * 0.12,
-                    cx - trunkW,        trunkTop   + trunkH * 0.18,
-                    cx - trunkW,        trunkTop);
-    c.lineTo(cx + trunkW, trunkTop);
-    c.bezierCurveTo(cx + trunkW,        trunkTop   + trunkH * 0.18,
-                    cx + trunkW * 1.6,  groundY - trunkH * 0.12,
-                    cx + trunkW * 2.2,  groundY);
-    c.closePath(); c.fill();
+    c.moveTo(cx - trunkRad * 2.8, groundY);
+    c.bezierCurveTo(cx - trunkRad * 1.8, groundY - totalH * 0.08,
+                    cx - trunkRad,        groundY - totalH * 0.25,
+                    cx - trunkRad * 0.55, trunkTop);
+    c.lineTo(cx + trunkRad * 0.55, trunkTop);
+    c.bezierCurveTo(cx + trunkRad,        groundY - totalH * 0.25,
+                    cx + trunkRad * 1.8,  groundY - totalH * 0.08,
+                    cx + trunkRad * 2.8,  groundY);
+    c.fillStyle = trunkRgb; c.closePath(); c.fill();
 
-    if (typ === 'emergent') {
-      // Emergent rainforest giant — umbrella crown high above canopy
-      const crownCx = cx + (s2 - 0.5) * tw * 0.4;
-      const crownY  = groundY - th;
-      const crownR  = tw * (1.3 + s3 * 0.8);
-      // Main spreading crown — 7 overlapping lobes
-      for (let li = 0; li < 7; li++) {
-        const ang  = (li / 7) * Math.PI + s2 * 0.4;
-        const lx   = crownCx + Math.cos(ang) * crownR * 0.7;
-        const ly   = crownY  + Math.sin(ang) * crownR * 0.4;
-        const lr   = crownR * (0.55 + ((li * 37) % 100 / 100) * 0.35);
-        c.beginPath(); c.arc(lx, ly, lr, 0, Math.PI * 2); c.fill();
-      }
-      // Central mass
-      c.beginPath(); c.arc(crownCx, crownY, crownR * 0.65, 0, Math.PI * 2); c.fill();
-      // Lower branch masses draping down
-      for (let bi = 0; bi < 4; bi++) {
-        const bx = crownCx + (((bi * 53) % 100 / 100) - 0.5) * crownR * 1.4;
-        const by = crownY + crownR * (0.3 + ((bi * 37) % 100 / 100) * 0.4);
-        c.beginPath(); c.arc(bx, by, crownR * 0.38, 0, Math.PI * 2); c.fill();
-      }
+    // ── Canopy: translucent leaf clusters so sky shows through ──
+    // Crown centre is at roughly 80–90% of total height (may be off screen top)
+    const crownCY  = groundY - totalH * (0.78 + s3 * 0.14);
+    const spread   = totalH  * (0.22 + s2 * 0.16);   // horizontal spread
+    const leafA    = isNight ? 0.30 : 0.38;            // per-cluster base alpha
+
+    // Determine tree type from seed
+    const typ = seed < 0.40 ? 'umbrella' : seed < 0.72 ? 'broad' : 'columnar';
+
+    if (typ === 'umbrella') {
+      // Flat spreading crown like a rainforest emergent
+      const radii  = [1.0, 0.82, 0.65, 0.50, 0.40];
+      const alphas = [0.18, 0.22, 0.28, 0.30, 0.25];
+      radii.forEach((rf, ri) => {
+        const clusters = 6 + ri;
+        for (let ci = 0; ci < clusters; ci++) {
+          const ang = (ci / clusters) * Math.PI * 2 + s2 * 1.2 + ri * 0.3;
+          const d   = spread * rf * (0.5 + ((ci * 41 + ri * 17) % 100 / 100) * 0.55);
+          const lx  = cx + Math.cos(ang) * d;
+          const ly  = crownCY + Math.sin(ang) * d * 0.32 + ri * spread * 0.08;
+          const lr  = spread * (0.25 + ((ci * 31) % 100 / 100) * 0.22);
+          _leafCluster(lx, ly, lr, leafRgb, alphas[ri]);
+        }
+      });
+      // Dense fill at centre
+      _leafCluster(cx, crownCY, spread * 0.42, leafRgb, 0.32);
 
     } else if (typ === 'broad') {
-      // Broadleaf canopy — wide irregular spreading crown
-      const crownCx = cx;
-      const crownY  = groundY - th * 0.72;
-      const spread  = tw * (1.6 + s2 * 1.0);
-      // Primary branch masses
-      const masses = 8 + Math.floor(s3 * 5);
-      for (let mi = 0; mi < masses; mi++) {
-        const ms  = (mi * 61 + seed * 100) % 100 / 100;
-        const ms2 = (mi * 43 + seed * 77)  % 100 / 100;
-        // Spread outward and upward
-        const ang = -Math.PI + (mi / masses) * Math.PI * 2 + s2 * 0.6;
-        const dist = spread * (0.3 + ms * 0.65);
-        const mx   = crownCx + Math.cos(ang) * dist;
-        const my   = crownY  + Math.sin(ang) * dist * 0.55 - ms2 * th * 0.12;
-        const mr   = spread  * (0.28 + ms2 * 0.30);
-        c.beginPath(); c.arc(mx, my, mr, 0, Math.PI * 2); c.fill();
+      // Wide irregular hardwood — multi-level masses
+      for (let pass = 0; pass < 3; pass++) {
+        const passY  = crownCY + pass * spread * 0.18;
+        const passA  = leafA * (1 - pass * 0.15);
+        const count  = 9 - pass * 2;
+        for (let ci = 0; ci < count; ci++) {
+          const cs  = (ci * 67 + pass * 31 + seed * 200) % 100 / 100;
+          const cs2 = (ci * 43 + pass * 19 + seed * 150) % 100 / 100;
+          const ang = -Math.PI + (ci / count) * Math.PI * 2 + s3 * 0.8;
+          const d   = spread * (0.25 + cs * 0.65);
+          const lx  = cx     + Math.cos(ang) * d;
+          const ly  = passY  + Math.sin(ang) * d * 0.40;
+          const lr  = spread * (0.20 + cs2 * 0.28);
+          _leafCluster(lx, ly, lr, leafRgb, passA);
+        }
+        _leafCluster(cx, passY, spread * 0.38, leafRgb, passA * 0.9);
       }
-      // Dense central fill
-      c.beginPath(); c.arc(crownCx, crownY, spread * 0.55, 0, Math.PI * 2); c.fill();
 
     } else {
-      // Conical / layered tropical — stacked tiers widening near base
-      const tiers = 5 + Math.floor(s2 * 3);
-      const topY  = groundY - th;
+      // Columnar / conical — tall tight crown
+      const tiers = 6;
       for (let ti = 0; ti < tiers; ti++) {
-        const tf    = ti / tiers;
-        const tierY = topY + tf * (th * 0.78);
-        const tierW = tw * (0.18 + tf * 1.35 + s3 * 0.3);
-        const tierH = th * (0.18 + tf * 0.06);
-        // Organic drooping tier shape
-        c.beginPath();
-        c.moveTo(cx, tierY - tierH * 0.9);
-        c.bezierCurveTo(cx + tierW * 0.5,  tierY - tierH * 0.4,
-                        cx + tierW * 1.05, tierY - tierH * 0.05,
-                        cx + tierW * 0.75, tierY + tierH * 0.22);
-        c.bezierCurveTo(cx + tierW * 0.35, tierY + tierH * 0.12,
-                        cx - tierW * 0.35, tierY + tierH * 0.12,
-                        cx - tierW * 0.75, tierY + tierH * 0.22);
-        c.bezierCurveTo(cx - tierW * 1.05, tierY - tierH * 0.05,
-                        cx - tierW * 0.5,  tierY - tierH * 0.4,
-                        cx, tierY - tierH * 0.9);
-        c.closePath(); c.fill();
+        const tf  = ti / tiers;
+        const ty  = crownCY + tf * spread * 0.85;
+        const tw2 = spread * (0.12 + tf * 0.55);
+        const ta  = leafA * (0.7 + tf * 0.4);
+        const cnt = 3 + ti;
+        for (let ci = 0; ci < cnt; ci++) {
+          const cs = (ci * 53 + ti * 37 + seed * 100) % 100 / 100;
+          const lx = cx + (cs - 0.5) * tw2 * 1.8;
+          const ly = ty + ((ci * 29 + ti * 13) % 100 / 100 - 0.5) * tw2 * 0.5;
+          const lr = tw2 * (0.35 + ((ci * 41) % 100 / 100) * 0.30);
+          _leafCluster(lx, ly, lr, leafRgb, ta * 0.85);
+        }
       }
     }
   }
@@ -1524,124 +1525,123 @@ const CanvasScenes = (() => {
     const isNight = hr < 6 || hr >= 19.5;
     const isDusk  = !isNight && (hr < 7 || hr >= 17.5);
 
-    // ── Vertical pan: groundY moves as you tilt up/down ─────────
-    // _panAlt: +50=looking up, -50=looking down
+    // Vertical pan — groundY shifts up when tilting up
     const altShift = (_panAlt / 50) * h * 0.32;
-    const groundY  = h * 0.68 + altShift;   // horizon/ground line on screen
+    const groundY  = h * 0.72 + altShift;
 
-    // ── Sky ─────────────────────────────────────────────────────
+    // ── Full sky (always visible through canopy) ─────────────────
+    _ctx.fillRect(0, 0, w, h);   // clear first
     const skyP = _skyPalette(hr, 'nature');
-    const sg = _ctx.createLinearGradient(0, 0, 0, groundY);
-    sg.addColorStop(0,   _tint(skyP.top, 0, 10, 0));
-    sg.addColorStop(0.5, _tint(skyP.mid, 0, 12, 0));
-    sg.addColorStop(1,   _tint(skyP.bot, 8, 18, 8));
+    const sg = _ctx.createLinearGradient(0, 0, 0, h);
+    sg.addColorStop(0,   _tint(skyP.top, 0, 8, 0));
+    sg.addColorStop(0.6, _tint(skyP.mid, 0, 10, 0));
+    sg.addColorStop(1,   _tint(skyP.bot, 5, 14, 5));
     _ctx.fillStyle = sg; _ctx.fillRect(0, 0, w, h);
 
     _drawStarsAndMoon(t, hr, mode);
     if (!isNight) _drawSun(hr);
 
-    // ── Distant hill silhouette ──────────────────────────────────
-    const hillBase = groundY - h * 0.14;
-    const hillCol  = isNight ? 'rgba(10,24,14,0.55)' : isDusk ? 'rgba(22,40,18,0.48)' : 'rgba(32,60,28,0.40)';
-    _ctx.fillStyle = hillCol;
-    _ctx.beginPath();
-    _ctx.moveTo(0, hillBase + h * 0.14);
-    for (let xi = 0; xi <= 14; xi++) {
-      const bx   = xi * w / 14;
-      const bs   = (xi * 83) % 100 / 100;
-      const by   = hillBase - h * (0.05 + bs * 0.09) + Math.sin(t * 0.0003 + xi) * 1.5;
-      xi === 0 ? _ctx.lineTo(bx, by)
-               : _ctx.bezierCurveTo(bx - w/28, hillBase - h*(0.04+bs*0.07), bx - w/28, by, bx, by);
-    }
-    _ctx.lineTo(w, hillBase + h * 0.14); _ctx.closePath(); _ctx.fill();
-
-    // Depth haze over hills
-    const hazeY   = hillBase - h * 0.04;
-    const hazeRgb = isNight ? '20,35,25' : isDusk ? '120,90,60' : '175,210,165';
-    const haze    = _ctx.createLinearGradient(0, hazeY, 0, hazeY + h * 0.18);
-    haze.addColorStop(0,   `rgba(${hazeRgb},0)`);
-    haze.addColorStop(0.5, `rgba(${hazeRgb},0.20)`);
-    haze.addColorStop(1,   `rgba(${hazeRgb},0)`);
-    _ctx.fillStyle = haze; _ctx.fillRect(0, hazeY, w, h * 0.18);
-
-    // ── Light shafts ─────────────────────────────────────────────
+    // ── Light shafts penetrating canopy ─────────────────────────
     if (!isNight) {
-      const sA = isDusk ? 0.050 : 0.032;
-      for (let si = 0; si < 6; si++) {
-        const sx = w * (0.08 + si * 0.16 + Math.sin(t * 0.0004 + si) * 0.04);
-        const sw = w * (0.035 + (si % 3) * 0.015);
-        const shft = _ctx.createLinearGradient(0, 0, 0, groundY);
-        shft.addColorStop(0,   `rgba(220,242,185,0)`);
-        shft.addColorStop(0.25,`rgba(220,242,185,${sA})`);
-        shft.addColorStop(1,   `rgba(220,242,185,0)`);
+      const sA = isDusk ? 0.055 : 0.038;
+      for (let si = 0; si < 7; si++) {
+        const sx  = w * (0.05 + si * 0.145 + Math.sin(t * 0.0004 + si) * 0.03);
+        const sw  = w * (0.025 + (si % 3) * 0.012);
+        const shft = _ctx.createLinearGradient(0, 0, 0, h * 0.9);
+        shft.addColorStop(0,    `rgba(230,248,190,0)`);
+        shft.addColorStop(0.2,  `rgba(230,248,190,${sA})`);
+        shft.addColorStop(0.7,  `rgba(230,248,190,${sA * 0.5})`);
+        shft.addColorStop(1,    `rgba(230,248,190,0)`);
         _ctx.fillStyle = shft;
         _ctx.beginPath();
-        _ctx.moveTo(sx - sw, 0);
-        _ctx.lineTo(sx + sw * 2.5, groundY);
-        _ctx.lineTo(sx - sw * 2.5, groundY);
-        _ctx.lineTo(sx + sw, 0);
+        _ctx.moveTo(sx - sw * 0.5, 0);
+        _ctx.lineTo(sx + sw * 3, h * 0.9);
+        _ctx.lineTo(sx - sw * 3, h * 0.9);
+        _ctx.lineTo(sx + sw * 0.5, 0);
         _ctx.closePath(); _ctx.fill();
       }
     }
 
-    // ── Tree layers (4) — world-space, seamless wrap ─────────────
+    // ── Trees — 4 depth layers, far→near, each wraps seamlessly ─
     const WORLD_W = w * 2;
-    // altShift pulls trees up (tilt up = see tops) or down (tilt down = see roots)
-    // Nearer layers shift more with tilt
+
+    // Leaf colour per layer: far=muted, near=richer green
+    const leafPalettes = isNight
+      ? ['18,38,20', '12,28,14', '8,20,10', '5,14,7']
+      : isDusk
+        ? ['55,72,30', '42,58,22', '30,46,15', '20,34,10']
+        : ['48,82,28', '35,68,20', '24,56,14', '15,42,10'];
+    const trunkPalettes = isNight
+      ? ['rgba(18,12,8,0.88)', 'rgba(14,9,6,0.92)', 'rgba(10,6,4,0.95)', 'rgba(7,4,2,0.98)']
+      : ['rgba(60,38,20,0.72)', 'rgba(48,30,14,0.82)', 'rgba(36,22,10,0.90)', 'rgba(26,16,7,0.96)'];
+
+    // Layers: distant (small, low, slow pan) → foreground (tall, fast pan, off-canvas top)
     const LAYERS = [
-      { hFrac:0.32, altF:0.45, rgba: isNight?'14,30,17,0.55':'22,48,20,0.52', count:24, twMin:0.035, twMax:0.060, ps:0.06 },
-      { hFrac:0.44, altF:0.60, rgba: isNight?'9,22,12,0.72' :'14,35,14,0.72', count:18, twMin:0.050, twMax:0.085, ps:0.10 },
-      { hFrac:0.60, altF:0.78, rgba: isNight?'5,14,8,0.88'  :'8,24,9,0.88',   count:13, twMin:0.070, twMax:0.115, ps:0.15 },
-      { hFrac:0.82, altF:1.00, rgba: isNight?'2,8,4,0.97'   :'4,14,5,0.96',   count: 9, twMin:0.095, twMax:0.155, ps:0.22 },
+      // { groundOff, totalHFrac, count, radMin, radMax, ps }
+      // groundOff: y offset from groundY (+ = lower on screen)
+      { gOff: h*0.06, hFrac:0.55, count:16, rMin:0.010, rMax:0.016, ps:0.06 },
+      { gOff: h*0.02, hFrac:0.75, count:12, rMin:0.014, rMax:0.022, ps:0.11 },
+      { gOff: 0,      hFrac:1.05, count: 9, rMin:0.018, rMax:0.030, ps:0.17 },
+      { gOff:-h*0.04, hFrac:1.45, count: 6, rMin:0.024, rMax:0.040, ps:0.24 },
     ];
 
     LAYERS.forEach((L, li) => {
-      const treeH  = h * L.hFrac;
-      // groundY for this layer shifted by altitude pan (near layers shift more)
-      const layerG = groundY + altShift * (L.altF - 1) * 0.4;
-      const panOff = (_panAz / 360) * WORLD_W * L.ps;
+      const layerGY = groundY + L.gOff;
+      const totalH  = h * L.hFrac;
+      const panOff  = (_panAz / 360) * WORLD_W * L.ps;
+      const leafRgb = leafPalettes[li];
+      const trunkRgb = trunkPalettes[li];
 
       for (let ti = 0; ti < L.count; ti++) {
-        const seed  = (li * 97 + ti * 137) % 1000 / 1000;
-        const seed2 = (li * 53 + ti * 113) % 1000 / 1000;
+        const seed  = (li * 97  + ti * 137) % 1000 / 1000;
+        const seed2 = (li * 53  + ti * 113) % 1000 / 1000;
         const worldX = seed * WORLD_W;
         const sx     = _treeScreenX(worldX, panOff, WORLD_W);
-        const tw     = (L.twMin + seed2 * (L.twMax - L.twMin)) * w;
-        const th     = treeH * (0.60 + seed * 0.55);
-        // Draw primary + one wraparound copy
+        const rad    = (L.rMin + seed2 * (L.rMax - L.rMin)) * w;
+        const tH     = totalH * (0.65 + seed * 0.50);
+
         [sx, sx + WORLD_W, sx - WORLD_W].forEach(cx => {
-          if (cx + tw * 2 < 0 || cx - tw * 2 > w) return;
-          _ctx.fillStyle = `rgba(${L.rgba})`;
-          _drawGiantTree(cx, layerG, tw, th, seed);
+          if (cx + tH < 0 || cx - tH > w) return;
+          _drawGiantTree(cx, layerGY, rad, tH, seed, leafRgb, trunkRgb, isNight);
         });
       }
     });
 
-    // ── Ground / forest floor ─────────────────────────────────────
+    // ── Forest floor ─────────────────────────────────────────────
     if (groundY < h) {
       const gnd = _ctx.createLinearGradient(0, groundY, 0, h);
-      gnd.addColorStop(0, isNight ? 'rgba(4,11,5,0.99)' : 'rgba(7,20,8,0.98)');
-      gnd.addColorStop(1, isNight ? '#010502' : '#020803');
+      gnd.addColorStop(0, isNight ? 'rgba(6,14,7,0.96)'  : 'rgba(10,24,10,0.95)');
+      gnd.addColorStop(1, isNight ? '#020603'             : '#030d03');
       _ctx.fillStyle = gnd; _ctx.fillRect(0, groundY, w, h - groundY);
-      // Moss ribbon
-      const moss = _ctx.createLinearGradient(0, groundY, 0, groundY + h * 0.07);
-      moss.addColorStop(0, 'rgba(18,48,18,0.40)'); moss.addColorStop(1, 'rgba(10,28,10,0)');
-      _ctx.fillStyle = moss; _ctx.fillRect(0, groundY, w, h * 0.07);
+      // Dappled ground light patches
+      if (!isNight) {
+        for (let di = 0; di < 8; di++) {
+          const ds = (di * 73) % 100 / 100;
+          const dx = ds * w;
+          const dr = w * (0.04 + ((di * 37) % 100 / 100) * 0.05);
+          const dg = _ctx.createRadialGradient(dx, groundY + dr, 0, dx, groundY + dr, dr);
+          dg.addColorStop(0,   `rgba(200,240,160,${isDusk ? 0.14 : 0.09})`);
+          dg.addColorStop(1,   'rgba(200,240,160,0)');
+          _ctx.fillStyle = dg; _ctx.fillRect(dx - dr, groundY, dr * 2, dr * 2);
+        }
+      }
+      // Moss tint
+      const moss = _ctx.createLinearGradient(0, groundY, 0, groundY + h * 0.06);
+      moss.addColorStop(0, 'rgba(20,55,18,0.45)'); moss.addColorStop(1, 'rgba(10,30,10,0)');
+      _ctx.fillStyle = moss; _ctx.fillRect(0, groundY, w, h * 0.06);
     }
 
-    // ── Ground mist ribbons ──────────────────────────────────────
-    for (let mi = 0; mi < 4; mi++) {
-      const my   = groundY - h * (0.13 - mi * 0.04) + Math.sin(t * 0.003 + mi * 2.1) * 10;
-      const mg   = _ctx.createLinearGradient(0, my - 14, 0, my + 14);
-      const mistA = 0.08 + mi * 0.025;
-      mg.addColorStop(0, 'rgba(190,215,200,0)');
-      mg.addColorStop(0.5, `rgba(190,215,200,${mistA})`);
-      mg.addColorStop(1, 'rgba(190,215,200,0)');
+    // ── Ground mist ──────────────────────────────────────────────
+    for (let mi = 0; mi < 5; mi++) {
+      const my  = groundY - h * (0.08 - mi * 0.02) + Math.sin(t * 0.003 + mi * 2.1) * 12;
+      const mg  = _ctx.createLinearGradient(0, my - 18, 0, my + 18);
+      mg.addColorStop(0,   'rgba(195,218,205,0)');
+      mg.addColorStop(0.5, `rgba(195,218,205,${0.07 + mi * 0.020})`);
+      mg.addColorStop(1,   'rgba(195,218,205,0)');
       _ctx.fillStyle = mg;
-      _ctx.fillRect(Math.sin(t * 0.0015 + mi * 1.7) * w * 0.03, my - 14, w, 28);
+      _ctx.fillRect(Math.sin(t * 0.0015 + mi * 1.7) * w * 0.04, my - 18, w, 36);
     }
 
-    // ── Fireflies ────────────────────────────────────────────────
     _drawFireflies(t, hr, mode);
   }
 
@@ -1667,47 +1667,87 @@ const CanvasScenes = (() => {
     const hr = new Date().getHours() + new Date().getMinutes() / 60;
     if (!_snowParticles) _initSnow();
 
-    // Vertical pan: tilt up = see more sky/peaks, tilt down = see more ground
+    // Vertical pan
     const altShift = (_panAlt / 50) * h * 0.30;
-    const groundY  = h * 0.72 + altShift;   // snow ground line
+    const groundY  = h * 0.74 + altShift;
 
-    // Cold sky — blue-white gradient
     const isNight = hr < 6 || hr >= 20;
-    const sg = _ctx.createLinearGradient(0, 0, 0, groundY);
+
+    // ── Korean ink-wash sky: misty white → pale steel ───────────
+    // Day: cream-white sky like hanji paper; Night: deep ink with stars
+    const sg = _ctx.createLinearGradient(0, 0, 0, h);
     if (isNight) {
-      sg.addColorStop(0,   '#040a18'); sg.addColorStop(0.5, '#081428'); sg.addColorStop(1, '#0c1a34');
+      sg.addColorStop(0,   '#06091a'); sg.addColorStop(0.5, '#0a1028');
+      sg.addColorStop(0.8, '#101830'); sg.addColorStop(1,   '#161e38');
     } else {
-      sg.addColorStop(0,   '#b8d4f0'); sg.addColorStop(0.4, '#d0e4f8'); sg.addColorStop(1, '#e8f2fc');
+      sg.addColorStop(0,   '#dce8f5'); sg.addColorStop(0.35, '#e8f2fc');
+      sg.addColorStop(0.7, '#f0f6ff'); sg.addColorStop(1,   '#f8faff');
     }
     _ctx.fillStyle = sg; _ctx.fillRect(0, 0, w, h);
 
-    if (isNight) _drawStarsAndMoon(t, hr, mode);
-    else         _drawSun(hr);
+    if (isNight) { _drawStarsAndMoon(t, hr, mode); }
+    else {
+      // Soft winter sun — pale disc, no harsh glow
+      const sp = _sunScreenPos(hr, w, h);
+      if (sp) {
+        const sg2 = _ctx.createRadialGradient(sp.sx, sp.sy, 0, sp.sx, sp.sy, h * 0.18);
+        sg2.addColorStop(0,   `rgba(255,248,230,${sp.alpha * 0.55})`);
+        sg2.addColorStop(0.3, `rgba(240,232,210,${sp.alpha * 0.20})`);
+        sg2.addColorStop(1,   'rgba(240,232,210,0)');
+        _ctx.fillStyle = sg2;
+        _ctx.beginPath(); _ctx.arc(sp.sx, sp.sy, h * 0.18, 0, Math.PI * 2); _ctx.fill();
+        // Pale disc
+        _ctx.beginPath(); _ctx.arc(sp.sx, sp.sy, h * 0.028, 0, Math.PI * 2);
+        _ctx.fillStyle = `rgba(255,252,245,${sp.alpha * 0.85})`; _ctx.fill();
+      }
+    }
 
-    // Mountain ridges — 3 layers anchored relative to groundY
-    // ridgeTop = where the tallest peak reaches above groundY
-    // Draw 3× canvas wide so horizontal pan never reveals empty edge
+    // ── Ink-wash mist bands — dissolve mountains into sky ───────
+    // These bands give the characteristic Korean painting "mist veil" effect
+    const mistBands = [
+      { yOff: -0.50, alpha: 0.30, h: 0.14 },   // high mist band
+      { yOff: -0.32, alpha: 0.45, h: 0.18 },   // mid mist
+      { yOff: -0.14, alpha: 0.35, h: 0.16 },   // low mist above ground
+    ];
+    mistBands.forEach(B => {
+      const my  = groundY + h * B.yOff;
+      const mg  = _ctx.createLinearGradient(0, my - h * B.h * 0.5, 0, my + h * B.h * 0.5);
+      const rgb = isNight ? '22,30,50' : '235,242,252';
+      mg.addColorStop(0,   `rgba(${rgb},0)`);
+      mg.addColorStop(0.5, `rgba(${rgb},${B.alpha})`);
+      mg.addColorStop(1,   `rgba(${rgb},0)`);
+      _ctx.fillStyle = mg;
+      _ctx.fillRect(0, my - h * B.h * 0.5, w, h * B.h);
+    });
+
+    // ── Mountain ridges — Korean sansu style ────────────────────
+    // Far ridges: very pale blue-grey, almost ghostly (dissolving into mist)
+    // Near ridges: darker ink, strong silhouette with crisp snow edges
+    // Draw 3× width; peaks anchored relative to groundY
     const RIDGES = [
-      { offY: -0.30, hFrac: 0.28, r: 180, g: 200, b: 228, a: 0.55, count: 18, ps: 0.10 },
-      { offY: -0.22, hFrac: 0.35, r: 120, g: 148, b: 188, a: 0.80, count: 13, ps: 0.16 },
-      { offY: -0.14, hFrac: 0.42, r:  55, g:  75, b: 110, a: 0.96, count: 10, ps: 0.24 },
+      // { offY from groundY, hFrac, inkR,g,b, alpha, count, panScale }
+      { offY:-0.55, hFrac:0.22, r:200,g:212,b:228, a:0.28, count:22, ps:0.06 }, // ghost far range
+      { offY:-0.44, hFrac:0.30, r:170,g:185,b:210, a:0.42, count:18, ps:0.09 }, // distant
+      { offY:-0.33, hFrac:0.36, r:130,g:150,b:185, a:0.62, count:14, ps:0.13 }, // mid
+      { offY:-0.22, hFrac:0.40, r: 75,g: 95,b:135, a:0.82, count:11, ps:0.18 }, // nearer
+      { offY:-0.13, hFrac:0.44, r: 38,g: 52,b: 82, a:0.96, count: 8, ps:0.24 }, // foreground
     ];
 
     RIDGES.forEach((R, ri) => {
-      // ridgeBase = groundY + small offset (ridge roots into snow plain)
-      const ridgeBase = groundY + h * 0.05;
-      // ridgeMid  = the "neutral" Y from which peaks rise (moves with tilt)
       const ridgeMid  = groundY + h * R.offY;
+      const ridgeBase = groundY + h * 0.04;
       const panOff    = (_panAz / 360) * w * 3 * R.ps;
       const xL = -w, xR = w * 2;
       const step = (xR - xL) / R.count;
 
+      // Peak Y using deterministic seed
       const peakY = pi => {
-        const seed = (ri * 53 + (((pi % R.count) + R.count) % R.count) * 71) % 100 / 100;
-        return ridgeMid - h * R.hFrac * (0.38 + seed * 0.62);
+        const s = (ri * 53 + (((pi % R.count) + R.count) % R.count) * 71) % 100 / 100;
+        return ridgeMid - h * R.hFrac * (0.35 + s * 0.65);
       };
 
-      // Ridge silhouette
+      // Ridge body — slightly transparent so mist bands show through
+      _ctx.globalAlpha = 0.92;
       _ctx.fillStyle = `rgba(${R.r},${R.g},${R.b},${R.a})`;
       _ctx.beginPath();
       _ctx.moveTo(xL - panOff, ridgeBase);
@@ -1716,48 +1756,78 @@ const CanvasScenes = (() => {
         const py  = peakY(pi);
         if (pi === 0) { _ctx.lineTo(px, py); continue; }
         const ppy = peakY(pi - 1);
-        _ctx.quadraticCurveTo(px - step * 0.5, (py + ppy) * 0.48, px, py);
+        // Korean peaks: concave saddles, sharp tips — use curve control above midpoint
+        const cpY = Math.min(py, ppy) - h * R.hFrac * 0.08;
+        _ctx.quadraticCurveTo(px - step * 0.5, cpY, px, py);
       }
       _ctx.lineTo(xR - panOff, ridgeBase);
       _ctx.closePath(); _ctx.fill();
+      _ctx.globalAlpha = 1;
 
-      // Snow cap overlay — upper 38% of each peak
-      _ctx.fillStyle = `rgba(242,250,255,${R.a * 0.60})`;
+      // Snow on peaks — white ink overlay, crisp on near ridges, soft on far
+      const snowAlpha = R.a * (ri < 2 ? 0.35 : ri < 4 ? 0.55 : 0.72);
+      _ctx.fillStyle = isNight ? `rgba(220,235,255,${snowAlpha})` : `rgba(252,255,255,${snowAlpha})`;
       _ctx.beginPath();
-      _ctx.moveTo(xL - panOff, ridgeMid);
+      _ctx.moveTo(xL - panOff, ridgeMid + h * R.hFrac * 0.10);
       for (let pi = 0; pi <= R.count; pi++) {
-        const px   = xL + pi * step - panOff;
-        const py   = peakY(pi);
-        const snow = py + (ridgeMid - py) * 0.38;
-        if (pi === 0) { _ctx.lineTo(px, snow); continue; }
+        const px    = xL + pi * step - panOff;
+        const py    = peakY(pi);
+        const snowL = py + (ridgeMid - py) * 0.30;   // top 30% = snow cap
+        if (pi === 0) { _ctx.lineTo(px, snowL); continue; }
         const ppy   = peakY(pi - 1);
-        const psnow = ppy + (ridgeMid - ppy) * 0.38;
-        _ctx.quadraticCurveTo(px - step * 0.5, (snow + psnow) * 0.48, px, snow);
+        const psnow = ppy + (ridgeMid - ppy) * 0.30;
+        const cpY   = Math.min(snowL, psnow) - h * R.hFrac * 0.04;
+        _ctx.quadraticCurveTo(px - step * 0.5, cpY, px, snowL);
       }
-      _ctx.lineTo(xR - panOff, ridgeMid);
+      _ctx.lineTo(xR - panOff, ridgeMid + h * R.hFrac * 0.10);
       _ctx.closePath(); _ctx.fill();
     });
 
-    // Atmospheric mist at mountain bases
-    const mistY = groundY - h * 0.10;
-    const mist  = _ctx.createLinearGradient(0, mistY - h*0.06, 0, mistY + h*0.07);
-    mist.addColorStop(0,   'rgba(200,220,240,0)');
-    mist.addColorStop(0.5, 'rgba(200,220,240,0.24)');
-    mist.addColorStop(1,   'rgba(200,220,240,0)');
-    _ctx.fillStyle = mist; _ctx.fillRect(0, mistY - h*0.06, w, h*0.13);
-
-    // Snow-covered ground (only if groundY < h)
-    if (groundY < h) {
-      const gnd = _ctx.createLinearGradient(0, groundY, 0, h);
-      gnd.addColorStop(0, 'rgba(222,236,250,0.97)'); gnd.addColorStop(1, '#b0c8e2');
-      _ctx.fillStyle = gnd; _ctx.fillRect(0, groundY, w, h - groundY);
-      // Subtle snow surface shimmer
-      const shimmer = _ctx.createLinearGradient(0, groundY, 0, groundY + h * 0.06);
-      shimmer.addColorStop(0, 'rgba(255,255,255,0.35)'); shimmer.addColorStop(1, 'rgba(255,255,255,0)');
-      _ctx.fillStyle = shimmer; _ctx.fillRect(0, groundY, w, h * 0.06);
+    // ── Foreground pine silhouettes (Korean sansu signature element) ─
+    const pinePanOff = (_panAz / 360) * w * 3 * 0.30;
+    const pineBase   = groundY - h * 0.01;
+    const pineCount  = 14;
+    const PINE_W = w * 3;
+    for (let pi = 0; pi < pineCount; pi++) {
+      const ps  = (pi * 137) % 1000 / 1000;
+      const ps2 = (pi * 89)  % 1000 / 1000;
+      const px  = ((ps * PINE_W) - pinePanOff % PINE_W + PINE_W) % PINE_W - w;
+      if (px < -w * 0.2 || px > w * 1.2) continue;
+      const ph  = h * (0.12 + ps2 * 0.10);
+      const pw  = ph * (0.25 + ps * 0.15);
+      const col = isNight ? `rgba(12,18,28,${0.7 + ps * 0.28})` : `rgba(22,28,38,${0.65 + ps * 0.30})`;
+      _ctx.fillStyle = col;
+      // Layered pine tiers
+      for (let ti = 0; ti < 4; ti++) {
+        const tf   = ti / 4;
+        const ty   = pineBase - ph * tf;
+        const twr  = pw * (0.85 - tf * 0.60);
+        _ctx.beginPath();
+        _ctx.moveTo(px, ty - ph * 0.28);
+        _ctx.bezierCurveTo(px + twr * 0.4, ty - ph * 0.10, px + twr, ty + ph * 0.02, px + twr * 0.65, ty + ph * 0.06);
+        _ctx.bezierCurveTo(px + twr * 0.25, ty + ph * 0.03, px - twr * 0.25, ty + ph * 0.03, px - twr * 0.65, ty + ph * 0.06);
+        _ctx.bezierCurveTo(px - twr, ty + ph * 0.02, px - twr * 0.4, ty - ph * 0.10, px, ty - ph * 0.28);
+        _ctx.closePath(); _ctx.fill();
+      }
+      // Trunk
+      _ctx.fillRect(px - pw * 0.05, pineBase - ph * 0.18, pw * 0.10, ph * 0.18);
     }
 
-    // Falling snow
+    // ── Snow ground ──────────────────────────────────────────────
+    if (groundY < h) {
+      const gnd = _ctx.createLinearGradient(0, groundY, 0, h);
+      gnd.addColorStop(0, isNight ? 'rgba(180,196,224,0.92)' : 'rgba(238,246,255,0.96)');
+      gnd.addColorStop(0.4, isNight ? '#8090b4' : '#c8daf0');
+      gnd.addColorStop(1,   isNight ? '#606888' : '#a8c0e0');
+      _ctx.fillStyle = gnd; _ctx.fillRect(0, groundY, w, h - groundY);
+      // Snow surface glint
+      const glint = _ctx.createLinearGradient(0, groundY, 0, groundY + h * 0.05);
+      glint.addColorStop(0, `rgba(255,255,255,${isNight ? 0.18 : 0.45})`);
+      glint.addColorStop(1, 'rgba(255,255,255,0)');
+      _ctx.fillStyle = glint; _ctx.fillRect(0, groundY, w, h * 0.05);
+    }
+
+    // ── Falling snow ─────────────────────────────────────────────
     _snowParticles.forEach(p => {
       p.y += p.speed;
       p.x += p.drift + Math.sin(t * 0.01 + p.phase) * 0.3;
@@ -1765,8 +1835,7 @@ const CanvasScenes = (() => {
       if (p.x > w + 4) p.x = -4;
       if (p.x < -4)    p.x = w + 4;
       _ctx.beginPath(); _ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
-      _ctx.fillStyle = `rgba(255,255,255,${p.alpha})`;
-      _ctx.fill();
+      _ctx.fillStyle = `rgba(255,255,255,${p.alpha * (isNight ? 0.75 : 0.55)})`; _ctx.fill();
     });
   }
 
