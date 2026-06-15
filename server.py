@@ -91,32 +91,42 @@ shuffle_mode = False
 last_scan_time = 0
 SCAN_INTERVAL = 30  # Scan every 30 seconds
 
-def scan_music_folder():
-    """Automatically scan music folder for ALL MP3 files"""
+def scan_music_folder(force=False):
+    """Scan music folder — uses cache if < SCAN_INTERVAL seconds old."""
     global last_scan_time, playlist_cache
-    
+
+    # Return cached result if recent enough and not forced
+    if not force and playlist_cache and (time.time() - last_scan_time) < SCAN_INTERVAL:
+        return playlist_cache
+
     tracks = []
-    
+
     if not os.path.exists(MUSIC_DIR):
         print(f"❌ Music directory not found: {MUSIC_DIR}")
         return tracks
-    
-    # Get ALL MP3 files recursively (root + channel subfolders)
-    all_mp3s = []
-    CHANNELS = ['', 'sleep', 'focus', 'yoga', 'nature']
-    for ch in CHANNELS:
+
+    # Collect all MP3s from root + channel subdirs, deduplicating by real path
+    seen_paths = set()
+    all_mp3s   = []
+    CHANNEL_DIRS = ['', 'sleep', 'focus', 'yoga', 'nature']
+    for ch in CHANNEL_DIRS:
         d = os.path.join(MUSIC_DIR, ch) if ch else MUSIC_DIR
         if not os.path.isdir(d):
             continue
         for f in sorted(os.listdir(d)):
-            if f.lower().endswith('.mp3'):
-                all_mp3s.append((ch, f, os.path.join(d, f)))
+            if not f.lower().endswith('.mp3'):
+                continue
+            real = os.path.realpath(os.path.join(d, f))   # resolve symlinks
+            if real in seen_paths:
+                print(f"  ⚠️ Skipping duplicate: {f} (already seen at {real})")
+                continue
+            seen_paths.add(real)
+            all_mp3s.append((ch, f, os.path.join(d, f)))
 
-    print(f"📁 Found {len(all_mp3s)} MP3 files across all channels")
+    print(f"📁 Found {len(all_mp3s)} unique MP3 files")
 
     for idx, (ch, mp3_file, filepath) in enumerate(all_mp3s):
-        # Try to get duration from MP3
-        duration = 180  # Default 3 minutes
+        duration = 180
         if MUTAGEN_AVAILABLE:
             try:
                 audio = MP3(filepath)
@@ -137,20 +147,16 @@ def scan_music_folder():
             'src':     src,
         })
         print(f"  ✅ [{ch or 'default'}] {title} ({duration}s)")
-    
+
     playlist_cache = tracks
     last_scan_time = time.time()
-    
-    if tracks:
-        print(f"\n🎵 Playlist ready: {len(tracks)} tracks available!")
-    else:
-        print(f"\n⚠️ No MP3 files found in: {MUSIC_DIR}")
-        print("   Please add some .mp3 files to this folder.")
-    
+
+    print(f"\n🎵 Playlist ready: {len(tracks)} unique tracks" if tracks
+          else f"\n⚠️ No MP3 files found in: {MUSIC_DIR}")
     return tracks
 
 def get_time_based_playlist():
-    """Return playlist filtered by time of day"""
+    """Return playlist filtered by time of day."""
     all_tracks = scan_music_folder()
     
     if not all_tracks:
@@ -297,9 +303,10 @@ def api_playlist_status():
 
 @app.route('/api/tracks', methods=['GET'])
 def api_tracks():
-    """Legacy tracks endpoint"""
+    """Legacy endpoint — redirects to /api/playlist for backwards compatibility."""
     tracks, _ = get_time_based_playlist()
-    return jsonify(tracks)
+    # Return same format as /api/playlist so old callers don't break
+    return jsonify({'tracks': tracks, 'count': len(tracks)})
 
 # ════════════════════════════════════
 #  Other API routes
