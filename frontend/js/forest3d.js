@@ -58,8 +58,12 @@ const Forest3D = (() => {
 
   // ── Seeded random ─────────────────────────────────────────────
   function rng(seed) {
-    let s = ((seed * 9301 + 49297) | 0) % 233280;
-    return () => { s = ((s * 9301 + 49297) | 0) % 233280; return s / 233280; };
+    // Use Math.abs to guard against negative values from JS signed-int overflow
+    let s = Math.abs(((seed * 9301 + 49297) | 0) % 233280);
+    return () => {
+      s = Math.abs(((s * 9301 + 49297) | 0) % 233280);
+      return s / 233280;
+    };
   }
 
   // ── Tree data ─────────────────────────────────────────────────
@@ -69,7 +73,7 @@ const Forest3D = (() => {
     for (let i = 0; i < TREES; i++) {
       const angle = r() * Math.PI * 2;
       const dist  = CHUNK * (0.12 + r() * 0.42);
-      const ptype = Math.floor(r() * PTYPES.length);
+      const ptype = Math.min(PTYPES.length - 1, Math.max(0, Math.floor(r() * PTYPES.length)));
       const pt    = PTYPES[ptype];
       out.push({
         lx   : Math.cos(angle) * dist + (r() - 0.5) * CHUNK * 0.18,
