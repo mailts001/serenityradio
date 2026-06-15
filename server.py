@@ -105,8 +105,11 @@ def scan_music_folder(force=False):
         print(f"❌ Music directory not found: {MUSIC_DIR}")
         return tracks
 
-    # Collect all MP3s from root + channel subdirs, deduplicating by real path
-    seen_paths = set()
+    # Collect all MP3s from root + channel subdirs.
+    # Deduplicate by BOTH real path (symlinks) AND filename — same filename in
+    # multiple directories counts as the same track; root folder wins.
+    seen_paths = set()   # resolved real paths
+    seen_names = set()   # bare filenames (case-insensitive)
     all_mp3s   = []
     CHANNEL_DIRS = ['', 'sleep', 'focus', 'yoga', 'nature']
     for ch in CHANNEL_DIRS:
@@ -116,11 +119,13 @@ def scan_music_folder(force=False):
         for f in sorted(os.listdir(d)):
             if not f.lower().endswith('.mp3'):
                 continue
-            real = os.path.realpath(os.path.join(d, f))   # resolve symlinks
-            if real in seen_paths:
-                print(f"  ⚠️ Skipping duplicate: {f} (already seen at {real})")
+            real  = os.path.realpath(os.path.join(d, f))
+            fname = f.lower()
+            if real in seen_paths or fname in seen_names:
+                print(f"  ⚠️ Skipping duplicate: {f}")
                 continue
             seen_paths.add(real)
+            seen_names.add(fname)
             all_mp3s.append((ch, f, os.path.join(d, f)))
 
     print(f"📁 Found {len(all_mp3s)} unique MP3 files")

@@ -887,9 +887,12 @@ const CanvasScenes = (() => {
     const g = _ctx.createRadialGradient(x, y * rx/ry, 0, x, y * rx/ry, rx);
     g.addColorStop(0,   colStop0.replace('A', String(a)));
     g.addColorStop(0.45,colStop1.replace('A', String(a * 0.55)));
-    g.addColorStop(1,   colStop0.replace(/,[^,)]+\)/, ',0)'));  // same colour, alpha=0
+    g.addColorStop(1,   colStop0.replace(/,[^,)]+\)/, ',0)'));
     _ctx.fillStyle = g;
-    _ctx.fillRect(x - rx, (y - ry) * rx/ry, rx * 2, ry * 2);
+    // Draw as arc (circle in scaled space = ellipse in screen space) — no rect edges
+    _ctx.beginPath();
+    _ctx.arc(x, y * rx / ry, rx, 0, Math.PI * 2);
+    _ctx.fill();
     _ctx.restore();
   }
 
@@ -994,38 +997,49 @@ const CanvasScenes = (() => {
       const tower = Math.min(ch * 1.8, cw * 1.2);  // cap at ~1× cloud width tall
       const tW    = cw * 0.30;
 
-      // Dark base: wide flat radial blob
-      const bg = _ctx.createRadialGradient(cx, base, 0, cx, base, cw * 0.55);
+      // Dark base — flat elliptical radial, drawn as scaled arc (no rect)
+      _ctx.save();
+      _ctx.scale(1, 0.28);   // flatten to wide disc shape
+      const bg = _ctx.createRadialGradient(cx, base / 0.28, 0, cx, base / 0.28, cw * 0.55);
       bg.addColorStop(0,   `rgba(48,55,80,${alpha * 0.82})`);
       bg.addColorStop(0.5, `rgba(35,42,65,${alpha * 0.45})`);
       bg.addColorStop(1,   'rgba(30,38,60,0)');
-      _ctx.fillStyle = bg; _ctx.fillRect(cx - cw*0.55, base - cw*0.15, cw*1.1, cw*0.30);
+      _ctx.fillStyle = bg;
+      _ctx.beginPath(); _ctx.arc(cx, base / 0.28, cw * 0.55, 0, Math.PI * 2); _ctx.fill();
+      _ctx.restore();
 
-      // Tower: 6 stacked radial blobs, narrowing and brightening upward
+      // Tower: 6 stacked radial blobs — all arc, no rect
       for (let ti = 0; ti < 6; ti++) {
-        const p  = ti / 5;
-        const ty = base - tower * (p * 0.78 + 0.06);
-        const tr = tW * (1 - p * 0.28) * (0.78 + Math.sin(ti * 1.6 + c.seed * 4) * 0.22);
+        const p   = ti / 5;
+        const ty  = base - tower * (p * 0.78 + 0.06);
+        const tr  = tW * (1 - p * 0.28) * (0.78 + Math.sin(ti * 1.6 + c.seed * 4) * 0.22);
         const lum = Math.round(145 + p * 100);
-        const tg = _ctx.createRadialGradient(cx + (c.seed-0.5)*6*p, ty, 0, cx, ty, tr * 2.0);
-        tg.addColorStop(0,   `rgba(${lum},${lum},${lum+8},${alpha*(0.48+p*0.28)})`);
-        tg.addColorStop(0.55,`rgba(${lum},${lum},${lum+5},${alpha*(0.18+p*0.12)})`);
-        tg.addColorStop(1,   `rgba(${lum},${lum},${lum},0)`);
-        _ctx.fillStyle = tg; _ctx.fillRect(cx - tr*2, ty - tr*1.2, tr*4, tr*2.4);
+        const tg  = _ctx.createRadialGradient(cx + (c.seed-0.5)*6*p, ty, 0, cx, ty, tr * 2.0);
+        tg.addColorStop(0,    `rgba(${lum},${lum},${lum+8},${alpha*(0.48+p*0.28)})`);
+        tg.addColorStop(0.55, `rgba(${lum},${lum},${lum+5},${alpha*(0.18+p*0.12)})`);
+        tg.addColorStop(1,    `rgba(${lum},${lum},${lum},0)`);
+        _ctx.fillStyle = tg;
+        _ctx.beginPath(); _ctx.arc(cx, ty, tr * 2.0, 0, Math.PI * 2); _ctx.fill();
       }
 
-      // Lavender mid-shadow blob
+      // Lavender mid-shadow — arc
       const lv = _ctx.createRadialGradient(cx, base - tower*0.44, 0, cx, base - tower*0.44, tW*1.2);
       lv.addColorStop(0,  `rgba(148,128,195,${alpha * 0.22})`);
       lv.addColorStop(1,  'rgba(148,128,195,0)');
-      _ctx.fillStyle = lv; _ctx.fillRect(cx - tW*1.2, base - tower*0.44 - tW, tW*2.4, tW*2);
+      _ctx.fillStyle = lv;
+      _ctx.beginPath(); _ctx.arc(cx, base - tower*0.44, tW*1.2, 0, Math.PI * 2); _ctx.fill();
 
-      // Anvil top: wide flat blob
-      const av = _ctx.createRadialGradient(cx, base - tower*0.80, 0, cx, base - tower*0.80, cw*0.65);
+      // Anvil top — wide flat elliptical arc
+      _ctx.save();
+      _ctx.scale(1, 0.20);
+      const avY = (base - tower*0.80) / 0.20;
+      const av  = _ctx.createRadialGradient(cx, avY, 0, cx, avY, cw * 0.65);
       av.addColorStop(0,   `rgba(248,250,255,${alpha*0.55})`);
       av.addColorStop(0.4, `rgba(240,245,255,${alpha*0.22})`);
       av.addColorStop(1,   'rgba(240,244,255,0)');
-      _ctx.fillStyle = av; _ctx.fillRect(cx - cw*0.65, base - tower*0.80 - cw*0.12, cw*1.3, cw*0.24);
+      _ctx.fillStyle = av;
+      _ctx.beginPath(); _ctx.arc(cx, avY, cw * 0.65, 0, Math.PI * 2); _ctx.fill();
+      _ctx.restore();
     }
   }
 

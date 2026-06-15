@@ -1091,9 +1091,16 @@ async function loadPlaylist() {
     const data = await response.json();
     // Handle both formats: {tracks: [...]} or just [...]
     const raw = data.tracks || (Array.isArray(data) ? data : []);
-    // Deduplicate by src — playlist endpoint and tracks endpoint can overlap
-    const seen = new Set();
-    tracks = raw.filter(t => { if (seen.has(t.src)) return false; seen.add(t.src); return true; });
+    // Deduplicate by src AND by bare filename — same file can appear with
+    // different src paths (/assets/music/x.mp3 vs /assets/music/sleep/x.mp3)
+    const seenSrc  = new Set();
+    const seenFile = new Set();
+    tracks = raw.filter(t => {
+      const fname = (t.file || t.src.split('/').pop()).toLowerCase();
+      if (seenSrc.has(t.src) || seenFile.has(fname)) return false;
+      seenSrc.add(t.src); seenFile.add(fname);
+      return true;
+    });
 
     console.log(`Loaded ${tracks.length} tracks (${raw.length - tracks.length} dupes removed):`, tracks.map(t => t.file));
     
