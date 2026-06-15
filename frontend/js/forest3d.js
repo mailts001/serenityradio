@@ -618,7 +618,7 @@ const Forest3D = (() => {
 
     if (typeof THREE === 'undefined') {
       const s = document.createElement('script');
-      s.src = 'https://cdn.jsdelivr.net/npm/three@0.158.0/build/three.min.js';
+      s.src = 'https://cdn.jsdelivr.net/npm/three@0.149.0/build/three.min.js';
       s.onload = _launch;
       document.head.appendChild(s);
     } else {
