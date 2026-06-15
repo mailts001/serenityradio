@@ -1651,151 +1651,199 @@ const CanvasScenes = (() => {
     });
   }
 
+  // Evaluate smooth rolling hill profile at a normalised x (0–1)
+  // Returns y offset from a base Y (positive = lower on screen)
+  function _hillEval(nx, phase, amp) {
+    return Math.sin(nx * Math.PI * 2.2 + phase)        * amp
+         + Math.sin(nx * Math.PI * 1.1 + phase * 1.6)  * amp * 0.42
+         + Math.cos(nx * Math.PI * 3.5 + phase * 0.9)  * amp * 0.20;
+  }
+
+  // Draw a filled hill silhouette and return a function that gives y-on-hill at screen x
+  function _drawHill(baseY, amp, phase, panOff, col) {
+    const w = _canvas.width, h = _canvas.height;
+    const steps = 80;
+    _ctx.beginPath();
+    _ctx.moveTo(-w * 0.05, h + 4);
+    for (let i = 0; i <= steps; i++) {
+      // World x maps to screen x with pan offset
+      const sx  = (i / steps) * w * 1.1 - w * 0.05;
+      const wx  = ((sx + panOff) / w + 10) % 1;   // normalise to 0–1, wrap
+      const hy  = baseY + _hillEval(wx, phase, amp);
+      i === 0 ? _ctx.moveTo(sx, hy) : _ctx.lineTo(sx, hy);
+    }
+    _ctx.lineTo(w * 1.05, h + 4);
+    _ctx.closePath();
+    _ctx.fillStyle = col;
+    _ctx.fill();
+    // Return a sampler so trees can root on this hill
+    return sx => {
+      const wx = ((sx + panOff) / w + 10) % 1;
+      return baseY + _hillEval(wx, phase, amp);
+    };
+  }
+
   function _forestFrame(t, mode) {
     const w  = _canvas.width, h = _canvas.height;
     const hr = new Date().getHours() + new Date().getMinutes() / 60;
     const isNight = hr < 6 || hr >= 19.5;
     const isDusk  = !isNight && (hr < 7 || hr >= 17.5);
 
-    // Vertical pan — stronger effect: ±42% of canvas height
-    // +50 (look up) → ground drops to bottom; -50 (look down) → ground near top
-    const altShift = (_panAlt / 50) * h * 0.42;
-    const groundY  = h * 0.70 + altShift;
+    // Vertical pan — looking up sees more sky, down sees more valley floor
+    const altShift = (_panAlt / 50) * h * 0.38;
 
-    // ── Full sky (always visible through canopy) ─────────────────
-    _ctx.fillRect(0, 0, w, h);   // clear first
-    const skyP = _skyPalette(hr, 'nature');
-    const sg = _ctx.createLinearGradient(0, 0, 0, h);
-    sg.addColorStop(0,   _tint(skyP.top, 0, 8, 0));
-    sg.addColorStop(0.6, _tint(skyP.mid, 0, 10, 0));
-    sg.addColorStop(1,   _tint(skyP.bot, 5, 14, 5));
+    // ── Natural sky — no green tint, airy and open ────────────────
+    const skyP = _skyPalette(hr);
+    const sg   = _ctx.createLinearGradient(0, 0, 0, h);
+    sg.addColorStop(0,   skyP.top);
+    sg.addColorStop(0.5, skyP.mid);
+    sg.addColorStop(1,   skyP.bot);
     _ctx.fillStyle = sg; _ctx.fillRect(0, 0, w, h);
 
     _drawStarsAndMoon(t, hr, mode);
     if (!isNight) _drawSun(hr);
 
-    // ── Light shafts penetrating canopy ─────────────────────────
+    // ── Soft god-ray shafts from above ───────────────────────────
     if (!isNight) {
-      const sA = isDusk ? 0.055 : 0.038;
-      for (let si = 0; si < 7; si++) {
-        const sx  = w * (0.05 + si * 0.145 + Math.sin(t * 0.0004 + si) * 0.03);
-        const sw  = w * (0.025 + (si % 3) * 0.012);
-        const shft = _ctx.createLinearGradient(0, 0, 0, h * 0.9);
-        shft.addColorStop(0,    `rgba(230,248,190,0)`);
-        shft.addColorStop(0.2,  `rgba(230,248,190,${sA})`);
-        shft.addColorStop(0.7,  `rgba(230,248,190,${sA * 0.5})`);
-        shft.addColorStop(1,    `rgba(230,248,190,0)`);
-        _ctx.fillStyle = shft;
+      const sA = isDusk ? 0.040 : 0.022;
+      for (let si = 0; si < 5; si++) {
+        const sx  = w * (0.08 + si * 0.20 + Math.sin(t * 0.0003 + si) * 0.04);
+        const sw  = w * 0.030;
+        const sg2 = _ctx.createLinearGradient(0, 0, 0, h * 0.85);
+        sg2.addColorStop(0,    `rgba(240,252,200,0)`);
+        sg2.addColorStop(0.15, `rgba(240,252,200,${sA})`);
+        sg2.addColorStop(0.8,  `rgba(240,252,200,${sA * 0.3})`);
+        sg2.addColorStop(1,    `rgba(240,252,200,0)`);
+        _ctx.fillStyle = sg2;
         _ctx.beginPath();
-        _ctx.moveTo(sx - sw * 0.5, 0);
-        _ctx.lineTo(sx + sw * 3, h * 0.9);
-        _ctx.lineTo(sx - sw * 3, h * 0.9);
-        _ctx.lineTo(sx + sw * 0.5, 0);
+        _ctx.moveTo(sx - sw, 0); _ctx.lineTo(sx + sw * 3.5, h * 0.85);
+        _ctx.lineTo(sx - sw * 3.5, h * 0.85); _ctx.lineTo(sx + sw, 0);
         _ctx.closePath(); _ctx.fill();
       }
     }
 
-    // ── Trees — 4 depth layers, far→near, each wraps seamlessly ─
-    // NOTE: trees are NOT anchored to groundY — they fill the full canvas height.
-    // groundY only affects sky/mist/light shaft positions.
-    const WORLD_W = w * 2;
+    // ── Rolling hill layers — valley garden composition ───────────
+    // Pan offset for parallax — nearer hills pan faster
+    const panOff0 = (_panAz / 360) * w * 0.30;   // far hills
+    const panOff1 = (_panAz / 360) * w * 0.55;   // mid hills
+    const panOff2 = (_panAz / 360) * w * 0.90;   // near slopes
 
-    // 3 leaf tones per layer (shadow / mid / highlight)
+    // Base Y of each hill layer shifts with vertical pan
+    const farBaseY  = h * 0.52 + altShift * 0.50;
+    const midBaseY  = h * 0.62 + altShift * 0.70;
+    const nearBaseY = h * 0.72 + altShift * 0.90;
+
+    const farAmp  = h * 0.055;
+    const midAmp  = h * 0.070;
+    const nearAmp = h * 0.085;
+
+    // Hill colours — light, airy, atmospheric
+    const hillColFar  = isNight ? 'rgba(30,46,36,0.55)'  : isDusk ? 'rgba(80,96,55,0.52)'  : 'rgba(120,155,85,0.45)';
+    const hillColMid  = isNight ? 'rgba(22,38,26,0.72)'  : isDusk ? 'rgba(58,80,36,0.68)'  : 'rgba(88,128,58,0.62)';
+    const hillColNear = isNight ? 'rgba(14,28,18,0.88)'  : isDusk ? 'rgba(40,62,24,0.82)'  : 'rgba(62,100,40,0.78)';
+
+    const hillSamplerFar  = _drawHill(farBaseY,  farAmp,  2.1, panOff0, hillColFar);
+    const hillSamplerMid  = _drawHill(midBaseY,  midAmp,  0.7, panOff1, hillColMid);
+    const hillSamplerNear = _drawHill(nearBaseY, nearAmp, 4.3, panOff2, hillColNear);
+
+    // ── Valley floor — soft grassy, lighter than before ───────────
+    const floorY = nearBaseY + nearAmp * 0.6;
+    if (floorY < h) {
+      const flr = _ctx.createLinearGradient(0, floorY, 0, h);
+      if (isNight) {
+        flr.addColorStop(0, 'rgba(28,44,22,0.92)'); flr.addColorStop(1, 'rgba(14,24,12,0.97)');
+      } else if (isDusk) {
+        flr.addColorStop(0, 'rgba(72,82,38,0.88)'); flr.addColorStop(1, 'rgba(46,56,24,0.95)');
+      } else {
+        flr.addColorStop(0, 'rgba(88,120,52,0.82)');  // warm grassy green
+        flr.addColorStop(0.5,'rgba(64,96,36,0.90)');
+        flr.addColorStop(1, 'rgba(40,68,22,0.96)');
+      }
+      _ctx.fillStyle = flr; _ctx.fillRect(0, floorY, w, h - floorY);
+      // Sunlit grass shimmer
+      if (!isNight) {
+        const shimmer = _ctx.createLinearGradient(0, floorY, 0, floorY + h * 0.07);
+        shimmer.addColorStop(0, `rgba(200,240,150,${isDusk ? 0.20 : 0.14})`);
+        shimmer.addColorStop(1, 'rgba(200,240,150,0)');
+        _ctx.fillStyle = shimmer; _ctx.fillRect(0, floorY, w, h * 0.07);
+      }
+    }
+
+    // ── Leaf tone palettes — lighter, less saturated for open feel ─
     const LP = isNight
-      ? [['16,36,18','22,46,24','28,58,30'], ['10,24,12','14,32,16','18,42,20'],
-         ['6,16,8',  '9,22,11', '12,28,14'], ['3,10,4',  '5,14,6',  '7,18,8' ]]
+      ? [['22,48,24','30,62,32','38,78,40'], ['14,36,16','20,48,22','26,60,28'],
+         ['8,22,10', '12,32,14','16,42,18']]
       : isDusk
-        ? [['52,68,24','66,84,32','80,102,40'], ['40,56,18','52,70,26','64,86,33'],
-           ['28,44,12','38,58,19','48,72,25'], ['18,30,8', '26,42,14','34,54,19']]
-        : [['42,78,20','56,96,28','70,116,36'], ['32,62,16','44,80,24','56,98,30'],
-           ['20,48,11','30,64,17','40,80,22'], ['12,32,7', '18,46,12','26,60,16']];
+        ? [['72,90,32','90,110,42','108,132,52'], ['54,76,24','70,96,34','86,116,44'],
+           ['38,58,16','52,78,24','66,98,32']]
+        : [['78,118,38','96,142,50','114,168,62'], ['58,96,28','74,118,38','90,142,48'],
+           ['40,72,18','54,92,28','68,114,38']];
 
-    // ── Natural clustering: trees grouped like a real forest ──────
-    // Pre-compute world positions for each layer using cluster seeds
-    // Each layer has 3–4 clusters, trees scatter around cluster centres
-    const LAYERS = [
-      { gOff: h*0.025, hFrac:0.50, count:13, rMin:0.008, rMax:0.012, ps:0.05 },
-      { gOff: h*0.010, hFrac:0.70, count:10, rMin:0.011, rMax:0.019, ps:0.10 },
-      { gOff: 0,       hFrac:0.98, count: 7, rMin:0.016, rMax:0.026, ps:0.16 },
-      { gOff: 0,       hFrac:1.38, count: 5, rMin:0.021, rMax:0.035, ps:0.23 },
+    // ── Trees on hill slopes — spaced, calm, garden-like ──────────
+    const WORLD_W = w * 2;
+    // 3 hill bands with modest tree counts — sparse and spaced
+    const TREE_LAYERS = [
+      // { hillSampler, count, hFrac, rMin, rMax, panOff, lp }
+      { sampler: hillSamplerFar,  count:  6, hFrac: 0.28, rMin:0.006, rMax:0.010, panOff: panOff0, li:0 },
+      { sampler: hillSamplerMid,  count:  5, hFrac: 0.40, rMin:0.009, rMax:0.015, panOff: panOff1, li:1 },
+      { sampler: hillSamplerNear, count:  4, hFrac: 0.56, rMin:0.013, rMax:0.022, panOff: panOff2, li:2 },
     ];
 
-    LAYERS.forEach((L, li) => {
-      // Trees span the full canvas height — no ground anchoring
-      const totalH = h * L.hFrac;
-      const panOff = (_panAz / 360) * WORLD_W * L.ps;
-      const lp     = LP[li];
-
-      // Cluster-based natural spacing
-      const clusterCentres = [
-        (0.14 + (li * 97  % 100 / 100) * 0.20) * WORLD_W,
-        (0.38 + (li * 53  % 100 / 100) * 0.22) * WORLD_W,
-        (0.62 + (li * 71  % 100 / 100) * 0.20) * WORLD_W,
-        (0.85 + (li * 113 % 100 / 100) * 0.10) * WORLD_W,
-      ];
-      const scatter = WORLD_W * 0.14;
+    TREE_LAYERS.forEach(L => {
+      const treeH  = h * L.hFrac;
+      const lp     = LP[L.li];
+      // Spread trees across world width with generous natural gaps
+      // Use golden ratio spacing with variation for non-uniform feel
+      const baseGap = WORLD_W / L.count;
+      let worldX = (L.li * 137 % 100 / 100) * baseGap;  // random start offset per layer
 
       for (let ti = 0; ti < L.count; ti++) {
-        const seed  = (li * 97  + ti * 137) % 1000 / 1000;
-        const seed2 = (li * 53  + ti * 113) % 1000 / 1000;
-        const seed3 = (li * 71  + ti * 89)  % 1000 / 1000;
-        const clIdx  = ti % clusterCentres.length;
-        const offset = (seed3 - 0.5) * 2 * scatter;
-        const worldX = (clusterCentres[clIdx] + offset + WORLD_W) % WORLD_W;
-        const sx     = _treeScreenX(worldX, panOff, WORLD_W);
-        const rad    = (L.rMin + seed2 * (L.rMax - L.rMin)) * w;
-        const tH     = totalH * (0.72 + seed * 0.38);
+        const seed  = (L.li * 97  + ti * 137) % 1000 / 1000;
+        const seed2 = (L.li * 53  + ti * 113) % 1000 / 1000;
+        // Vary gap: 70%–130% of base gap for natural irregularity
+        const gap    = baseGap * (0.70 + seed2 * 0.60);
+        worldX       = (worldX + gap) % WORLD_W;
 
-        // Vertical pan shifts visible portion of tree — trunks extend beyond canvas
-        // altShift already baked into sky/light shaft drawing; here just offset canvasH
-        const treeCanvasH = h + altShift * (0.3 + li * 0.15);
+        const sx     = _treeScreenX(worldX, L.panOff, WORLD_W);
+        const rad    = (L.rMin + seed2 * (L.rMax - L.rMin)) * w;
+        const tH     = treeH * (0.75 + seed * 0.35);
 
         [sx, sx + WORLD_W, sx - WORLD_W].forEach(cx => {
-          if (cx + tH * 0.5 < 0 || cx - tH * 0.5 > w) return;
-          // Pass canvas height so trunk fills full canvas bottom to top
-          _drawGiantTree(cx, treeCanvasH, rad, tH, seed, lp, isNight);
+          if (cx + tH * 0.4 < 0 || cx - tH * 0.4 > w) return;
+          // Root tree ON the hill surface at this x position
+          const rootY = L.sampler(cx) + rad * 0.5;
+          // Tree canvas height relative to root so trunk extends to bottom
+          const treeCanH = rootY + h * 0.08 + tH * 0.15;
+          _drawGiantTree(cx, treeCanH, rad, tH, seed, lp, isNight);
         });
       }
     });
 
-    // No ground fill — trunks extend to canvas bottom, sky shows between them
+    // ── Valley mist drifting through the scene ────────────────────
+    const mistRgb = isNight ? '205,222,215' : isDusk ? '238,222,198' : '218,235,222';
+    for (let mi = 0; mi < 5; mi++) {
+      const driftX  = Math.sin(t * 0.00045 + mi * 1.4) * w * 0.22 + Math.cos(t * 0.00022 + mi * 0.8) * w * 0.10;
+      const baseY   = nearBaseY - h * (0.18 - mi * 0.04) + Math.sin(t * 0.0022 + mi * 2.1) * h * 0.022;
+      const ribbonH = h * (0.040 + (mi % 3) * 0.016);
+      const alpha   = (0.050 + mi * 0.016) * (isNight ? 0.65 : 1.0);
 
-    // ── Soft organic flowing mist — bezier ribbons, no hard edges ─
-    const mistRgb = isNight ? '210,228,218' : isDusk ? '235,218,195' : '215,232,220';
-    for (let mi = 0; mi < 6; mi++) {
-      // Each ribbon has its own slow drift speed and phase
-      const driftX  = Math.sin(t * 0.00055 + mi * 1.3) * w * 0.18 + Math.cos(t * 0.00028 + mi * 0.7) * w * 0.08;
-      const baseY   = groundY - h * (0.22 - mi * 0.038) + Math.sin(t * 0.0025 + mi * 2.0) * h * 0.025;
-      const ribbonH = h * (0.045 + (mi % 3) * 0.018);
-      const alpha   = (0.055 + mi * 0.018) * (isNight ? 0.7 : 1.0);
+      const x0 = -w * 0.12 + driftX;
+      const x1 = w * 0.32  + driftX + Math.sin(t * 0.0007 + mi) * w * 0.07;
+      const x2 = w * 0.68  + driftX + Math.cos(t * 0.0005 + mi * 1.5) * w * 0.07;
+      const x3 = w * 1.12  + driftX;
+      const wv = ribbonH * 0.18;
 
-      // Draw as a soft bezier-edged shape instead of a rectangle
       _ctx.beginPath();
-      // Top edge — wavy bezier across full canvas width + drift bleed
-      const x0 = -w * 0.1 + driftX;
-      const x1 = w * 0.35 + driftX + Math.sin(t * 0.0008 + mi) * w * 0.06;
-      const x2 = w * 0.65 + driftX + Math.cos(t * 0.0006 + mi * 1.4) * w * 0.06;
-      const x3 = w * 1.1  + driftX;
-      const wTop = ribbonH * (0.15 + mi * 0.08);
-      _ctx.moveTo(x0, baseY + wTop);
-      _ctx.bezierCurveTo(x1, baseY - ribbonH * 0.25,
-                         x2, baseY + ribbonH * 0.10,
-                         x3, baseY + wTop * 0.8);
-      // Bottom edge — slightly different wave
-      const bWave = ribbonH * 0.20;
-      _ctx.bezierCurveTo(x2, baseY + ribbonH + bWave,
-                         x1, baseY + ribbonH * 0.75,
-                         x0, baseY + ribbonH + wTop);
+      _ctx.moveTo(x0, baseY + wv);
+      _ctx.bezierCurveTo(x1, baseY - ribbonH * 0.28, x2, baseY + ribbonH * 0.12, x3, baseY + wv * 0.7);
+      _ctx.bezierCurveTo(x2, baseY + ribbonH * 1.25,  x1, baseY + ribbonH * 0.80, x0, baseY + ribbonH + wv);
       _ctx.closePath();
-
-      // Soft gradient fill — zero alpha at edges of the ribbon shape
-      const mg = _ctx.createLinearGradient(0, baseY - ribbonH * 0.3, 0, baseY + ribbonH * 1.3);
+      const mg = _ctx.createLinearGradient(0, baseY - ribbonH * 0.4, 0, baseY + ribbonH * 1.4);
       mg.addColorStop(0,    `rgba(${mistRgb},0)`);
-      mg.addColorStop(0.25, `rgba(${mistRgb},${alpha})`);
-      mg.addColorStop(0.75, `rgba(${mistRgb},${alpha * 0.85})`);
+      mg.addColorStop(0.30, `rgba(${mistRgb},${alpha})`);
+      mg.addColorStop(0.70, `rgba(${mistRgb},${alpha * 0.80})`);
       mg.addColorStop(1,    `rgba(${mistRgb},0)`);
-      _ctx.fillStyle = mg;
-      _ctx.fill();
+      _ctx.fillStyle = mg; _ctx.fill();
     }
 
     _drawFireflies(t, hr, mode);
