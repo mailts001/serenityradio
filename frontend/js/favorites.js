@@ -146,30 +146,54 @@ const Favorites = (() => {
       <div class="fav-panel-backdrop" onclick="Favorites._closePanel()"></div>
       <div class="fav-panel-inner">
         <div class="fav-panel-header">
-          <h3>♥ My Favorites <span style="font-size:13px;color:var(--muted);font-weight:400">${favs.length} songs</span></h3>
+          <h3>♥ My Favorites <span style="font-size:13px;color:var(--muted);font-weight:400">${favs.filter(f=>!f.src.startsWith('/sched/')).length} tracks</span></h3>
           <button onclick="Favorites._closePanel()" style="background:none;border:none;cursor:pointer;color:var(--muted);font-size:18px">✕</button>
         </div>
         ${favs.length === 0
           ? `<p class="fav-empty">No favorites yet.<br>Tap ♡ on any track to save it here.</p>`
-          : `<div class="fav-queue-btns">
-              <button class="fav-q-btn" onclick="Favorites.playAll()">▶ Play All</button>
-              <button class="fav-q-btn" onclick="Favorites.shuffleAll()">🔀 Shuffle All</button>
-              <button class="fav-q-btn fav-q-disabled" id="fav-play-sel-btn" disabled onclick="Favorites.playSelected()">▶ Play Selected</button>
-             </div>
-             <div class="fav-list">
-             ${favs.map((f) => {
-               const title = f.title || f.src.split('/').pop().replace(/\.mp3$/i,'');
-               return `<div class="fav-row" data-src="${f.src}">
-                 <input type="checkbox" class="fav-check" onchange="Favorites._toggleSelect('${f.src}',this)">
-                 <div class="fav-row-info">
-                   <div class="fav-row-title">${title}</div>
-                   <div class="fav-row-artist">${f.artist || 'Serenity Radio'} · ${f.channel || 'default'}</div>
-                 </div>
-                 <button class="fav-play-btn" onclick="Favorites._playOne('${f.src}','${title}','${f.artist||''}','${f.channel||'default'}')">▶</button>
-                 <button class="fav-remove-btn" onclick="Favorites._removeRow('${f.src}',this)">✕</button>
-               </div>`;
-             }).join('')}
-             </div>`
+          : (() => {
+              // Separate real tracks (src starts with /assets/) from show reminders (/sched/)
+              const musicFavs = favs.filter(f => !f.src.startsWith('/sched/'));
+              const schedFavs = favs.filter(f =>  f.src.startsWith('/sched/'));
+
+              const trackRows = musicFavs.map(f => {
+                const title = f.title || f.src.split('/').pop().replace(/\.mp3$/i,'');
+                return `<div class="fav-row" data-src="${f.src}">
+                  <input type="checkbox" class="fav-check" onchange="Favorites._toggleSelect('${f.src}',this)">
+                  <div class="fav-row-info">
+                    <div class="fav-row-title">${title}</div>
+                    <div class="fav-row-artist">${f.artist || 'Serenity Radio'}</div>
+                  </div>
+                  <button class="fav-play-btn" onclick="Favorites._playOne('${f.src}','${title}','${f.artist||''}','${f.channel||'default'}')">▶</button>
+                  <button class="fav-remove-btn" onclick="Favorites._removeRow('${f.src}',this)">✕</button>
+                </div>`;
+              }).join('');
+
+              const schedRows = schedFavs.map(f => {
+                const title = f.title || 'Show reminder';
+                return `<div class="fav-row" data-src="${f.src}" style="opacity:.75">
+                  <div class="fav-row-info" style="flex:1">
+                    <div class="fav-row-title">${title}</div>
+                    <div class="fav-row-artist" style="font-size:11px;color:var(--text-muted)">📅 Show reminder — no audio file</div>
+                  </div>
+                  <button class="fav-remove-btn" onclick="Favorites._removeRow('${f.src}',this)">✕</button>
+                </div>`;
+              }).join('');
+
+              return `
+                <div class="fav-queue-btns">
+                  <button class="fav-q-btn" onclick="Favorites.playAll()">▶ Play All</button>
+                  <button class="fav-q-btn" onclick="Favorites.shuffleAll()">🔀 Shuffle</button>
+                  <button class="fav-q-btn fav-q-disabled" id="fav-play-sel-btn" disabled onclick="Favorites.playSelected()">▶ Selected</button>
+                </div>
+                ${musicFavs.length > 0 ? `
+                  <div style="font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:var(--text-muted);padding:8px 12px 4px">♫ Saved Tracks (${musicFavs.length})</div>
+                  <div class="fav-list">${trackRows}</div>` : `
+                  <p class="fav-empty" style="margin:8px 12px;font-size:13px">No music saved yet.<br>Tap ♡ on a track in the playlist below.</p>`}
+                ${schedFavs.length > 0 ? `
+                  <div style="font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:var(--text-muted);padding:8px 12px 4px">🔔 Show Reminders (${schedFavs.length})</div>
+                  <div class="fav-list">${schedRows}</div>` : ''}`;
+            })()
         }
       </div>`;
     document.body.appendChild(panel);

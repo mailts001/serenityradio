@@ -763,8 +763,9 @@ function buildScheduleDisplay() {
         data-src="/sched/${encodeURIComponent(s.name)}"
         data-sched-channel="${s.channel||'default'}"
         data-sched-name="${s.name}"
-        title="Save this station to favorites"
-        onclick="event.stopPropagation();schedFav(this)">♡</button>
+        title="Remind me — save this show to your schedule reminders"
+        onclick="event.stopPropagation();schedFav(this)"
+        style="font-size:10px;padding:2px 7px;border-radius:10px;">🔔</button>
     `;
     el.appendChild(div);
   });
@@ -854,20 +855,19 @@ function renderTrackList(list) {
   }).join('');
 }
 
-// Heart on schedule slot — saves a "station" to favorites
-// When played, it switches to that channel and queues its tracks
+// Bell on schedule slot — saves a show reminder (NOT a music track)
 function schedFav(btn) {
   if (typeof Favorites === 'undefined') return;
-  if (!Auth.isLoggedIn()) { Auth.openLogin(); return; }
+  if (!Auth.isLoggedIn()) { Auth.openLogin({ hint: 'Sign in to save show reminders.' }); return; }
   const ch   = btn.dataset.schedChannel || 'default';
   const name = btn.dataset.schedName   || ch;
-  const src  = btn.dataset.src;    // unique per slot: /sched/<encoded-name>
-  Favorites.toggle(src, '📻 ' + name, 'Serenity Radio · ' + ch + ' channel', ch);
+  const src  = btn.dataset.src;
+  Favorites.toggle(src, '🔔 ' + name, 'Show reminder · ' + ch + ' channel', ch);
   const nowFav = Favorites.isFav(src);
-  btn.textContent = nowFav ? '♥' : '♡';
-  btn.classList.toggle('active', nowFav);
-  btn.title = nowFav ? 'Remove from favorites' : 'Save this station';
-  showToast(nowFav ? '♥ Station saved to favorites' : 'Removed from favorites');
+  btn.textContent = nowFav ? '🔔' : '🔔';
+  btn.style.opacity = nowFav ? '1' : '0.5';
+  btn.title = nowFav ? 'Remove reminder' : 'Remind me about this show';
+  showToast(nowFav ? '🔔 Reminder set for "' + name + '"' : 'Reminder removed');
 }
 
 // Heart button in tracklist — reads track from global array by index
