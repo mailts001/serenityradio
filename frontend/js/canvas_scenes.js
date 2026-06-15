@@ -1493,162 +1493,114 @@ const CanvasScenes = (() => {
     const s2 = (seed * 137.5) % 1;
     const s3 = (seed * 97.3)  % 1;
     const s4 = (seed * 211.7) % 1;
-    const lean = (s2 - 0.5) * 0.025;  // very slight natural lean
+    const lean = (s2 - 0.5) * 0.018;  // very slight natural lean
 
-    // ── Trunk colour — warm cinnamon-red Hinoki bark ──────────────
-    const tR = 68  + Math.floor(s3 * 44);   // 68–112
-    const tG = 40  + Math.floor(s4 * 30);   // 40–70
-    const tB = 18  + Math.floor(s2 * 20);   // 18–38
+    // ── Trunk colour — warm earthy bark ───────────────────────────
+    const tR = 72  + Math.floor(s3 * 40);
+    const tG = 44  + Math.floor(s4 * 28);
+    const tB = 20  + Math.floor(s2 * 18);
 
-    // Trunk runs from well below canvas bottom to above canvas top
-    const bottomY  = canvasH + trunkRad * 2;   // off screen bottom
-    const trunkTopY = -totalH * 0.12;           // off screen top — continuous trunk
+    const bottomY   = canvasH + trunkRad * 2;
+    const trunkTopY = canvasH * 0.22 - totalH * 0.08;   // crown starts here
     const trunkTopX = cx + lean * totalH;
+    const wBottom   = trunkRad * 3.2;
+    const wTop      = trunkRad * 0.70;
 
-    // At the branching zone (upper 45% of visible tree)
-    const branchZoneY = canvasH * 0.35 - totalH * 0.10;
-    const branchZoneX = cx + lean * (canvasH - branchZoneY) * 0.5;
-
-    // Width at bottom (wide) and at branching zone (narrower)
-    const wBottom  = trunkRad * 3.4;
-    const wBranch  = trunkRad * 0.85;
-
-    // ── Trunk silhouette: bezier taper from bottom to top ─────────
+    // ── Solid trunk silhouette ─────────────────────────────────────
     c.beginPath();
     c.moveTo(cx - wBottom, bottomY);
     c.bezierCurveTo(
-      cx - trunkRad * 2.2, canvasH * 0.75,
-      branchZoneX - trunkRad * 1.1, canvasH * 0.40,
-      trunkTopX - wBranch, trunkTopY
+      cx - trunkRad * 2.0, canvasH * 0.70,
+      trunkTopX - trunkRad * 1.2, canvasH * 0.35,
+      trunkTopX - wTop, trunkTopY
     );
-    c.lineTo(trunkTopX + wBranch, trunkTopY);
+    c.lineTo(trunkTopX + wTop, trunkTopY);
     c.bezierCurveTo(
-      branchZoneX + trunkRad * 1.1, canvasH * 0.40,
-      cx + trunkRad * 2.2, canvasH * 0.75,
+      trunkTopX + trunkRad * 1.2, canvasH * 0.35,
+      cx + trunkRad * 2.0, canvasH * 0.70,
       cx + wBottom, bottomY
     );
     c.closePath();
-    c.fillStyle = `rgba(${tR},${tG},${tB},0.94)`;
+    c.fillStyle = `rgb(${tR},${tG},${tB})`;
     c.fill();
 
-    // ── Lateral light gradient (3D round feel) ─────────────────────
-    const lgX = cx - wBottom * 0.3;    // light source left-centre
-    const lg  = c.createLinearGradient(cx - wBottom, 0, cx + wBottom, 0);
-    lg.addColorStop(0,    `rgba(${tR-22},${tG-16},${tB-9},0.55)`);  // shadow right
-    lg.addColorStop(0.35, `rgba(${tR+32},${tG+22},${tB+12},0.30)`); // highlight
-    lg.addColorStop(0.55, `rgba(${tR+18},${tG+12},${tB+6},0.15)`);
-    lg.addColorStop(1,    `rgba(${tR-28},${tG-20},${tB-10},0.50)`); // shadow left
+    // ── Lateral light (3D roundness) ───────────────────────────────
+    const lg = c.createLinearGradient(cx - wBottom, 0, cx + wBottom, 0);
+    lg.addColorStop(0,    `rgba(${tR-20},${tG-14},${tB-8},0.50)`);
+    lg.addColorStop(0.32, `rgba(${tR+28},${tG+18},${tB+10},0.28)`);
+    lg.addColorStop(1,    `rgba(${tR-26},${tG-18},${tB-9},0.46)`);
     c.fillStyle = lg;
     c.fillRect(cx - wBottom - 2, trunkTopY, wBottom * 2 + 4, bottomY - trunkTopY);
 
-    // ── Swirling bark lines — gentle helical grooves up the trunk ──
+    // ── Bark texture lines ─────────────────────────────────────────
     c.save();
-    c.lineCap = 'round';
-    // Clip to trunk region to keep lines inside
     c.beginPath();
-    c.rect(cx - wBottom - 2, trunkTopY, wBottom * 2 + 4, bottomY - trunkTopY);
+    c.rect(cx - wBottom - 1, trunkTopY, wBottom * 2 + 2, bottomY - trunkTopY);
     c.clip();
-
-    const numLines = 8 + Math.floor(s2 * 5);
-    for (let li = 0; li < numLines; li++) {
-      const ls    = (li * 67 + seed * 300) % 100 / 100;
-      const ls2   = (li * 43 + seed * 200) % 100 / 100;
-      // Start x offset relative to trunk centre
-      const startXOff = (ls - 0.5) * wBottom * 1.8;
-      // Swirl direction and pitch
-      const swirlAmt  = (ls2 - 0.5) * wBottom * 0.55;  // horizontal drift over full height
-      const lineAlpha = 0.08 + ls * 0.10;
-      const isLight   = li % 3 !== 0;
-
+    const nLines = 7 + Math.floor(s2 * 5);
+    for (let li = 0; li < nLines; li++) {
+      const ls  = (li * 67 + seed * 300) % 100 / 100;
+      const ls2 = (li * 43 + seed * 200) % 100 / 100;
+      const xOff = (ls - 0.5) * wBottom * 1.6;
+      const drift = (ls2 - 0.5) * wBottom * 0.45;
       c.beginPath();
-      c.moveTo(cx + startXOff, bottomY);
-      // Draw as a series of short bezier segments, drifting gently
-      const steps = 12;
-      for (let si = 0; si <= steps; si++) {
-        const sf   = si / steps;
-        const sy   = bottomY - (bottomY - trunkTopY) * sf;
-        // Trunk half-width at this y: interpolate from wBottom to wBranch
-        const wHere = wBottom + (wBranch - wBottom) * sf;
-        // Swirl: slow horizontal sine drift
-        const swirlX = Math.sin(sf * Math.PI * 1.5 + ls * Math.PI * 2) * swirlAmt * (1 - sf * 0.4);
-        const sx = cx + startXOff * (1 - sf * 0.6) + swirlX;
-        // Clamp to trunk edges with a little padding
-        const clamped = Math.max(cx - wHere + 1, Math.min(cx + wHere - 1, sx));
-        c.lineTo(clamped, sy);
+      c.moveTo(cx + xOff, bottomY);
+      for (let si = 1; si <= 10; si++) {
+        const sf = si / 10;
+        const sy = bottomY - (bottomY - trunkTopY) * sf;
+        const wH = wBottom + (wTop - wBottom) * sf;
+        const sx = Math.max(cx - wH + 1, Math.min(cx + wH - 1,
+                     cx + xOff * (1 - sf * 0.5) + Math.sin(sf * Math.PI * 1.6 + ls * 6) * drift * (1 - sf * 0.3)));
+        c.lineTo(sx, sy);
       }
-      c.lineWidth   = 0.7 + ls * 0.8;
-      c.strokeStyle = isLight
-        ? `rgba(${tR+26},${tG+18},${tB+10},${lineAlpha})`
-        : `rgba(${tR-18},${tG-12},${tB-7},${lineAlpha * 0.8})`;
+      c.lineWidth = 0.6 + ls * 0.7;
+      c.strokeStyle = li % 3 === 0
+        ? `rgba(${tR+22},${tG+14},${tB+8},${0.07 + ls * 0.08})`
+        : `rgba(${tR-16},${tG-10},${tB-6},${0.06 + ls * 0.07})`;
       c.stroke();
     }
     c.restore();
 
-    // ── Tapered branches — vary shade per branch for depth/3D ─────
-    c.lineCap = 'round'; c.lineJoin = 'round';
-    const baseAng   = -Math.PI * 0.5 + lean * 4;
-    const branchLen = totalH * 0.20;
-    const branchW   = trunkRad * 1.15;
-
-    const branchPoints = [];
-    // 5–7 branch tiers along the upper trunk, alternating sides
-    const numTiers = 5 + Math.floor(s4 * 3);
-    for (let bi = 0; bi < numTiers; bi++) {
-      const bs    = (bi * 83 + seed * 100) % 100 / 100;
-      const bs2   = (bi * 61 + seed * 170) % 100 / 100;
-      const side  = bi % 2 === 0 ? -1 : 1;
-      // Space branch origins along trunk (upper 55% of canvas)
-      const brY   = canvasH * 0.80 - bi * (canvasH * 0.55 / numTiers) - totalH * 0.05;
-      const wHere = wBottom + (wBranch - wBottom) * ((canvasH - brY) / canvasH);
-      const brX   = cx + lean * (canvasH - brY) + side * wHere * 0.85;
-      const ang   = baseAng + side * (0.30 + bs * 0.22) + (bs2 - 0.5) * 0.12;
-      const bLen  = branchLen * (0.75 + bs * 0.40) * (1 - bi * 0.04);
-      // Light comes from slightly left — left branches brighter
-      const lightSide = side;
-      const ep = _drawTaperedBranch(brX, brY, ang, bLen, branchW * (0.95 - bi * 0.06),
-                                    tR, tG, tB, 2, bs + seed * 0.4, lightSide);
-      branchPoints.push(ep);
-    }
-
-    // ── Hinoki foliage: narrow tiered canopy, drooping, translucent ─
-    const crownTopY  = canvasH * 0.05 - totalH * 0.05;
-    const crownBaseY = canvasH * 0.68;
-    const crownH     = crownBaseY - crownTopY;
-    const maxSpread  = totalH * (0.11 + s2 * 0.08);
+    // ── Dense leaf canopy — no branches, full organic crown ────────
+    // Crown occupies from trunkTopY upward
+    const crownBot  = trunkTopY + totalH * 0.08;   // crown base (just above trunk top)
+    const crownTop  = trunkTopY - totalH * 0.58;   // crown apex
+    const crownH    = crownBot - crownTop;
+    // Max spread is widest in the middle of the crown
+    const maxSpread = totalH * (0.18 + s2 * 0.10);
 
     const lRgb0 = leafRgbArr[0], lRgb1 = leafRgbArr[1], lRgb2 = leafRgbArr[2];
-    const leafA  = isNight ? 0.26 : 0.38;
+    // Fully opaque leaves — no translucency
+    const leafA = isNight ? 0.72 : 0.88;
 
-    const numFolTiers = 8 + Math.floor(s3 * 5);
-    for (let ti = 0; ti < numFolTiers; ti++) {
-      const tf  = ti / numFolTiers;
-      const ty  = crownTopY + crownH * tf;
-      const tw  = maxSpread * (0.16 + tf * 0.88);
-      const cnt = 3 + Math.floor(tf * 4);
+    // Draw tiers bottom → top (bottom tiers widest, top narrow)
+    const numTiers = 14 + Math.floor(s3 * 6);   // generous tier count for fullness
+    for (let ti = 0; ti < numTiers; ti++) {
+      const tf  = ti / (numTiers - 1);            // 0 = bottom, 1 = top
+      const ty  = crownBot - crownH * tf;
+      // Spread: wide in lower-middle, narrow at crown tip (like a real oval canopy)
+      const spreadF = Math.sin(tf * Math.PI) * 0.85 + (1 - tf) * 0.18;
+      const tw  = maxSpread * spreadF;
+      // More blobs per tier in the middle for density
+      const cnt = Math.round(4 + spreadF * 9);
       for (let bi = 0; bi < cnt; bi++) {
         const bs  = (bi * 53 + ti * 37 + seed * 200) % 100 / 100;
         const bs2 = (bi * 41 + ti * 29 + seed * 150) % 100 / 100;
-        const bx  = cx + lean * (canvasH - ty) * 0.3 + (bs - 0.5) * tw * 1.9;
-        const droop = Math.abs(bs - 0.5) * tw * 0.40;   // outer sprays droop
-        const by  = ty + droop + bs2 * tw * 0.18;
-        const rx  = tw * (0.20 + bs2 * 0.26);
-        const ry  = rx * (0.42 + bs * 0.28);
+        // Spread across crown width, slight lean following trunk
+        const bx  = cx + lean * (canvasH - ty) * 0.25 + (bs - 0.5) * tw * 2.0;
+        // Natural slight droop at outer edges, vertical scatter within tier
+        const droop = Math.abs(bs - 0.5) * tw * 0.30;
+        const by  = ty + droop + (bs2 - 0.5) * tw * 0.22;
+        // Blob size — larger in mid-crown, smaller at tips
+        const rx  = tw * (0.17 + bs2 * 0.22) * (0.7 + spreadF * 0.5);
+        const ry  = rx * (0.55 + bs * 0.30);
+        // Rotate through 3 leaf tones for depth variation
         const rgb = bi % 3 === 0 ? lRgb0 : bi % 3 === 1 ? lRgb1 : lRgb2;
-        const a   = leafA * (0.60 + (1 - tf) * 0.42);
-        _organicLeaf(bx, by, rx, ry, bs + seed + ti * 0.07, rgb, Math.min(0.54, a));
+        // Slightly vary alpha: edge blobs slightly lighter for rim-light feel
+        const edgeFade = 1 - Math.abs(bs - 0.5) * 0.35;
+        _organicLeaf(bx, by, rx, ry, bs + seed + ti * 0.07, rgb, Math.min(leafA, leafA * edgeFade + 0.18));
       }
     }
-
-    // Leaf clusters at branch tips
-    branchPoints.forEach((bp, bi) => {
-      for (let ei = 0; ei < 5; ei++) {
-        const es  = (bi * 71 + ei * 43 + seed * 80) % 100 / 100;
-        const ex  = bp.x + (es - 0.5) * maxSpread * 0.65;
-        const ey  = bp.y + ((ei * 31 + seed * 40) % 100 / 100 - 0.25) * maxSpread * 0.45;
-        const er  = maxSpread * (0.13 + es * 0.16);
-        _organicLeaf(ex, ey, er, er * 0.58, es + seed * 0.5, lRgb1, leafA * 0.62);
-      }
-    });
   }
 
   // Evaluate smooth rolling hill profile at a normalised x (0–1)
@@ -1729,9 +1681,9 @@ const CanvasScenes = (() => {
     const panOff2 = (_panAz / 360) * w * 0.90;   // near slopes
 
     // Base Y of each hill layer shifts with vertical pan
-    const farBaseY  = h * 0.52 + altShift * 0.50;
-    const midBaseY  = h * 0.62 + altShift * 0.70;
-    const nearBaseY = h * 0.72 + altShift * 0.90;
+    const farBaseY  = h * 0.56 + altShift * 0.50;
+    const midBaseY  = h * 0.66 + altShift * 0.70;
+    const nearBaseY = h * 0.76 + altShift * 0.90;
 
     const farAmp  = h * 0.055;
     const midAmp  = h * 0.070;
@@ -1769,51 +1721,47 @@ const CanvasScenes = (() => {
       }
     }
 
-    // ── Leaf tone palettes — lighter, less saturated for open feel ─
+    // ── Leaf tone palettes — natural greens, not too dark ─────────
     const LP = isNight
-      ? [['22,48,24','30,62,32','38,78,40'], ['14,36,16','20,48,22','26,60,28'],
-         ['8,22,10', '12,32,14','16,42,18']]
+      ? [['28,56,28','38,72,38','48,90,48'], ['18,42,18','26,56,26','34,70,34'],
+         ['10,28,12','16,38,16','22,50,22']]
       : isDusk
-        ? [['72,90,32','90,110,42','108,132,52'], ['54,76,24','70,96,34','86,116,44'],
-           ['38,58,16','52,78,24','66,98,32']]
-        : [['78,118,38','96,142,50','114,168,62'], ['58,96,28','74,118,38','90,142,48'],
-           ['40,72,18','54,92,28','68,114,38']];
+        ? [['80,100,36','98,122,46','118,146,58'], ['60,84,28','76,104,38','94,126,48'],
+           ['44,64,20','58,84,30','72,104,40']]
+        : [['68,108,32','84,130,44','100,154,56'], ['52,88,24','66,108,34','82,130,44'],
+           ['36,66,16','50,86,26','64,108,36']];
 
-    // ── Trees on hill slopes — spaced, calm, garden-like ──────────
+    // ── Trees on hill slopes — very spaced, calm, minimalist ──────
     const WORLD_W = w * 2;
-    // 3 hill bands with modest tree counts — sparse and spaced
+    // Fewer trees, much wider gaps — 3–4 trees visible at most
     const TREE_LAYERS = [
-      // { hillSampler, count, hFrac, rMin, rMax, panOff, lp }
-      { sampler: hillSamplerFar,  count:  6, hFrac: 0.28, rMin:0.006, rMax:0.010, panOff: panOff0, li:0 },
-      { sampler: hillSamplerMid,  count:  5, hFrac: 0.40, rMin:0.009, rMax:0.015, panOff: panOff1, li:1 },
-      { sampler: hillSamplerNear, count:  4, hFrac: 0.56, rMin:0.013, rMax:0.022, panOff: panOff2, li:2 },
+      { sampler: hillSamplerFar,  count:  4, hFrac: 0.30, rMin:0.007, rMax:0.012, panOff: panOff0, li:0 },
+      { sampler: hillSamplerMid,  count:  4, hFrac: 0.44, rMin:0.011, rMax:0.018, panOff: panOff1, li:1 },
+      { sampler: hillSamplerNear, count:  3, hFrac: 0.60, rMin:0.015, rMax:0.024, panOff: panOff2, li:2 },
     ];
 
     TREE_LAYERS.forEach(L => {
       const treeH  = h * L.hFrac;
       const lp     = LP[L.li];
-      // Spread trees across world width with generous natural gaps
-      // Use golden ratio spacing with variation for non-uniform feel
+      // Very wide base gap — trees spread far apart around the world
       const baseGap = WORLD_W / L.count;
-      let worldX = (L.li * 137 % 100 / 100) * baseGap;  // random start offset per layer
+      let worldX = (L.li * 137 % 100 / 100) * baseGap;
 
       for (let ti = 0; ti < L.count; ti++) {
         const seed  = (L.li * 97  + ti * 137) % 1000 / 1000;
         const seed2 = (L.li * 53  + ti * 113) % 1000 / 1000;
-        // Vary gap: 70%–130% of base gap for natural irregularity
-        const gap    = baseGap * (0.70 + seed2 * 0.60);
+        // Vary gap: 80%–120% of base — less variation = more even spacing
+        const gap    = baseGap * (0.80 + seed2 * 0.40);
         worldX       = (worldX + gap) % WORLD_W;
 
         const sx     = _treeScreenX(worldX, L.panOff, WORLD_W);
         const rad    = (L.rMin + seed2 * (L.rMax - L.rMin)) * w;
-        const tH     = treeH * (0.75 + seed * 0.35);
+        const tH     = treeH * (0.78 + seed * 0.30);
 
         [sx, sx + WORLD_W, sx - WORLD_W].forEach(cx => {
-          if (cx + tH * 0.4 < 0 || cx - tH * 0.4 > w) return;
-          // Root tree ON the hill surface at this x position
-          const rootY = L.sampler(cx) + rad * 0.5;
-          // Tree canvas height relative to root so trunk extends to bottom
-          const treeCanH = rootY + h * 0.08 + tH * 0.15;
+          if (cx + tH * 0.5 < 0 || cx - tH * 0.5 > w) return;
+          const rootY    = L.sampler(cx) + rad * 0.4;
+          const treeCanH = rootY + h * 0.10 + tH * 0.10;
           _drawGiantTree(cx, treeCanH, rad, tH, seed, lp, isNight);
         });
       }
