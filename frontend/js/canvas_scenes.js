@@ -2004,6 +2004,18 @@ const CanvasScenes = (() => {
 
     if (typeof AmbientAudio !== 'undefined') AmbientAudio.setMode(mode);
 
+    // ── Forest: hand off to Three.js Forest3D ─────────────────
+    if (_activeSceneType === 'forest') {
+      // Stop any 2D animation loop
+      cancelAnimationFrame(_raf);
+      // Start WebGL forest (hides 2D canvas internally)
+      if (typeof Forest3D !== 'undefined') Forest3D.start(_canvas);
+      return;
+    } else {
+      // Leaving forest — restore 2D canvas and stop 3D
+      if (typeof Forest3D !== 'undefined') Forest3D.stop();
+    }
+
     // Reset snow particles on scene entry
     if (_activeSceneType === 'snow') _snowParticles = null;
 
@@ -2013,7 +2025,6 @@ const CanvasScenes = (() => {
       t++;
       switch (_activeSceneType) {
         case 'space':  _spaceFrame(t);       break;
-        case 'forest': _forestFrame(t, mode); break;
         case 'snow':   _snowFrame(t, mode);   break;
         default:       _worldFrame(t, mode);  break;
       }
