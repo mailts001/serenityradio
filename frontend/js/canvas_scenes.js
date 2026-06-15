@@ -1426,97 +1426,146 @@ const CanvasScenes = (() => {
     return mod > worldW * 0.75 ? mod - worldW : mod;
   }
 
-  // Draw a semi-transparent leaf cluster at (cx,cy) radius r, colour rgb string
-  function _leafCluster(cx, cy, r, rgb, alpha) {
-    _ctx.beginPath(); _ctx.arc(cx, cy, r, 0, Math.PI * 2);
-    _ctx.fillStyle = `rgba(${rgb},${alpha})`; _ctx.fill();
+  // Draw an organic irregular leaf blob (not a circle) — polygon with wobbly edges
+  function _organicLeaf(cx, cy, rx, ry, seed, rgb, alpha) {
+    const c   = _ctx;
+    const pts = 9;
+    c.beginPath();
+    for (let i = 0; i <= pts; i++) {
+      const ang  = (i / pts) * Math.PI * 2;
+      const ns   = (seed * 100 + i * 41) % 100 / 100;
+      const ns2  = (seed * 73  + i * 29) % 100 / 100;
+      const dr   = 0.60 + ns * 0.80;   // wobble: 60%–140% of radius
+      const bx   = cx + Math.cos(ang + ns2 * 0.3) * rx * dr;
+      const by   = cy + Math.sin(ang + ns2 * 0.3) * ry * dr;
+      i === 0 ? c.moveTo(bx, by) : c.lineTo(bx, by);
+    }
+    c.closePath();
+    c.fillStyle = `rgba(${rgb},${alpha})`;
+    c.fill();
   }
 
-  // Draw a majestic tree: refined trunk visible from ground, translucent leaf canopy
-  // Trunks extend far above canvas top; foliage is semi-transparent overlapping clusters
-  function _drawGiantTree(cx, groundY, trunkRad, totalH, seed, leafRgb, trunkRgb, isNight) {
-    const c  = _ctx;
-    const s2 = (seed * 137.5) % 1;
-    const s3 = (seed * 97.3)  % 1;
-    // Trunk goes from groundY to well above canvas
-    const trunkTop = groundY - totalH;
-
-    // ── Trunk: tapered with buttress roots ──
-    c.beginPath();
-    c.moveTo(cx - trunkRad * 2.8, groundY);
-    c.bezierCurveTo(cx - trunkRad * 1.8, groundY - totalH * 0.08,
-                    cx - trunkRad,        groundY - totalH * 0.25,
-                    cx - trunkRad * 0.55, trunkTop);
-    c.lineTo(cx + trunkRad * 0.55, trunkTop);
-    c.bezierCurveTo(cx + trunkRad,        groundY - totalH * 0.25,
-                    cx + trunkRad * 1.8,  groundY - totalH * 0.08,
-                    cx + trunkRad * 2.8,  groundY);
-    c.fillStyle = trunkRgb; c.closePath(); c.fill();
-
-    // ── Canopy: translucent leaf clusters so sky shows through ──
-    // Crown centre is at roughly 80–90% of total height (may be off screen top)
-    const crownCY  = groundY - totalH * (0.78 + s3 * 0.14);
-    const spread   = totalH  * (0.22 + s2 * 0.16);   // horizontal spread
-    const leafA    = isNight ? 0.30 : 0.38;            // per-cluster base alpha
-
-    // Determine tree type from seed
-    const typ = seed < 0.40 ? 'umbrella' : seed < 0.72 ? 'broad' : 'columnar';
-
-    if (typ === 'umbrella') {
-      // Flat spreading crown like a rainforest emergent
-      const radii  = [1.0, 0.82, 0.65, 0.50, 0.40];
-      const alphas = [0.18, 0.22, 0.28, 0.30, 0.25];
-      radii.forEach((rf, ri) => {
-        const clusters = 6 + ri;
-        for (let ci = 0; ci < clusters; ci++) {
-          const ang = (ci / clusters) * Math.PI * 2 + s2 * 1.2 + ri * 0.3;
-          const d   = spread * rf * (0.5 + ((ci * 41 + ri * 17) % 100 / 100) * 0.55);
-          const lx  = cx + Math.cos(ang) * d;
-          const ly  = crownCY + Math.sin(ang) * d * 0.32 + ri * spread * 0.08;
-          const lr  = spread * (0.25 + ((ci * 31) % 100 / 100) * 0.22);
-          _leafCluster(lx, ly, lr, leafRgb, alphas[ri]);
-        }
-      });
-      // Dense fill at centre
-      _leafCluster(cx, crownCY, spread * 0.42, leafRgb, 0.32);
-
-    } else if (typ === 'broad') {
-      // Wide irregular hardwood — multi-level masses
-      for (let pass = 0; pass < 3; pass++) {
-        const passY  = crownCY + pass * spread * 0.18;
-        const passA  = leafA * (1 - pass * 0.15);
-        const count  = 9 - pass * 2;
-        for (let ci = 0; ci < count; ci++) {
-          const cs  = (ci * 67 + pass * 31 + seed * 200) % 100 / 100;
-          const cs2 = (ci * 43 + pass * 19 + seed * 150) % 100 / 100;
-          const ang = -Math.PI + (ci / count) * Math.PI * 2 + s3 * 0.8;
-          const d   = spread * (0.25 + cs * 0.65);
-          const lx  = cx     + Math.cos(ang) * d;
-          const ly  = passY  + Math.sin(ang) * d * 0.40;
-          const lr  = spread * (0.20 + cs2 * 0.28);
-          _leafCluster(lx, ly, lr, leafRgb, passA);
-        }
-        _leafCluster(cx, passY, spread * 0.38, leafRgb, passA * 0.9);
-      }
-
-    } else {
-      // Columnar / conical — tall tight crown
-      const tiers = 6;
-      for (let ti = 0; ti < tiers; ti++) {
-        const tf  = ti / tiers;
-        const ty  = crownCY + tf * spread * 0.85;
-        const tw2 = spread * (0.12 + tf * 0.55);
-        const ta  = leafA * (0.7 + tf * 0.4);
-        const cnt = 3 + ti;
-        for (let ci = 0; ci < cnt; ci++) {
-          const cs = (ci * 53 + ti * 37 + seed * 100) % 100 / 100;
-          const lx = cx + (cs - 0.5) * tw2 * 1.8;
-          const ly = ty + ((ci * 29 + ti * 13) % 100 / 100 - 0.5) * tw2 * 0.5;
-          const lr = tw2 * (0.35 + ((ci * 41) % 100 / 100) * 0.30);
-          _leafCluster(lx, ly, lr, leafRgb, ta * 0.85);
-        }
+  // Draw one branch segment and recurse. x1,y1=start, ang=angle(rad), len=length
+  // Returns endpoint {x,y} so caller can place leaves
+  function _drawBranch(x1, y1, ang, len, thick, trunkR, trunkG, trunkB, depth, seed) {
+    if (len < 4 || depth < 0) return { x: x1, y: y1 };
+    const x2 = x1 + Math.cos(ang) * len;
+    const y2 = y1 + Math.sin(ang) * len;
+    _ctx.beginPath();
+    _ctx.moveTo(x1, y1); _ctx.lineTo(x2, y2);
+    _ctx.lineWidth   = Math.max(0.8, thick);
+    _ctx.strokeStyle = `rgba(${trunkR},${trunkG},${trunkB},0.88)`;
+    _ctx.stroke();
+    if (depth > 0) {
+      const spread1 = 0.35 + (seed * 100 % 100 / 100) * 0.25;
+      const spread2 = 0.30 + (seed * 137 % 100 / 100) * 0.25;
+      const s2 = (seed * 1.618) % 1;
+      _drawBranch(x2, y2, ang - spread1, len * 0.62, thick * 0.60, trunkR, trunkG, trunkB, depth - 1, seed * 1.3 % 1);
+      _drawBranch(x2, y2, ang + spread2, len * 0.68, thick * 0.58, trunkR, trunkG, trunkB, depth - 1, s2);
+      if (seed > 0.45 && depth > 1) {
+        _drawBranch(x2, y2, ang + 0.08, len * 0.52, thick * 0.45, trunkR, trunkG, trunkB, depth - 2, seed * 2.1 % 1);
       }
     }
+    return { x: x2, y: y2 };
+  }
+
+  // Draw a full giant forest tree grounded at (cx, groundY)
+  function _drawGiantTree(cx, groundY, trunkRad, totalH, seed, leafRgbArr, isNight) {
+    const c    = _ctx;
+    const s2   = (seed * 137.5) % 1;
+    const s3   = (seed * 97.3)  % 1;
+    const s4   = (seed * 211.7) % 1;
+    const lean = (s2 - 0.5) * 0.06;   // slight natural lean
+
+    // ── Parse trunk colour from leafRgbArr ─────────────────────
+    // trunk tones: warm grey-brown, darker at base, lighter patches
+    const tR = 38 + Math.floor(s3 * 28), tG = 26 + Math.floor(s4 * 18), tB = 14 + Math.floor(s2 * 12);
+
+    // ── Trunk: bezier from ground up, tapering, with lean ──────
+    const trunkTopX = cx + lean * totalH;
+    const trunkTopY = groundY - totalH * 0.42;   // trunk goes ~42% of total height before branching
+    const midX      = cx + lean * totalH * 0.5;
+    const midY      = groundY - totalH * 0.20;
+
+    // Buttress roots at base
+    c.beginPath();
+    c.moveTo(cx - trunkRad * 3.2, groundY);
+    c.bezierCurveTo(cx - trunkRad * 2.0, groundY - totalH * 0.05,
+                    cx - trunkRad * 0.9, groundY - totalH * 0.15,
+                    trunkTopX - trunkRad * 0.5, trunkTopY);
+    c.lineTo(trunkTopX + trunkRad * 0.5, trunkTopY);
+    c.bezierCurveTo(cx + trunkRad * 0.9, groundY - totalH * 0.15,
+                    cx + trunkRad * 2.0, groundY - totalH * 0.05,
+                    cx + trunkRad * 3.2, groundY);
+    c.closePath();
+    c.fillStyle = `rgba(${tR},${tG},${tB},0.94)`;
+    c.fill();
+
+    // Bark patches — lighter and darker irregular ellipses on trunk surface
+    for (let pi = 0; pi < 6; pi++) {
+      const ps  = (pi * 73 + seed * 200) % 100 / 100;
+      const ps2 = (pi * 53 + seed * 150) % 100 / 100;
+      const py  = groundY - totalH * (0.04 + ps * 0.32);
+      const pxo = (ps2 - 0.5) * trunkRad * 1.2;
+      const pr  = trunkRad * (0.5 + ps * 0.6);
+      const pLight = pi % 2 === 0;
+      c.globalAlpha = 0.18;
+      c.fillStyle = pLight ? `rgb(${tR+22},${tG+16},${tB+10})` : `rgb(${tR-12},${tG-8},${tB-5})`;
+      c.beginPath(); c.ellipse(cx + pxo, py, pr, pr * 0.35, 0, 0, Math.PI * 2); c.fill();
+    }
+    c.globalAlpha = 1.0;
+
+    // ── Fractal branches from top of trunk ─────────────────────
+    c.lineCap  = 'round';
+    c.lineJoin = 'round';
+    const branchLen   = totalH * 0.26;
+    const branchThick = trunkRad * 1.1;
+    // Main branch fork angle: upward, slight lean
+    const baseAng = -Math.PI / 2 + lean * 2;
+    // Left and right main branches
+    const spread = 0.38 + s4 * 0.22;
+    const brL = _drawBranch(trunkTopX, trunkTopY, baseAng - spread, branchLen, branchThick, tR, tG, tB, 2, seed);
+    const brR = _drawBranch(trunkTopX, trunkTopY, baseAng + spread, branchLen * 0.92, branchThick * 0.90, tR, tG, tB, 2, s2);
+    if (s3 > 0.3) _drawBranch(trunkTopX, trunkTopY, baseAng - 0.05, branchLen * 0.78, branchThick * 0.75, tR, tG, tB, 1, s3);
+
+    // ── Leaf canopy — organic blobs in 3 shades, translucent ───
+    const crownY  = groundY - totalH * 0.82;
+    const spread2 = totalH * (0.20 + s2 * 0.14);
+    const leafA   = isNight ? 0.25 : 0.36;
+
+    // 3 leaf tones from the passed palette
+    const lRgb0 = leafRgbArr[0], lRgb1 = leafRgbArr[1], lRgb2 = leafRgbArr[2];
+
+    // Generate 18–26 leaf blob clusters in organic positions around crown
+    const numBlobs = 18 + Math.floor(s4 * 9);
+    for (let bi = 0; bi < numBlobs; bi++) {
+      const bs  = (bi * 67 + seed * 300) % 100 / 100;
+      const bs2 = (bi * 43 + seed * 200) % 100 / 100;
+      const bs3 = (bi * 31 + seed * 150) % 100 / 100;
+      // Position in organic elliptical crown — denser near centre
+      const ang  = (bi / numBlobs) * Math.PI * 2 + s2 * 0.8 + bs3 * 0.4;
+      const dist = spread2 * (0.15 + Math.sqrt(bs) * 0.85);
+      const lx   = cx   + lean * totalH * 0.4 + Math.cos(ang) * dist;
+      const ly   = crownY + Math.sin(ang) * dist * 0.52;
+      const rx   = spread2 * (0.18 + bs2 * 0.22);
+      const ry   = rx * (0.55 + bs3 * 0.35);
+      // Vary colour and alpha per cluster: outer blobs lighter/more transparent
+      const edgeFrac = dist / (spread2 * 0.85);
+      const rgb  = bi % 3 === 0 ? lRgb0 : bi % 3 === 1 ? lRgb1 : lRgb2;
+      const a    = leafA * (0.55 + (1 - edgeFrac) * 0.50);
+      _organicLeaf(lx, ly, rx, ry, bs + seed, rgb, Math.min(0.58, a));
+    }
+
+    // A few extra blobs around branch endpoints for realistic leaf clusters there
+    [brL, brR].forEach((br, bi) => {
+      for (let ei = 0; ei < 5; ei++) {
+        const es  = (bi * 100 + ei * 37 + seed * 50) % 100 / 100;
+        const ex  = br.x + (es - 0.5) * spread2 * 0.55;
+        const ey  = br.y + ((ei * 29 + seed * 30) % 100 / 100 - 0.5) * spread2 * 0.35;
+        const er  = spread2 * (0.12 + es * 0.16);
+        _organicLeaf(ex, ey, er, er * 0.7, es + seed * 0.5, lRgb1, leafA * 0.70);
+      }
+    });
   }
 
   function _forestFrame(t, mode) {
@@ -1525,9 +1574,10 @@ const CanvasScenes = (() => {
     const isNight = hr < 6 || hr >= 19.5;
     const isDusk  = !isNight && (hr < 7 || hr >= 17.5);
 
-    // Vertical pan — groundY shifts up when tilting up
-    const altShift = (_panAlt / 50) * h * 0.32;
-    const groundY  = h * 0.72 + altShift;
+    // Vertical pan — stronger effect: ±42% of canvas height
+    // +50 (look up) → ground drops to bottom; -50 (look down) → ground near top
+    const altShift = (_panAlt / 50) * h * 0.42;
+    const groundY  = h * 0.70 + altShift;
 
     // ── Full sky (always visible through canopy) ─────────────────
     _ctx.fillRect(0, 0, w, h);   // clear first
@@ -1565,44 +1615,48 @@ const CanvasScenes = (() => {
     // ── Trees — 4 depth layers, far→near, each wraps seamlessly ─
     const WORLD_W = w * 2;
 
-    // Leaf colour per layer: far=muted, near=richer green
-    const leafPalettes = isNight
-      ? ['18,38,20', '12,28,14', '8,20,10', '5,14,7']
+    // 3 leaf tones per layer: shadow/mid/highlight
+    const LP = isNight
+      ? [['14,32,16','18,40,20','22,50,24'], ['9,22,11','12,28,14','15,36,18'],
+         ['5,14,7', '7,18,9',  '10,24,12'], ['3,9,4',  '4,12,5',  '6,16,7' ]]
       : isDusk
-        ? ['55,72,30', '42,58,22', '30,46,15', '20,34,10']
-        : ['48,82,28', '35,68,20', '24,56,14', '15,42,10'];
-    const trunkPalettes = isNight
-      ? ['rgba(18,12,8,0.88)', 'rgba(14,9,6,0.92)', 'rgba(10,6,4,0.95)', 'rgba(7,4,2,0.98)']
-      : ['rgba(60,38,20,0.72)', 'rgba(48,30,14,0.82)', 'rgba(36,22,10,0.90)', 'rgba(26,16,7,0.96)'];
+        ? [['45,60,20','58,76,28','72,92,35'], ['34,50,15','44,64,22','56,80,28'],
+           ['24,38,10','32,52,16','42,66,22'], ['15,26,7', '22,38,12','30,50,16']]
+        : [['38,70,18','50,88,26','62,108,34'], ['28,56,14','38,72,20','48,90,26'],
+           ['18,42,10','26,56,15','34,70,20'], ['10,28,6', '16,40,10','22,52,14']];
 
-    // Layers: distant (small, low, slow pan) → foreground (tall, fast pan, off-canvas top)
+    // Layers: all trees root AT groundY (no floating)
+    // gOff = small positive offset so distant trees seem slightly lower
     const LAYERS = [
-      // { groundOff, totalHFrac, count, radMin, radMax, ps }
-      // groundOff: y offset from groundY (+ = lower on screen)
-      { gOff: h*0.06, hFrac:0.55, count:16, rMin:0.010, rMax:0.016, ps:0.06 },
-      { gOff: h*0.02, hFrac:0.75, count:12, rMin:0.014, rMax:0.022, ps:0.11 },
-      { gOff: 0,      hFrac:1.05, count: 9, rMin:0.018, rMax:0.030, ps:0.17 },
-      { gOff:-h*0.04, hFrac:1.45, count: 6, rMin:0.024, rMax:0.040, ps:0.24 },
+      { gOff: h*0.03, hFrac:0.52, count:14, rMin:0.008, rMax:0.013, ps:0.05 },
+      { gOff: h*0.01, hFrac:0.72, count:11, rMin:0.012, rMax:0.020, ps:0.10 },
+      { gOff: 0,      hFrac:1.00, count: 8, rMin:0.017, rMax:0.028, ps:0.16 },
+      { gOff: 0,      hFrac:1.40, count: 5, rMin:0.023, rMax:0.038, ps:0.23 },
     ];
 
     LAYERS.forEach((L, li) => {
+      // All trees root at or just below groundY — never above it (no floating)
       const layerGY = groundY + L.gOff;
       const totalH  = h * L.hFrac;
       const panOff  = (_panAz / 360) * WORLD_W * L.ps;
-      const leafRgb = leafPalettes[li];
-      const trunkRgb = trunkPalettes[li];
+      const lp      = LP[li];
 
+      // Natural spacing: use Poisson-disk-like positions baked into seed sequence
+      // We spread trees with varying gaps to avoid uniform grid look
+      let worldX = 0;
       for (let ti = 0; ti < L.count; ti++) {
         const seed  = (li * 97  + ti * 137) % 1000 / 1000;
         const seed2 = (li * 53  + ti * 113) % 1000 / 1000;
-        const worldX = seed * WORLD_W;
-        const sx     = _treeScreenX(worldX, panOff, WORLD_W);
-        const rad    = (L.rMin + seed2 * (L.rMax - L.rMin)) * w;
-        const tH     = totalH * (0.65 + seed * 0.50);
+        const gap   = (0.04 + seed2 * 0.12) * WORLD_W;  // vary gap 4–16% of world width
+        worldX      = (worldX + gap) % WORLD_W;
+
+        const sx  = _treeScreenX(worldX, panOff, WORLD_W);
+        const rad = (L.rMin + seed2 * (L.rMax - L.rMin)) * w;
+        const tH  = totalH * (0.68 + seed * 0.45);
 
         [sx, sx + WORLD_W, sx - WORLD_W].forEach(cx => {
-          if (cx + tH < 0 || cx - tH > w) return;
-          _drawGiantTree(cx, layerGY, rad, tH, seed, leafRgb, trunkRgb, isNight);
+          if (cx + tH * 0.6 < 0 || cx - tH * 0.6 > w) return;
+          _drawGiantTree(cx, layerGY, rad, tH, seed, lp, isNight);
         });
       }
     });
@@ -1667,8 +1721,8 @@ const CanvasScenes = (() => {
     const hr = new Date().getHours() + new Date().getMinutes() / 60;
     if (!_snowParticles) _initSnow();
 
-    // Vertical pan
-    const altShift = (_panAlt / 50) * h * 0.30;
+    // Vertical pan — look up reveals more sky/peaks, look down reveals snowfield
+    const altShift = (_panAlt / 50) * h * 0.40;
     const groundY  = h * 0.74 + altShift;
 
     const isNight = hr < 6 || hr >= 20;
