@@ -1469,101 +1469,130 @@ const CanvasScenes = (() => {
     return { x: x2, y: y2 };
   }
 
-  // Draw a full giant forest tree grounded at (cx, groundY)
+  // Draw a Hinoki-style giant forest tree — straight strong trunk, tiered drooping branches, translucent foliage
   function _drawGiantTree(cx, groundY, trunkRad, totalH, seed, leafRgbArr, isNight) {
-    const c    = _ctx;
-    const s2   = (seed * 137.5) % 1;
-    const s3   = (seed * 97.3)  % 1;
-    const s4   = (seed * 211.7) % 1;
-    const lean = (s2 - 0.5) * 0.06;   // slight natural lean
+    const c  = _ctx;
+    const s2 = (seed * 137.5) % 1;
+    const s3 = (seed * 97.3)  % 1;
+    const s4 = (seed * 211.7) % 1;
 
-    // ── Parse trunk colour from leafRgbArr ─────────────────────
-    // trunk tones: warm grey-brown, darker at base, lighter patches
-    const tR = 38 + Math.floor(s3 * 28), tG = 26 + Math.floor(s4 * 18), tB = 14 + Math.floor(s2 * 12);
+    // Hinoki: very slight lean — these are strong upright trees
+    const lean = (s2 - 0.5) * 0.03;
 
-    // ── Trunk: bezier from ground up, tapering, with lean ──────
-    const trunkTopX = cx + lean * totalH;
-    const trunkTopY = groundY - totalH * 0.42;   // trunk goes ~42% of total height before branching
-    const midX      = cx + lean * totalH * 0.5;
-    const midY      = groundY - totalH * 0.20;
+    // ── Trunk colour — warm reddish-brown bark, varied per tree ──
+    // Hinoki has warm cinnamon-red bark with light patches
+    const tR = 72  + Math.floor(s3 * 40);   // 72–112
+    const tG = 44  + Math.floor(s4 * 28);   // 44–72
+    const tB = 22  + Math.floor(s2 * 18);   // 22–40
 
-    // Buttress roots at base
+    // Trunk top: where branching begins (~50% up)
+    const trunkTopX = cx + lean * totalH * 0.5;
+    const trunkTopY = groundY - totalH * 0.50;
+
+    // ── Draw trunk: strong straight column, tapers gently ────────
+    // Base width ~3× trunkRad, top ~0.8× trunkRad
     c.beginPath();
-    c.moveTo(cx - trunkRad * 3.2, groundY);
-    c.bezierCurveTo(cx - trunkRad * 2.0, groundY - totalH * 0.05,
-                    cx - trunkRad * 0.9, groundY - totalH * 0.15,
-                    trunkTopX - trunkRad * 0.5, trunkTopY);
-    c.lineTo(trunkTopX + trunkRad * 0.5, trunkTopY);
-    c.bezierCurveTo(cx + trunkRad * 0.9, groundY - totalH * 0.15,
-                    cx + trunkRad * 2.0, groundY - totalH * 0.05,
-                    cx + trunkRad * 3.2, groundY);
+    c.moveTo(cx - trunkRad * 3.0, groundY);
+    c.bezierCurveTo(
+      cx - trunkRad * 1.8, groundY - totalH * 0.12,
+      trunkTopX - trunkRad * 0.9, groundY - totalH * 0.35,
+      trunkTopX - trunkRad * 0.8, trunkTopY
+    );
+    c.lineTo(trunkTopX + trunkRad * 0.8, trunkTopY);
+    c.bezierCurveTo(
+      trunkTopX + trunkRad * 0.9, groundY - totalH * 0.35,
+      cx + trunkRad * 1.8, groundY - totalH * 0.12,
+      cx + trunkRad * 3.0, groundY
+    );
     c.closePath();
-    c.fillStyle = `rgba(${tR},${tG},${tB},0.94)`;
+    c.fillStyle = `rgba(${tR},${tG},${tB},0.92)`;
     c.fill();
 
-    // Bark patches — lighter and darker irregular ellipses on trunk surface
-    for (let pi = 0; pi < 6; pi++) {
-      const ps  = (pi * 73 + seed * 200) % 100 / 100;
-      const ps2 = (pi * 53 + seed * 150) % 100 / 100;
-      const py  = groundY - totalH * (0.04 + ps * 0.32);
-      const pxo = (ps2 - 0.5) * trunkRad * 1.2;
-      const pr  = trunkRad * (0.5 + ps * 0.6);
-      const pLight = pi % 2 === 0;
-      c.globalAlpha = 0.18;
-      c.fillStyle = pLight ? `rgb(${tR+22},${tG+16},${tB+10})` : `rgb(${tR-12},${tG-8},${tB-5})`;
-      c.beginPath(); c.ellipse(cx + pxo, py, pr, pr * 0.35, 0, 0, Math.PI * 2); c.fill();
+    // Trunk highlight (light side) — thin vertical band
+    const hlGrad = c.createLinearGradient(cx - trunkRad, 0, cx + trunkRad * 0.5, 0);
+    hlGrad.addColorStop(0,   `rgba(${tR-20},${tG-14},${tB-8},0)`);
+    hlGrad.addColorStop(0.55,`rgba(${tR+28},${tG+18},${tB+10},0.22)`);
+    hlGrad.addColorStop(1,   `rgba(${tR},${tG},${tB},0)`);
+    c.fillStyle = hlGrad;
+    c.fillRect(cx - trunkRad * 2, groundY - totalH * 0.5, trunkRad * 3, totalH * 0.5);
+
+    // Bark texture patches
+    for (let pi = 0; pi < 7; pi++) {
+      const ps  = (pi * 67 + seed * 190) % 100 / 100;
+      const ps2 = (pi * 43 + seed * 130) % 100 / 100;
+      const py  = groundY - totalH * (0.03 + ps * 0.42);
+      const pr  = trunkRad * (0.4 + ps2 * 0.7);
+      c.globalAlpha = 0.14;
+      c.fillStyle = pi % 2 === 0 ? `rgb(${tR+30},${tG+20},${tB+12})` : `rgb(${tR-18},${tG-12},${tB-7})`;
+      c.beginPath(); c.ellipse(cx + (ps2 - 0.5) * trunkRad * 1.4, py, pr, pr * 0.28, 0.1, 0, Math.PI * 2); c.fill();
     }
     c.globalAlpha = 1.0;
 
-    // ── Fractal branches from top of trunk ─────────────────────
-    c.lineCap  = 'round';
-    c.lineJoin = 'round';
-    const branchLen   = totalH * 0.26;
-    const branchThick = trunkRad * 1.1;
-    // Main branch fork angle: upward, slight lean
-    const baseAng = -Math.PI / 2 + lean * 2;
-    // Left and right main branches
-    const spread = 0.38 + s4 * 0.22;
-    const brL = _drawBranch(trunkTopX, trunkTopY, baseAng - spread, branchLen, branchThick, tR, tG, tB, 2, seed);
-    const brR = _drawBranch(trunkTopX, trunkTopY, baseAng + spread, branchLen * 0.92, branchThick * 0.90, tR, tG, tB, 2, s2);
-    if (s3 > 0.3) _drawBranch(trunkTopX, trunkTopY, baseAng - 0.05, branchLen * 0.78, branchThick * 0.75, tR, tG, tB, 1, s3);
+    // ── Fractal branches: 3 levels, Hinoki style drooping ────────
+    c.lineCap = 'round'; c.lineJoin = 'round';
+    const baseAng    = -Math.PI * 0.5 + lean * 3;
+    const branchLen  = totalH * 0.22;
+    const branchW    = trunkRad * 1.2;
 
-    // ── Leaf canopy — organic blobs in 3 shades, translucent ───
-    const crownY  = groundY - totalH * 0.82;
-    const spread2 = totalH * (0.20 + s2 * 0.14);
-    const leafA   = isNight ? 0.25 : 0.36;
-
-    // 3 leaf tones from the passed palette
-    const lRgb0 = leafRgbArr[0], lRgb1 = leafRgbArr[1], lRgb2 = leafRgbArr[2];
-
-    // Generate 18–26 leaf blob clusters in organic positions around crown
-    const numBlobs = 18 + Math.floor(s4 * 9);
-    for (let bi = 0; bi < numBlobs; bi++) {
-      const bs  = (bi * 67 + seed * 300) % 100 / 100;
-      const bs2 = (bi * 43 + seed * 200) % 100 / 100;
-      const bs3 = (bi * 31 + seed * 150) % 100 / 100;
-      // Position in organic elliptical crown — denser near centre
-      const ang  = (bi / numBlobs) * Math.PI * 2 + s2 * 0.8 + bs3 * 0.4;
-      const dist = spread2 * (0.15 + Math.sqrt(bs) * 0.85);
-      const lx   = cx   + lean * totalH * 0.4 + Math.cos(ang) * dist;
-      const ly   = crownY + Math.sin(ang) * dist * 0.52;
-      const rx   = spread2 * (0.18 + bs2 * 0.22);
-      const ry   = rx * (0.55 + bs3 * 0.35);
-      // Vary colour and alpha per cluster: outer blobs lighter/more transparent
-      const edgeFrac = dist / (spread2 * 0.85);
-      const rgb  = bi % 3 === 0 ? lRgb0 : bi % 3 === 1 ? lRgb1 : lRgb2;
-      const a    = leafA * (0.55 + (1 - edgeFrac) * 0.50);
-      _organicLeaf(lx, ly, rx, ry, bs + seed, rgb, Math.min(0.58, a));
+    // 2–3 main branches from trunk top upward
+    const branchPoints = [];
+    const numMain = 2 + (s4 > 0.5 ? 1 : 0);
+    for (let bi = 0; bi < numMain; bi++) {
+      const bs   = (bi * 83 + seed * 100) % 100 / 100;
+      const side = bi % 2 === 0 ? -1 : 1;
+      const ang  = baseAng + side * (0.28 + bs * 0.20);
+      const bLen = branchLen * (0.85 + bs * 0.30);
+      const ep   = _drawBranch(trunkTopX, trunkTopY, ang, bLen, branchW, tR, tG, tB, 2, seed + bi * 0.3);
+      branchPoints.push(ep);
+      // Also some mid-trunk branches for Hinoki layered look
+      if (bi < 2) {
+        const midBrY = trunkTopY + totalH * (0.12 + bi * 0.10);
+        const midBrX = trunkTopX + lean * totalH * 0.1;
+        _drawBranch(midBrX, midBrY, baseAng + side * (0.45 + bs * 0.25), bLen * 0.65, branchW * 0.55, tR, tG, tB, 1, s2 + bi * 0.2);
+      }
     }
 
-    // A few extra blobs around branch endpoints for realistic leaf clusters there
-    [brL, brR].forEach((br, bi) => {
-      for (let ei = 0; ei < 5; ei++) {
-        const es  = (bi * 100 + ei * 37 + seed * 50) % 100 / 100;
-        const ex  = br.x + (es - 0.5) * spread2 * 0.55;
-        const ey  = br.y + ((ei * 29 + seed * 30) % 100 / 100 - 0.5) * spread2 * 0.35;
-        const er  = spread2 * (0.12 + es * 0.16);
-        _organicLeaf(ex, ey, er, er * 0.7, es + seed * 0.5, lRgb1, leafA * 0.70);
+    // ── Hinoki foliage: narrow columnar crown, tiered layers ─────
+    // Hinoki canopy is much narrower than broadleaf — tall conical
+    const crownTopY  = groundY - totalH * 0.98;   // crown starts near very top
+    const crownBaseY = trunkTopY - totalH * 0.08; // crown base just above branch zone
+    const crownH     = crownBaseY - crownTopY;
+    const maxSpread  = totalH * (0.12 + s2 * 0.09);  // narrow — Hinoki is not wide
+
+    const lRgb0 = leafRgbArr[0], lRgb1 = leafRgbArr[1], lRgb2 = leafRgbArr[2];
+    const leafA = isNight ? 0.28 : 0.40;
+
+    // Tiered foliage layers from top down — each tier slightly wider
+    const numTiers = 7 + Math.floor(s3 * 4);
+    for (let ti = 0; ti < numTiers; ti++) {
+      const tf   = ti / numTiers;
+      const ty   = crownTopY + crownH * tf;
+      const tw   = maxSpread * (0.18 + tf * 0.85);  // narrow at top, wider at base
+      const blobCount = 3 + Math.floor(tf * 4);
+
+      for (let bi = 0; bi < blobCount; bi++) {
+        const bs  = (bi * 53 + ti * 37 + seed * 200) % 100 / 100;
+        const bs2 = (bi * 41 + ti * 29 + seed * 150) % 100 / 100;
+        const bx  = cx + lean * totalH * 0.3 + (bs - 0.5) * tw * 1.8;
+        // Hinoki foliage droops slightly at tier edges
+        const droop = Math.abs(bs - 0.5) * tw * 0.35;
+        const by  = ty + droop + bs2 * tw * 0.20;
+        const rx  = tw * (0.22 + bs2 * 0.28);
+        const ry  = rx * (0.45 + bs * 0.30);   // slightly flattened — drooping sprays
+        const rgb = bi % 3 === 0 ? lRgb0 : bi % 3 === 1 ? lRgb1 : lRgb2;
+        const a   = leafA * (0.65 + (1 - tf) * 0.38);  // top brighter, base darker
+        _organicLeaf(bx, by, rx, ry, bs + seed + ti * 0.07, rgb, Math.min(0.55, a));
+      }
+    }
+
+    // Leaf clusters at branch endpoints for natural connection
+    branchPoints.forEach((bp, bi) => {
+      for (let ei = 0; ei < 4; ei++) {
+        const es  = (bi * 71 + ei * 43 + seed * 80) % 100 / 100;
+        const ex  = bp.x + (es - 0.5) * maxSpread * 0.7;
+        const ey  = bp.y + ((ei * 31 + seed * 40) % 100 / 100 - 0.3) * maxSpread * 0.5;
+        const er  = maxSpread * (0.14 + es * 0.18);
+        _organicLeaf(ex, ey, er, er * 0.6, es + seed * 0.5, lRgb1, leafA * 0.65);
       }
     });
   }
@@ -1615,85 +1644,132 @@ const CanvasScenes = (() => {
     // ── Trees — 4 depth layers, far→near, each wraps seamlessly ─
     const WORLD_W = w * 2;
 
-    // 3 leaf tones per layer: shadow/mid/highlight
+    // 3 leaf tones per layer (shadow / mid / highlight)
     const LP = isNight
-      ? [['14,32,16','18,40,20','22,50,24'], ['9,22,11','12,28,14','15,36,18'],
-         ['5,14,7', '7,18,9',  '10,24,12'], ['3,9,4',  '4,12,5',  '6,16,7' ]]
+      ? [['16,36,18','22,46,24','28,58,30'], ['10,24,12','14,32,16','18,42,20'],
+         ['6,16,8',  '9,22,11', '12,28,14'], ['3,10,4',  '5,14,6',  '7,18,8' ]]
       : isDusk
-        ? [['45,60,20','58,76,28','72,92,35'], ['34,50,15','44,64,22','56,80,28'],
-           ['24,38,10','32,52,16','42,66,22'], ['15,26,7', '22,38,12','30,50,16']]
-        : [['38,70,18','50,88,26','62,108,34'], ['28,56,14','38,72,20','48,90,26'],
-           ['18,42,10','26,56,15','34,70,20'], ['10,28,6', '16,40,10','22,52,14']];
+        ? [['52,68,24','66,84,32','80,102,40'], ['40,56,18','52,70,26','64,86,33'],
+           ['28,44,12','38,58,19','48,72,25'], ['18,30,8', '26,42,14','34,54,19']]
+        : [['42,78,20','56,96,28','70,116,36'], ['32,62,16','44,80,24','56,98,30'],
+           ['20,48,11','30,64,17','40,80,22'], ['12,32,7', '18,46,12','26,60,16']];
 
-    // Layers: all trees root AT groundY (no floating)
-    // gOff = small positive offset so distant trees seem slightly lower
+    // ── Natural clustering: trees grouped like a real forest ──────
+    // Pre-compute world positions for each layer using cluster seeds
+    // Each layer has 3–4 clusters, trees scatter around cluster centres
     const LAYERS = [
-      { gOff: h*0.03, hFrac:0.52, count:14, rMin:0.008, rMax:0.013, ps:0.05 },
-      { gOff: h*0.01, hFrac:0.72, count:11, rMin:0.012, rMax:0.020, ps:0.10 },
-      { gOff: 0,      hFrac:1.00, count: 8, rMin:0.017, rMax:0.028, ps:0.16 },
-      { gOff: 0,      hFrac:1.40, count: 5, rMin:0.023, rMax:0.038, ps:0.23 },
+      { gOff: h*0.025, hFrac:0.50, count:13, rMin:0.008, rMax:0.012, ps:0.05 },
+      { gOff: h*0.010, hFrac:0.70, count:10, rMin:0.011, rMax:0.019, ps:0.10 },
+      { gOff: 0,       hFrac:0.98, count: 7, rMin:0.016, rMax:0.026, ps:0.16 },
+      { gOff: 0,       hFrac:1.38, count: 5, rMin:0.021, rMax:0.035, ps:0.23 },
     ];
 
     LAYERS.forEach((L, li) => {
-      // All trees root at or just below groundY — never above it (no floating)
       const layerGY = groundY + L.gOff;
       const totalH  = h * L.hFrac;
       const panOff  = (_panAz / 360) * WORLD_W * L.ps;
       const lp      = LP[li];
 
-      // Natural spacing: use Poisson-disk-like positions baked into seed sequence
-      // We spread trees with varying gaps to avoid uniform grid look
-      let worldX = 0;
+      // Build cluster-based positions:
+      // 3 cluster centres spread across world width, trees scatter ±15% per cluster
+      const clusterCentres = [
+        (0.15 + (li * 97  % 100 / 100) * 0.20) * WORLD_W,
+        (0.40 + (li * 53  % 100 / 100) * 0.20) * WORLD_W,
+        (0.68 + (li * 71  % 100 / 100) * 0.18) * WORLD_W,
+        (0.88 + (li * 113 % 100 / 100) * 0.09) * WORLD_W,
+      ];
+      const scatter = WORLD_W * 0.16;  // ±16% scatter around each cluster
+
       for (let ti = 0; ti < L.count; ti++) {
         const seed  = (li * 97  + ti * 137) % 1000 / 1000;
         const seed2 = (li * 53  + ti * 113) % 1000 / 1000;
-        const gap   = (0.04 + seed2 * 0.12) * WORLD_W;  // vary gap 4–16% of world width
-        worldX      = (worldX + gap) % WORLD_W;
+        const seed3 = (li * 71  + ti * 89)  % 1000 / 1000;
+        // Pick a cluster and scatter within it
+        const clIdx  = ti % clusterCentres.length;
+        const offset = (seed3 - 0.5) * 2 * scatter;
+        const worldX = (clusterCentres[clIdx] + offset + WORLD_W) % WORLD_W;
 
         const sx  = _treeScreenX(worldX, panOff, WORLD_W);
         const rad = (L.rMin + seed2 * (L.rMax - L.rMin)) * w;
-        const tH  = totalH * (0.68 + seed * 0.45);
+        const tH  = totalH * (0.72 + seed * 0.38);
 
         [sx, sx + WORLD_W, sx - WORLD_W].forEach(cx => {
-          if (cx + tH * 0.6 < 0 || cx - tH * 0.6 > w) return;
+          if (cx + tH * 0.5 < 0 || cx - tH * 0.5 > w) return;
           _drawGiantTree(cx, layerGY, rad, tH, seed, lp, isNight);
         });
       }
     });
 
-    // ── Forest floor ─────────────────────────────────────────────
+    // ── Forest floor — warm mossy, not too dark ───────────────────
     if (groundY < h) {
       const gnd = _ctx.createLinearGradient(0, groundY, 0, h);
-      gnd.addColorStop(0, isNight ? 'rgba(6,14,7,0.96)'  : 'rgba(10,24,10,0.95)');
-      gnd.addColorStop(1, isNight ? '#020603'             : '#030d03');
+      if (isNight) {
+        gnd.addColorStop(0, 'rgba(22,38,18,0.96)');
+        gnd.addColorStop(0.5,'rgba(14,26,12,0.98)');
+        gnd.addColorStop(1, 'rgba(8,16,7,0.99)');
+      } else if (isDusk) {
+        gnd.addColorStop(0, 'rgba(42,52,22,0.92)');
+        gnd.addColorStop(0.5,'rgba(30,38,16,0.96)');
+        gnd.addColorStop(1, 'rgba(18,24,10,0.98)');
+      } else {
+        gnd.addColorStop(0, 'rgba(38,62,24,0.88)');    // mossy green
+        gnd.addColorStop(0.4,'rgba(26,46,16,0.94)');
+        gnd.addColorStop(1, 'rgba(14,28,9,0.97)');
+      }
       _ctx.fillStyle = gnd; _ctx.fillRect(0, groundY, w, h - groundY);
-      // Dappled ground light patches
+
+      // Dappled sunlight patches on ground
       if (!isNight) {
-        for (let di = 0; di < 8; di++) {
-          const ds = (di * 73) % 100 / 100;
-          const dx = ds * w;
-          const dr = w * (0.04 + ((di * 37) % 100 / 100) * 0.05);
-          const dg = _ctx.createRadialGradient(dx, groundY + dr, 0, dx, groundY + dr, dr);
-          dg.addColorStop(0,   `rgba(200,240,160,${isDusk ? 0.14 : 0.09})`);
-          dg.addColorStop(1,   'rgba(200,240,160,0)');
-          _ctx.fillStyle = dg; _ctx.fillRect(dx - dr, groundY, dr * 2, dr * 2);
+        for (let di = 0; di < 10; di++) {
+          const ds  = (di * 73 + 17) % 100 / 100;
+          const dx  = ds * w;
+          const dr  = w * (0.035 + ((di * 37) % 100 / 100) * 0.055);
+          const dg  = _ctx.createRadialGradient(dx, groundY + dr * 0.5, 0, dx, groundY + dr * 0.5, dr);
+          const dA  = isDusk ? 0.18 : 0.11;
+          dg.addColorStop(0, `rgba(210,245,165,${dA})`);
+          dg.addColorStop(1, 'rgba(210,245,165,0)');
+          _ctx.fillStyle = dg;
+          _ctx.beginPath(); _ctx.ellipse(dx, groundY + dr * 0.5, dr, dr * 0.45, 0, 0, Math.PI * 2); _ctx.fill();
         }
       }
-      // Moss tint
-      const moss = _ctx.createLinearGradient(0, groundY, 0, groundY + h * 0.06);
-      moss.addColorStop(0, 'rgba(20,55,18,0.45)'); moss.addColorStop(1, 'rgba(10,30,10,0)');
-      _ctx.fillStyle = moss; _ctx.fillRect(0, groundY, w, h * 0.06);
     }
 
-    // ── Ground mist ──────────────────────────────────────────────
-    for (let mi = 0; mi < 5; mi++) {
-      const my  = groundY - h * (0.08 - mi * 0.02) + Math.sin(t * 0.003 + mi * 2.1) * 12;
-      const mg  = _ctx.createLinearGradient(0, my - 18, 0, my + 18);
-      mg.addColorStop(0,   'rgba(195,218,205,0)');
-      mg.addColorStop(0.5, `rgba(195,218,205,${0.07 + mi * 0.020})`);
-      mg.addColorStop(1,   'rgba(195,218,205,0)');
+    // ── Soft organic flowing mist — bezier ribbons, no hard edges ─
+    const mistRgb = isNight ? '210,228,218' : isDusk ? '235,218,195' : '215,232,220';
+    for (let mi = 0; mi < 6; mi++) {
+      // Each ribbon has its own slow drift speed and phase
+      const driftX  = Math.sin(t * 0.00055 + mi * 1.3) * w * 0.18 + Math.cos(t * 0.00028 + mi * 0.7) * w * 0.08;
+      const baseY   = groundY - h * (0.22 - mi * 0.038) + Math.sin(t * 0.0025 + mi * 2.0) * h * 0.025;
+      const ribbonH = h * (0.045 + (mi % 3) * 0.018);
+      const alpha   = (0.055 + mi * 0.018) * (isNight ? 0.7 : 1.0);
+
+      // Draw as a soft bezier-edged shape instead of a rectangle
+      _ctx.beginPath();
+      // Top edge — wavy bezier across full canvas width + drift bleed
+      const x0 = -w * 0.1 + driftX;
+      const x1 = w * 0.35 + driftX + Math.sin(t * 0.0008 + mi) * w * 0.06;
+      const x2 = w * 0.65 + driftX + Math.cos(t * 0.0006 + mi * 1.4) * w * 0.06;
+      const x3 = w * 1.1  + driftX;
+      const wTop = ribbonH * (0.15 + mi * 0.08);
+      _ctx.moveTo(x0, baseY + wTop);
+      _ctx.bezierCurveTo(x1, baseY - ribbonH * 0.25,
+                         x2, baseY + ribbonH * 0.10,
+                         x3, baseY + wTop * 0.8);
+      // Bottom edge — slightly different wave
+      const bWave = ribbonH * 0.20;
+      _ctx.bezierCurveTo(x2, baseY + ribbonH + bWave,
+                         x1, baseY + ribbonH * 0.75,
+                         x0, baseY + ribbonH + wTop);
+      _ctx.closePath();
+
+      // Soft gradient fill — zero alpha at edges of the ribbon shape
+      const mg = _ctx.createLinearGradient(0, baseY - ribbonH * 0.3, 0, baseY + ribbonH * 1.3);
+      mg.addColorStop(0,    `rgba(${mistRgb},0)`);
+      mg.addColorStop(0.25, `rgba(${mistRgb},${alpha})`);
+      mg.addColorStop(0.75, `rgba(${mistRgb},${alpha * 0.85})`);
+      mg.addColorStop(1,    `rgba(${mistRgb},0)`);
       _ctx.fillStyle = mg;
-      _ctx.fillRect(Math.sin(t * 0.0015 + mi * 1.7) * w * 0.04, my - 18, w, 36);
+      _ctx.fill();
     }
 
     _drawFireflies(t, hr, mode);
