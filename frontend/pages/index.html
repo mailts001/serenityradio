@@ -336,7 +336,7 @@
       <div id="auth-area"></div>
       <button class="btn btn-subscribe" onclick="openModal('modal-subscribe')">✦ Subscribe</button>
       <button class="btn btn-donate" onclick="openModal('modal-donate')">♡ Donate</button>
-      <button class="btn btn-upload" onclick="openModal('modal-upload')">↑ Upload Music</button>
+      <button class="btn btn-upload" onclick="Auth.requirePro('upload','Upload your own music — available to Teacher accounts. Share your healing tracks with the Serenity community.') && openModal('modal-upload')">↑ Upload Music</button>
     </div>
     <div class="logo-glyph">
       <div class="logo-ring"></div><div class="logo-ring"></div>
@@ -1013,15 +1013,12 @@ async function loadPlaylist() {
     const response = await fetch('/api/playlist');
     const data = await response.json();
     // Handle both formats: {tracks: [...]} or just [...]
-    if (data.tracks) {
-      tracks = data.tracks;
-    } else if (Array.isArray(data)) {
-      tracks = data;
-    } else {
-      tracks = [];
-    }
-    
-    console.log(`Loaded ${tracks.length} tracks:`, tracks.map(t => t.file));
+    const raw = data.tracks || (Array.isArray(data) ? data : []);
+    // Deduplicate by src — playlist endpoint and tracks endpoint can overlap
+    const seen = new Set();
+    tracks = raw.filter(t => { if (seen.has(t.src)) return false; seen.add(t.src); return true; });
+
+    console.log(`Loaded ${tracks.length} tracks (${raw.length - tracks.length} dupes removed):`, tracks.map(t => t.file));
     
     if (tracks.length > 0) {
       currentTrack = 0;

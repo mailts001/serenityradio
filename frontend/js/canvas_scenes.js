@@ -37,7 +37,7 @@ const CanvasScenes = (() => {
   }
 
   function _initPools() {
-    _birds     = Array.from({length: 9},  () => _newBird(true));
+    _birds     = Array.from({length: 7},  (_, i) => _newBird(true, i));
     _fireflies = Array.from({length: 22}, () => _newFirefly(true));
     _petals    = Array.from({length: 18}, () => _newPetal(true));
   }
@@ -212,17 +212,35 @@ const CanvasScenes = (() => {
     const sunB = Math.round(80  + altitude * 120);
     const col  = `rgba(${sunR},${sunG},${sunB},${alpha})`;
 
-    // Atmospheric halo
-    const haloR = radius * (altitude < 0.15 ? 5 : 3.5);
-    const haloAlpha = alpha * (altitude < 0.15 ? 0.22 : 0.14);
-    const halo = _ctx.createRadialGradient(sx, sy, 0, sx, sy, haloR);
-    halo.addColorStop(0,   `rgba(${sunR},${sunG},${sunB},${haloAlpha})`);
-    halo.addColorStop(0.4, `rgba(${sunR},${Math.round(sunG*0.8)},${Math.round(sunB*0.5)},${haloAlpha * 0.4})`);
-    halo.addColorStop(1,   'rgba(255,160,60,0)');
-    _ctx.fillStyle = halo;
-    _ctx.fillRect(sx - haloR, sy - haloR, haloR * 2, haloR * 2);
+    // ── Layered atmospheric glow — 3 rings, all drawn as arcs (no rect edges) ──
+    // Ring 1: wide ambient scatter (largest, most transparent)
+    const glowR1 = radius * 8;
+    const g1 = _ctx.createRadialGradient(sx, sy, radius * 0.8, sx, sy, glowR1);
+    g1.addColorStop(0,    `rgba(${sunR},${sunG},${sunB},${alpha * 0.08})`);
+    g1.addColorStop(0.5,  `rgba(${sunR},${Math.round(sunG*0.85)},60,${alpha * 0.04})`);
+    g1.addColorStop(1,    'rgba(255,140,30,0)');
+    _ctx.fillStyle = g1;
+    _ctx.beginPath(); _ctx.arc(sx, sy, glowR1, 0, Math.PI * 2); _ctx.fill();
 
-    // Sun disc
+    // Ring 2: corona (medium, slightly warm)
+    const glowR2 = radius * 3.8;
+    const g2 = _ctx.createRadialGradient(sx, sy, radius * 0.6, sx, sy, glowR2);
+    g2.addColorStop(0,   `rgba(${sunR},${sunG},200,${alpha * (altitude < 0.2 ? 0.28 : 0.18)})`);
+    g2.addColorStop(0.55,`rgba(255,210,80,${alpha * 0.07})`);
+    g2.addColorStop(1,   'rgba(255,180,40,0)');
+    _ctx.fillStyle = g2;
+    _ctx.beginPath(); _ctx.arc(sx, sy, glowR2, 0, Math.PI * 2); _ctx.fill();
+
+    // Ring 3: inner limb brightening (tight, bright)
+    const glowR3 = radius * 1.7;
+    const g3 = _ctx.createRadialGradient(sx, sy, 0, sx, sy, glowR3);
+    g3.addColorStop(0,   `rgba(255,255,240,${alpha * 0.95})`);
+    g3.addColorStop(0.5, `rgba(${sunR},${sunG},${sunB},${alpha * 0.55})`);
+    g3.addColorStop(1,   `rgba(${sunR},${sunG},60,0)`);
+    _ctx.fillStyle = g3;
+    _ctx.beginPath(); _ctx.arc(sx, sy, glowR3, 0, Math.PI * 2); _ctx.fill();
+
+    // Sun disc — solid core
     _ctx.beginPath();
     _ctx.arc(sx, sy, radius, 0, Math.PI * 2);
     _ctx.fillStyle = col;
@@ -275,11 +293,21 @@ const CanvasScenes = (() => {
           if (my <= h * 0.95 && my >= 0) {
             const mr = Math.min(w, h) * 0.048;
             // Glow — draw as arc not fillRect so edges fade cleanly
-            const mg = _ctx.createRadialGradient(mx, my, 0, mx, my, mr * 4);
-            mg.addColorStop(0, `rgba(200,215,255,${moonAlpha * 0.18})`);
-            mg.addColorStop(1, 'rgba(200,215,255,0)');
-            _ctx.fillStyle = mg;
-            _ctx.beginPath(); _ctx.arc(mx, my, mr * 4, 0, Math.PI * 2); _ctx.fill();
+            // ── Moon layered glow — 3 rings, all arcs ──
+            // Outer diffuse scatter
+            const mg1 = _ctx.createRadialGradient(mx, my, mr, mx, my, mr * 6);
+            mg1.addColorStop(0,   `rgba(200,215,255,${moonAlpha * 0.10})`);
+            mg1.addColorStop(0.5, `rgba(190,210,255,${moonAlpha * 0.04})`);
+            mg1.addColorStop(1,   'rgba(180,205,255,0)');
+            _ctx.fillStyle = mg1;
+            _ctx.beginPath(); _ctx.arc(mx, my, mr * 6, 0, Math.PI * 2); _ctx.fill();
+            // Inner corona
+            const mg2 = _ctx.createRadialGradient(mx, my, mr * 0.5, mx, my, mr * 2.8);
+            mg2.addColorStop(0,   `rgba(220,230,255,${moonAlpha * 0.22})`);
+            mg2.addColorStop(0.6, `rgba(200,215,255,${moonAlpha * 0.08})`);
+            mg2.addColorStop(1,   'rgba(200,215,255,0)');
+            _ctx.fillStyle = mg2;
+            _ctx.beginPath(); _ctx.arc(mx, my, mr * 2.8, 0, Math.PI * 2); _ctx.fill();
             // Disc
             _ctx.beginPath(); _ctx.arc(mx, my, mr, 0, Math.PI * 2);
             _ctx.fillStyle = `rgba(228,235,255,${moonAlpha})`;
@@ -611,21 +639,24 @@ const CanvasScenes = (() => {
   }
 
   // ── Birds ──────────────────────────────────────────────────
-  function _newBird(init) {
+  // All birds in a session fly the SAME direction (left-to-right).
+  // A new direction is picked once at page load, matches a real flock's behaviour.
+  const _FLOCK_DIR = 1;  // always left → right; calming, unified, purposeful
+
+  function _newBird(init, flockIdx) {
     const w = _canvas?.width || 1200;
     const h = _canvas?.height || 800;
-    const fromLeft = Math.random() > 0.5;
+    // Stagger entry: first bird near left edge, others follow behind
+    const startX = init ? -60 - (flockIdx || 0) * 55 : -80;
     return {
-      x:      fromLeft ? -60 : w + 60,
-      y:      h * (0.08 + Math.random() * 0.42),
-      dir:    fromLeft ? 1 : -1,
-      speed:  0.18 + Math.random() * 0.28,
-      size:   3.5 + Math.random() * 4,
-      flock:  Math.random() < 0.35,     // part of a loose flock?
-      flockOff: { x: (Math.random()-0.5)*80, y: (Math.random()-0.5)*30 },
-      wingPhase: Math.random() * Math.PI * 2,
-      wingSpeed: 0.04 + Math.random() * 0.03,
-      yDrift:    (Math.random()-0.5) * 0.008,
+      x:      startX,
+      y:      h * (0.10 + Math.random() * 0.36),   // upper half of sky only
+      dir:    _FLOCK_DIR,
+      speed:  0.55 + Math.random() * 0.30,          // all move similar speed
+      size:   3.5 + Math.random() * 3.5,
+      yOff:   (Math.random() - 0.5) * 28,           // vertical spread within flock
+      wingPhase:  Math.random() * Math.PI * 2,
+      wingSpeed:  0.038 + Math.random() * 0.018,    // gentle wing beat
       driftPhase: Math.random() * Math.PI * 2,
       alpha:  init ? 1 : 0,
       fadeIn: !init,
@@ -649,13 +680,13 @@ const CanvasScenes = (() => {
       // Fade in
       if (b.fadeIn) { b.alpha = Math.min(1, b.alpha + 0.01); if (b.alpha >= 1) b.fadeIn = false; }
 
-      // Move
+      // Move — gentle sine drift in y, clamped to upper sky
       b.x += b.dir * b.speed;
-      b.y += b.yDrift + Math.sin(t * 0.018 + b.driftPhase) * 0.3;
-      b.y  = Math.max(h * 0.04, Math.min(h * 0.55, b.y));
+      b.y += Math.sin(t * 0.014 + b.driftPhase) * 0.18;
+      b.y  = Math.max(h * 0.06, Math.min(h * 0.48, b.y));
 
-      // Recycle when off-screen
-      if ((b.dir > 0 && b.x > w + 80) || (b.dir < 0 && b.x < -80)) {
+      // Recycle when off right edge — re-enter from left
+      if (b.x > w + 90) {
         Object.assign(b, _newBird(false));
         b.alpha = 0; b.fadeIn = true;
       }
