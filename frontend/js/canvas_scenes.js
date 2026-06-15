@@ -988,58 +988,34 @@ const CanvasScenes = (() => {
       }
 
     } else if (type === 'cumulonimbus') {
-      // Thunderhead — all radial gradients, no filled paths, no hard edges.
-      // Dark base blob → stacked lighter tower blobs → wide anvil blob at top.
-      // Tower height capped to avoid massive blobs on tall screens.
-      // Use cw (cloud width) as the primary scale reference — width is
-      // already sensibly bounded by canvas width fraction.
-      const base  = cy + Math.min(ch, cw * 0.3) * 0.5;
-      const tower = Math.min(ch * 1.8, cw * 1.2);  // cap at ~1× cloud width tall
-      const tW    = cw * 0.30;
+      // Tall dark storm cloud — rendered as a vertical stack of cumulus-style
+      // radial blobs, darker at base and lighter toward top.
+      // No anvil cap, no flat dark disc — those looked like geometric shapes.
+      // Instead: 8 overlapping blobs arranged in a tall column, size and
+      // brightness increasing upward, with the bottommost blob darker/bluer.
+      const nBlob  = 8;
+      const height = Math.min(cw * 1.4, ch * 2.2);   // total column height
+      const bR     = cw * 0.26;                        // blob radius
 
-      // Dark base — flat elliptical radial, drawn as scaled arc (no rect)
-      _ctx.save();
-      _ctx.scale(1, 0.28);   // flatten to wide disc shape
-      const bg = _ctx.createRadialGradient(cx, base / 0.28, 0, cx, base / 0.28, cw * 0.55);
-      bg.addColorStop(0,   `rgba(48,55,80,${alpha * 0.82})`);
-      bg.addColorStop(0.5, `rgba(35,42,65,${alpha * 0.45})`);
-      bg.addColorStop(1,   'rgba(30,38,60,0)');
-      _ctx.fillStyle = bg;
-      _ctx.beginPath(); _ctx.arc(cx, base / 0.28, cw * 0.55, 0, Math.PI * 2); _ctx.fill();
-      _ctx.restore();
+      for (let bi = 0; bi < nBlob; bi++) {
+        const p   = bi / (nBlob - 1);                 // 0 = bottom, 1 = top
+        const by  = cy + height * 0.5 - p * height;   // bottom→top
+        // Horizontal jitter so blobs don't stack in a perfect line
+        const bx  = cx + (Math.sin(bi * 1.9 + c.seed * 6) * bR * 0.55);
+        const br  = bR * (0.72 + p * 0.38 + Math.sin(bi * 2.3 + c.seed * 4) * 0.18);
 
-      // Tower: 6 stacked radial blobs — all arc, no rect
-      for (let ti = 0; ti < 6; ti++) {
-        const p   = ti / 5;
-        const ty  = base - tower * (p * 0.78 + 0.06);
-        const tr  = tW * (1 - p * 0.28) * (0.78 + Math.sin(ti * 1.6 + c.seed * 4) * 0.22);
-        const lum = Math.round(145 + p * 100);
-        const tg  = _ctx.createRadialGradient(cx + (c.seed-0.5)*6*p, ty, 0, cx, ty, tr * 2.0);
-        tg.addColorStop(0,    `rgba(${lum},${lum},${lum+8},${alpha*(0.48+p*0.28)})`);
-        tg.addColorStop(0.55, `rgba(${lum},${lum},${lum+5},${alpha*(0.18+p*0.12)})`);
-        tg.addColorStop(1,    `rgba(${lum},${lum},${lum},0)`);
-        _ctx.fillStyle = tg;
-        _ctx.beginPath(); _ctx.arc(cx, ty, tr * 2.0, 0, Math.PI * 2); _ctx.fill();
+        // Bottom blobs: dark blue-grey.  Top blobs: bright white-grey.
+        const lum  = Math.round(85  + p * 155);   // 85 (dark) → 240 (bright)
+        const blue = Math.round(100 + p * 140);   // slight blue tint at base
+        const a    = alpha * (0.55 + p * 0.30);   // more opaque at top
+
+        const g = _ctx.createRadialGradient(bx, by, 0, bx, by, br * 2.2);
+        g.addColorStop(0,    `rgba(${lum},${lum},${blue},${a})`);
+        g.addColorStop(0.45, `rgba(${lum},${lum},${blue},${a * 0.38})`);
+        g.addColorStop(1,    `rgba(${lum},${lum},${blue},0)`);
+        _ctx.fillStyle = g;
+        _ctx.beginPath(); _ctx.arc(bx, by, br * 2.2, 0, Math.PI * 2); _ctx.fill();
       }
-
-      // Lavender mid-shadow — arc
-      const lv = _ctx.createRadialGradient(cx, base - tower*0.44, 0, cx, base - tower*0.44, tW*1.2);
-      lv.addColorStop(0,  `rgba(148,128,195,${alpha * 0.22})`);
-      lv.addColorStop(1,  'rgba(148,128,195,0)');
-      _ctx.fillStyle = lv;
-      _ctx.beginPath(); _ctx.arc(cx, base - tower*0.44, tW*1.2, 0, Math.PI * 2); _ctx.fill();
-
-      // Anvil top — wide flat elliptical arc
-      _ctx.save();
-      _ctx.scale(1, 0.20);
-      const avY = (base - tower*0.80) / 0.20;
-      const av  = _ctx.createRadialGradient(cx, avY, 0, cx, avY, cw * 0.65);
-      av.addColorStop(0,   `rgba(248,250,255,${alpha*0.55})`);
-      av.addColorStop(0.4, `rgba(240,245,255,${alpha*0.22})`);
-      av.addColorStop(1,   'rgba(240,244,255,0)');
-      _ctx.fillStyle = av;
-      _ctx.beginPath(); _ctx.arc(cx, avY, cw * 0.65, 0, Math.PI * 2); _ctx.fill();
-      _ctx.restore();
     }
   }
 
