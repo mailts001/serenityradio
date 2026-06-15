@@ -1445,154 +1445,208 @@ const CanvasScenes = (() => {
     c.fill();
   }
 
-  // Draw one branch segment and recurse. x1,y1=start, ang=angle(rad), len=length
-  // Returns endpoint {x,y} so caller can place leaves
-  function _drawBranch(x1, y1, ang, len, thick, trunkR, trunkG, trunkB, depth, seed) {
-    if (len < 4 || depth < 0) return { x: x1, y: y1 };
-    const x2 = x1 + Math.cos(ang) * len;
-    const y2 = y1 + Math.sin(ang) * len;
+  // Draw a tapered branch as a filled wedge — thick at base, narrows to a fine tip
+  // lightSide: +1 = left-lit, -1 = right-lit, affects shade variation
+  function _drawTaperedBranch(x1, y1, ang, len, baseW, bR, bG, bB, depth, seed, lightSide) {
+    if (len < 3 || depth < 0) return { x: x1, y: y1 };
+    const x2   = x1 + Math.cos(ang) * len;
+    const y2   = y1 + Math.sin(ang) * len;
+    const perp = ang + Math.PI * 0.5;
+    const px   = Math.cos(perp), py = Math.sin(perp);
+
+    // Shade varies with depth and light side — deeper = darker, lit side = brighter
+    const depthFade = depth * 14;
+    const litBump   = lightSide * 12;
+    const r = Math.max(0, Math.min(255, bR - depthFade + litBump));
+    const g = Math.max(0, Math.min(255, bG - depthFade + litBump * 0.7));
+    const b = Math.max(0, Math.min(255, bB - depthFade + litBump * 0.4));
+
+    // Filled tapered shape: two bezier curves meeting at the fine tip
+    const midX = (x1 + x2) * 0.5, midY = (y1 + y2) * 0.5;
+    const halfW = baseW * 0.5;
     _ctx.beginPath();
-    _ctx.moveTo(x1, y1); _ctx.lineTo(x2, y2);
-    _ctx.lineWidth   = Math.max(0.8, thick);
-    _ctx.strokeStyle = `rgba(${trunkR},${trunkG},${trunkB},0.88)`;
-    _ctx.stroke();
+    _ctx.moveTo(x1 + px * halfW, y1 + py * halfW);
+    _ctx.quadraticCurveTo(midX + px * halfW * 0.5, midY + py * halfW * 0.5, x2, y2);
+    _ctx.quadraticCurveTo(midX - px * halfW * 0.5, midY - py * halfW * 0.5,
+                          x1 - px * halfW, y1 - py * halfW);
+    _ctx.closePath();
+    _ctx.fillStyle = `rgba(${r},${g},${b},0.90)`;
+    _ctx.fill();
+
     if (depth > 0) {
-      const spread1 = 0.35 + (seed * 100 % 100 / 100) * 0.25;
-      const spread2 = 0.30 + (seed * 137 % 100 / 100) * 0.25;
-      const s2 = (seed * 1.618) % 1;
-      _drawBranch(x2, y2, ang - spread1, len * 0.62, thick * 0.60, trunkR, trunkG, trunkB, depth - 1, seed * 1.3 % 1);
-      _drawBranch(x2, y2, ang + spread2, len * 0.68, thick * 0.58, trunkR, trunkG, trunkB, depth - 1, s2);
-      if (seed > 0.45 && depth > 1) {
-        _drawBranch(x2, y2, ang + 0.08, len * 0.52, thick * 0.45, trunkR, trunkG, trunkB, depth - 2, seed * 2.1 % 1);
+      const s1 = (seed * 1.37) % 1, s2 = (seed * 1.618) % 1;
+      const sp1 = 0.32 + (seed  * 100 % 100 / 100) * 0.24;
+      const sp2 = 0.28 + (s1    * 100 % 100 / 100) * 0.24;
+      _drawTaperedBranch(x2, y2, ang - sp1, len * 0.60, baseW * 0.56, bR, bG, bB, depth-1, s1, -lightSide);
+      _drawTaperedBranch(x2, y2, ang + sp2, len * 0.65, baseW * 0.52, bR, bG, bB, depth-1, s2,  lightSide);
+      if (seed > 0.38 && depth > 1) {
+        const s3 = (seed * 2.14) % 1;
+        _drawTaperedBranch(x2, y2, ang - 0.06, len * 0.48, baseW * 0.40, bR, bG, bB, depth-2, s3, lightSide * 0.5);
       }
     }
     return { x: x2, y: y2 };
   }
 
-  // Draw a Hinoki-style giant forest tree — straight strong trunk, tiered drooping branches, translucent foliage
-  function _drawGiantTree(cx, groundY, trunkRad, totalH, seed, leafRgbArr, isNight) {
+  // Draw a Hinoki giant tree: trunk fills full canvas height, tapered branches, swirl bark lines
+  function _drawGiantTree(cx, canvasH, trunkRad, totalH, seed, leafRgbArr, isNight) {
     const c  = _ctx;
     const s2 = (seed * 137.5) % 1;
     const s3 = (seed * 97.3)  % 1;
     const s4 = (seed * 211.7) % 1;
+    const lean = (s2 - 0.5) * 0.025;  // very slight natural lean
 
-    // Hinoki: very slight lean — these are strong upright trees
-    const lean = (s2 - 0.5) * 0.03;
+    // ── Trunk colour — warm cinnamon-red Hinoki bark ──────────────
+    const tR = 68  + Math.floor(s3 * 44);   // 68–112
+    const tG = 40  + Math.floor(s4 * 30);   // 40–70
+    const tB = 18  + Math.floor(s2 * 20);   // 18–38
 
-    // ── Trunk colour — warm reddish-brown bark, varied per tree ──
-    // Hinoki has warm cinnamon-red bark with light patches
-    const tR = 72  + Math.floor(s3 * 40);   // 72–112
-    const tG = 44  + Math.floor(s4 * 28);   // 44–72
-    const tB = 22  + Math.floor(s2 * 18);   // 22–40
+    // Trunk runs from well below canvas bottom to above canvas top
+    const bottomY  = canvasH + trunkRad * 2;   // off screen bottom
+    const trunkTopY = -totalH * 0.12;           // off screen top — continuous trunk
+    const trunkTopX = cx + lean * totalH;
 
-    // Trunk top: where branching begins (~50% up)
-    const trunkTopX = cx + lean * totalH * 0.5;
-    const trunkTopY = groundY - totalH * 0.50;
+    // At the branching zone (upper 45% of visible tree)
+    const branchZoneY = canvasH * 0.35 - totalH * 0.10;
+    const branchZoneX = cx + lean * (canvasH - branchZoneY) * 0.5;
 
-    // ── Draw trunk: strong straight column, tapers gently ────────
-    // Base width ~3× trunkRad, top ~0.8× trunkRad
+    // Width at bottom (wide) and at branching zone (narrower)
+    const wBottom  = trunkRad * 3.4;
+    const wBranch  = trunkRad * 0.85;
+
+    // ── Trunk silhouette: bezier taper from bottom to top ─────────
     c.beginPath();
-    c.moveTo(cx - trunkRad * 3.0, groundY);
+    c.moveTo(cx - wBottom, bottomY);
     c.bezierCurveTo(
-      cx - trunkRad * 1.8, groundY - totalH * 0.12,
-      trunkTopX - trunkRad * 0.9, groundY - totalH * 0.35,
-      trunkTopX - trunkRad * 0.8, trunkTopY
+      cx - trunkRad * 2.2, canvasH * 0.75,
+      branchZoneX - trunkRad * 1.1, canvasH * 0.40,
+      trunkTopX - wBranch, trunkTopY
     );
-    c.lineTo(trunkTopX + trunkRad * 0.8, trunkTopY);
+    c.lineTo(trunkTopX + wBranch, trunkTopY);
     c.bezierCurveTo(
-      trunkTopX + trunkRad * 0.9, groundY - totalH * 0.35,
-      cx + trunkRad * 1.8, groundY - totalH * 0.12,
-      cx + trunkRad * 3.0, groundY
+      branchZoneX + trunkRad * 1.1, canvasH * 0.40,
+      cx + trunkRad * 2.2, canvasH * 0.75,
+      cx + wBottom, bottomY
     );
     c.closePath();
-    c.fillStyle = `rgba(${tR},${tG},${tB},0.92)`;
+    c.fillStyle = `rgba(${tR},${tG},${tB},0.94)`;
     c.fill();
 
-    // Trunk highlight (light side) — thin vertical band
-    const hlGrad = c.createLinearGradient(cx - trunkRad, 0, cx + trunkRad * 0.5, 0);
-    hlGrad.addColorStop(0,   `rgba(${tR-20},${tG-14},${tB-8},0)`);
-    hlGrad.addColorStop(0.55,`rgba(${tR+28},${tG+18},${tB+10},0.22)`);
-    hlGrad.addColorStop(1,   `rgba(${tR},${tG},${tB},0)`);
-    c.fillStyle = hlGrad;
-    c.fillRect(cx - trunkRad * 2, groundY - totalH * 0.5, trunkRad * 3, totalH * 0.5);
+    // ── Lateral light gradient (3D round feel) ─────────────────────
+    const lgX = cx - wBottom * 0.3;    // light source left-centre
+    const lg  = c.createLinearGradient(cx - wBottom, 0, cx + wBottom, 0);
+    lg.addColorStop(0,    `rgba(${tR-22},${tG-16},${tB-9},0.55)`);  // shadow right
+    lg.addColorStop(0.35, `rgba(${tR+32},${tG+22},${tB+12},0.30)`); // highlight
+    lg.addColorStop(0.55, `rgba(${tR+18},${tG+12},${tB+6},0.15)`);
+    lg.addColorStop(1,    `rgba(${tR-28},${tG-20},${tB-10},0.50)`); // shadow left
+    c.fillStyle = lg;
+    c.fillRect(cx - wBottom - 2, trunkTopY, wBottom * 2 + 4, bottomY - trunkTopY);
 
-    // Bark texture patches
-    for (let pi = 0; pi < 7; pi++) {
-      const ps  = (pi * 67 + seed * 190) % 100 / 100;
-      const ps2 = (pi * 43 + seed * 130) % 100 / 100;
-      const py  = groundY - totalH * (0.03 + ps * 0.42);
-      const pr  = trunkRad * (0.4 + ps2 * 0.7);
-      c.globalAlpha = 0.14;
-      c.fillStyle = pi % 2 === 0 ? `rgb(${tR+30},${tG+20},${tB+12})` : `rgb(${tR-18},${tG-12},${tB-7})`;
-      c.beginPath(); c.ellipse(cx + (ps2 - 0.5) * trunkRad * 1.4, py, pr, pr * 0.28, 0.1, 0, Math.PI * 2); c.fill();
-    }
-    c.globalAlpha = 1.0;
+    // ── Swirling bark lines — gentle helical grooves up the trunk ──
+    c.save();
+    c.lineCap = 'round';
+    // Clip to trunk region to keep lines inside
+    c.beginPath();
+    c.rect(cx - wBottom - 2, trunkTopY, wBottom * 2 + 4, bottomY - trunkTopY);
+    c.clip();
 
-    // ── Fractal branches: 3 levels, Hinoki style drooping ────────
-    c.lineCap = 'round'; c.lineJoin = 'round';
-    const baseAng    = -Math.PI * 0.5 + lean * 3;
-    const branchLen  = totalH * 0.22;
-    const branchW    = trunkRad * 1.2;
+    const numLines = 8 + Math.floor(s2 * 5);
+    for (let li = 0; li < numLines; li++) {
+      const ls    = (li * 67 + seed * 300) % 100 / 100;
+      const ls2   = (li * 43 + seed * 200) % 100 / 100;
+      // Start x offset relative to trunk centre
+      const startXOff = (ls - 0.5) * wBottom * 1.8;
+      // Swirl direction and pitch
+      const swirlAmt  = (ls2 - 0.5) * wBottom * 0.55;  // horizontal drift over full height
+      const lineAlpha = 0.08 + ls * 0.10;
+      const isLight   = li % 3 !== 0;
 
-    // 2–3 main branches from trunk top upward
-    const branchPoints = [];
-    const numMain = 2 + (s4 > 0.5 ? 1 : 0);
-    for (let bi = 0; bi < numMain; bi++) {
-      const bs   = (bi * 83 + seed * 100) % 100 / 100;
-      const side = bi % 2 === 0 ? -1 : 1;
-      const ang  = baseAng + side * (0.28 + bs * 0.20);
-      const bLen = branchLen * (0.85 + bs * 0.30);
-      const ep   = _drawBranch(trunkTopX, trunkTopY, ang, bLen, branchW, tR, tG, tB, 2, seed + bi * 0.3);
-      branchPoints.push(ep);
-      // Also some mid-trunk branches for Hinoki layered look
-      if (bi < 2) {
-        const midBrY = trunkTopY + totalH * (0.12 + bi * 0.10);
-        const midBrX = trunkTopX + lean * totalH * 0.1;
-        _drawBranch(midBrX, midBrY, baseAng + side * (0.45 + bs * 0.25), bLen * 0.65, branchW * 0.55, tR, tG, tB, 1, s2 + bi * 0.2);
+      c.beginPath();
+      c.moveTo(cx + startXOff, bottomY);
+      // Draw as a series of short bezier segments, drifting gently
+      const steps = 12;
+      for (let si = 0; si <= steps; si++) {
+        const sf   = si / steps;
+        const sy   = bottomY - (bottomY - trunkTopY) * sf;
+        // Trunk half-width at this y: interpolate from wBottom to wBranch
+        const wHere = wBottom + (wBranch - wBottom) * sf;
+        // Swirl: slow horizontal sine drift
+        const swirlX = Math.sin(sf * Math.PI * 1.5 + ls * Math.PI * 2) * swirlAmt * (1 - sf * 0.4);
+        const sx = cx + startXOff * (1 - sf * 0.6) + swirlX;
+        // Clamp to trunk edges with a little padding
+        const clamped = Math.max(cx - wHere + 1, Math.min(cx + wHere - 1, sx));
+        c.lineTo(clamped, sy);
       }
+      c.lineWidth   = 0.7 + ls * 0.8;
+      c.strokeStyle = isLight
+        ? `rgba(${tR+26},${tG+18},${tB+10},${lineAlpha})`
+        : `rgba(${tR-18},${tG-12},${tB-7},${lineAlpha * 0.8})`;
+      c.stroke();
+    }
+    c.restore();
+
+    // ── Tapered branches — vary shade per branch for depth/3D ─────
+    c.lineCap = 'round'; c.lineJoin = 'round';
+    const baseAng   = -Math.PI * 0.5 + lean * 4;
+    const branchLen = totalH * 0.20;
+    const branchW   = trunkRad * 1.15;
+
+    const branchPoints = [];
+    // 5–7 branch tiers along the upper trunk, alternating sides
+    const numTiers = 5 + Math.floor(s4 * 3);
+    for (let bi = 0; bi < numTiers; bi++) {
+      const bs    = (bi * 83 + seed * 100) % 100 / 100;
+      const bs2   = (bi * 61 + seed * 170) % 100 / 100;
+      const side  = bi % 2 === 0 ? -1 : 1;
+      // Space branch origins along trunk (upper 55% of canvas)
+      const brY   = canvasH * 0.80 - bi * (canvasH * 0.55 / numTiers) - totalH * 0.05;
+      const wHere = wBottom + (wBranch - wBottom) * ((canvasH - brY) / canvasH);
+      const brX   = cx + lean * (canvasH - brY) + side * wHere * 0.85;
+      const ang   = baseAng + side * (0.30 + bs * 0.22) + (bs2 - 0.5) * 0.12;
+      const bLen  = branchLen * (0.75 + bs * 0.40) * (1 - bi * 0.04);
+      // Light comes from slightly left — left branches brighter
+      const lightSide = side;
+      const ep = _drawTaperedBranch(brX, brY, ang, bLen, branchW * (0.95 - bi * 0.06),
+                                    tR, tG, tB, 2, bs + seed * 0.4, lightSide);
+      branchPoints.push(ep);
     }
 
-    // ── Hinoki foliage: narrow columnar crown, tiered layers ─────
-    // Hinoki canopy is much narrower than broadleaf — tall conical
-    const crownTopY  = groundY - totalH * 0.98;   // crown starts near very top
-    const crownBaseY = trunkTopY - totalH * 0.08; // crown base just above branch zone
+    // ── Hinoki foliage: narrow tiered canopy, drooping, translucent ─
+    const crownTopY  = canvasH * 0.05 - totalH * 0.05;
+    const crownBaseY = canvasH * 0.68;
     const crownH     = crownBaseY - crownTopY;
-    const maxSpread  = totalH * (0.12 + s2 * 0.09);  // narrow — Hinoki is not wide
+    const maxSpread  = totalH * (0.11 + s2 * 0.08);
 
     const lRgb0 = leafRgbArr[0], lRgb1 = leafRgbArr[1], lRgb2 = leafRgbArr[2];
-    const leafA = isNight ? 0.28 : 0.40;
+    const leafA  = isNight ? 0.26 : 0.38;
 
-    // Tiered foliage layers from top down — each tier slightly wider
-    const numTiers = 7 + Math.floor(s3 * 4);
-    for (let ti = 0; ti < numTiers; ti++) {
-      const tf   = ti / numTiers;
-      const ty   = crownTopY + crownH * tf;
-      const tw   = maxSpread * (0.18 + tf * 0.85);  // narrow at top, wider at base
-      const blobCount = 3 + Math.floor(tf * 4);
-
-      for (let bi = 0; bi < blobCount; bi++) {
+    const numFolTiers = 8 + Math.floor(s3 * 5);
+    for (let ti = 0; ti < numFolTiers; ti++) {
+      const tf  = ti / numFolTiers;
+      const ty  = crownTopY + crownH * tf;
+      const tw  = maxSpread * (0.16 + tf * 0.88);
+      const cnt = 3 + Math.floor(tf * 4);
+      for (let bi = 0; bi < cnt; bi++) {
         const bs  = (bi * 53 + ti * 37 + seed * 200) % 100 / 100;
         const bs2 = (bi * 41 + ti * 29 + seed * 150) % 100 / 100;
-        const bx  = cx + lean * totalH * 0.3 + (bs - 0.5) * tw * 1.8;
-        // Hinoki foliage droops slightly at tier edges
-        const droop = Math.abs(bs - 0.5) * tw * 0.35;
-        const by  = ty + droop + bs2 * tw * 0.20;
-        const rx  = tw * (0.22 + bs2 * 0.28);
-        const ry  = rx * (0.45 + bs * 0.30);   // slightly flattened — drooping sprays
+        const bx  = cx + lean * (canvasH - ty) * 0.3 + (bs - 0.5) * tw * 1.9;
+        const droop = Math.abs(bs - 0.5) * tw * 0.40;   // outer sprays droop
+        const by  = ty + droop + bs2 * tw * 0.18;
+        const rx  = tw * (0.20 + bs2 * 0.26);
+        const ry  = rx * (0.42 + bs * 0.28);
         const rgb = bi % 3 === 0 ? lRgb0 : bi % 3 === 1 ? lRgb1 : lRgb2;
-        const a   = leafA * (0.65 + (1 - tf) * 0.38);  // top brighter, base darker
-        _organicLeaf(bx, by, rx, ry, bs + seed + ti * 0.07, rgb, Math.min(0.55, a));
+        const a   = leafA * (0.60 + (1 - tf) * 0.42);
+        _organicLeaf(bx, by, rx, ry, bs + seed + ti * 0.07, rgb, Math.min(0.54, a));
       }
     }
 
-    // Leaf clusters at branch endpoints for natural connection
+    // Leaf clusters at branch tips
     branchPoints.forEach((bp, bi) => {
-      for (let ei = 0; ei < 4; ei++) {
+      for (let ei = 0; ei < 5; ei++) {
         const es  = (bi * 71 + ei * 43 + seed * 80) % 100 / 100;
-        const ex  = bp.x + (es - 0.5) * maxSpread * 0.7;
-        const ey  = bp.y + ((ei * 31 + seed * 40) % 100 / 100 - 0.3) * maxSpread * 0.5;
-        const er  = maxSpread * (0.14 + es * 0.18);
-        _organicLeaf(ex, ey, er, er * 0.6, es + seed * 0.5, lRgb1, leafA * 0.65);
+        const ex  = bp.x + (es - 0.5) * maxSpread * 0.65;
+        const ey  = bp.y + ((ei * 31 + seed * 40) % 100 / 100 - 0.25) * maxSpread * 0.45;
+        const er  = maxSpread * (0.13 + es * 0.16);
+        _organicLeaf(ex, ey, er, er * 0.58, es + seed * 0.5, lRgb1, leafA * 0.62);
       }
     });
   }
@@ -1642,6 +1696,8 @@ const CanvasScenes = (() => {
     }
 
     // ── Trees — 4 depth layers, far→near, each wraps seamlessly ─
+    // NOTE: trees are NOT anchored to groundY — they fill the full canvas height.
+    // groundY only affects sky/mist/light shaft positions.
     const WORLD_W = w * 2;
 
     // 3 leaf tones per layer (shadow / mid / highlight)
@@ -1665,74 +1721,44 @@ const CanvasScenes = (() => {
     ];
 
     LAYERS.forEach((L, li) => {
-      const layerGY = groundY + L.gOff;
-      const totalH  = h * L.hFrac;
-      const panOff  = (_panAz / 360) * WORLD_W * L.ps;
-      const lp      = LP[li];
+      // Trees span the full canvas height — no ground anchoring
+      const totalH = h * L.hFrac;
+      const panOff = (_panAz / 360) * WORLD_W * L.ps;
+      const lp     = LP[li];
 
-      // Build cluster-based positions:
-      // 3 cluster centres spread across world width, trees scatter ±15% per cluster
+      // Cluster-based natural spacing
       const clusterCentres = [
-        (0.15 + (li * 97  % 100 / 100) * 0.20) * WORLD_W,
-        (0.40 + (li * 53  % 100 / 100) * 0.20) * WORLD_W,
-        (0.68 + (li * 71  % 100 / 100) * 0.18) * WORLD_W,
-        (0.88 + (li * 113 % 100 / 100) * 0.09) * WORLD_W,
+        (0.14 + (li * 97  % 100 / 100) * 0.20) * WORLD_W,
+        (0.38 + (li * 53  % 100 / 100) * 0.22) * WORLD_W,
+        (0.62 + (li * 71  % 100 / 100) * 0.20) * WORLD_W,
+        (0.85 + (li * 113 % 100 / 100) * 0.10) * WORLD_W,
       ];
-      const scatter = WORLD_W * 0.16;  // ±16% scatter around each cluster
+      const scatter = WORLD_W * 0.14;
 
       for (let ti = 0; ti < L.count; ti++) {
         const seed  = (li * 97  + ti * 137) % 1000 / 1000;
         const seed2 = (li * 53  + ti * 113) % 1000 / 1000;
         const seed3 = (li * 71  + ti * 89)  % 1000 / 1000;
-        // Pick a cluster and scatter within it
         const clIdx  = ti % clusterCentres.length;
         const offset = (seed3 - 0.5) * 2 * scatter;
         const worldX = (clusterCentres[clIdx] + offset + WORLD_W) % WORLD_W;
+        const sx     = _treeScreenX(worldX, panOff, WORLD_W);
+        const rad    = (L.rMin + seed2 * (L.rMax - L.rMin)) * w;
+        const tH     = totalH * (0.72 + seed * 0.38);
 
-        const sx  = _treeScreenX(worldX, panOff, WORLD_W);
-        const rad = (L.rMin + seed2 * (L.rMax - L.rMin)) * w;
-        const tH  = totalH * (0.72 + seed * 0.38);
+        // Vertical pan shifts visible portion of tree — trunks extend beyond canvas
+        // altShift already baked into sky/light shaft drawing; here just offset canvasH
+        const treeCanvasH = h + altShift * (0.3 + li * 0.15);
 
         [sx, sx + WORLD_W, sx - WORLD_W].forEach(cx => {
           if (cx + tH * 0.5 < 0 || cx - tH * 0.5 > w) return;
-          _drawGiantTree(cx, layerGY, rad, tH, seed, lp, isNight);
+          // Pass canvas height so trunk fills full canvas bottom to top
+          _drawGiantTree(cx, treeCanvasH, rad, tH, seed, lp, isNight);
         });
       }
     });
 
-    // ── Forest floor — warm mossy, not too dark ───────────────────
-    if (groundY < h) {
-      const gnd = _ctx.createLinearGradient(0, groundY, 0, h);
-      if (isNight) {
-        gnd.addColorStop(0, 'rgba(22,38,18,0.96)');
-        gnd.addColorStop(0.5,'rgba(14,26,12,0.98)');
-        gnd.addColorStop(1, 'rgba(8,16,7,0.99)');
-      } else if (isDusk) {
-        gnd.addColorStop(0, 'rgba(42,52,22,0.92)');
-        gnd.addColorStop(0.5,'rgba(30,38,16,0.96)');
-        gnd.addColorStop(1, 'rgba(18,24,10,0.98)');
-      } else {
-        gnd.addColorStop(0, 'rgba(38,62,24,0.88)');    // mossy green
-        gnd.addColorStop(0.4,'rgba(26,46,16,0.94)');
-        gnd.addColorStop(1, 'rgba(14,28,9,0.97)');
-      }
-      _ctx.fillStyle = gnd; _ctx.fillRect(0, groundY, w, h - groundY);
-
-      // Dappled sunlight patches on ground
-      if (!isNight) {
-        for (let di = 0; di < 10; di++) {
-          const ds  = (di * 73 + 17) % 100 / 100;
-          const dx  = ds * w;
-          const dr  = w * (0.035 + ((di * 37) % 100 / 100) * 0.055);
-          const dg  = _ctx.createRadialGradient(dx, groundY + dr * 0.5, 0, dx, groundY + dr * 0.5, dr);
-          const dA  = isDusk ? 0.18 : 0.11;
-          dg.addColorStop(0, `rgba(210,245,165,${dA})`);
-          dg.addColorStop(1, 'rgba(210,245,165,0)');
-          _ctx.fillStyle = dg;
-          _ctx.beginPath(); _ctx.ellipse(dx, groundY + dr * 0.5, dr, dr * 0.45, 0, 0, Math.PI * 2); _ctx.fill();
-        }
-      }
-    }
+    // No ground fill — trunks extend to canvas bottom, sky shows between them
 
     // ── Soft organic flowing mist — bezier ribbons, no hard edges ─
     const mistRgb = isNight ? '210,228,218' : isDusk ? '235,218,195' : '215,232,220';
