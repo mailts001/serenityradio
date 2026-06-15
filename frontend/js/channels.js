@@ -4,11 +4,11 @@
    ══════════════════════════════════════════ */
 
 const CHANNELS = [
-  { id: 'default', label: '✦ All',    emoji: '✦', desc: 'Mixed · Curated blend'   },
-  { id: 'sleep',   label: '🌙 Sleep',  emoji: '🌙', desc: 'Sleep · Deep relaxation' },
-  { id: 'focus',   label: '🎯 Focus',  emoji: '🎯', desc: 'Focus · Deep work'       },
-  { id: 'yoga',    label: '🧘 Yoga',   emoji: '🧘', desc: 'Yoga · Flow & energy'    },
-  { id: 'nature',  label: '🌿 Nature', emoji: '🌿', desc: 'Nature · Forest & rain'  },
+  { id: 'default', label: '✦ All',      emoji: '✦',  desc: 'All music · Curated blend'      },
+  { id: 'sleep',   label: '🌙 Sleep',   emoji: '🌙', desc: 'Sleep · Slow & dreamy'           },
+  { id: 'focus',   label: '🎯 Focus',   emoji: '🎯', desc: 'Focus · Steady & clear'          },
+  { id: 'yoga',    label: '🧘 Breathe', emoji: '🧘', desc: 'Breathe · Gentle flow'           },
+  { id: 'nature',  label: '🌿 Nature',  emoji: '🌿', desc: 'Nature · Forest sounds & rain'   },
 ];
 
 let activeChannel = localStorage.getItem('sr_channel') || 'default';
@@ -47,9 +47,7 @@ async function switchChannel(channelId) {
     ))
   );
 
-  // Update canvas background scene — use window._activeScene (global, set in index.html)
-  window._activeScene = channelId;
-  if (typeof CanvasScenes !== 'undefined') CanvasScenes.setScene(channelId);
+  // Channel only controls music — scene is controlled by the scene buttons
   document.dispatchEvent(new CustomEvent('channel:changed', { detail: channelId }));
 
   // Load channel tracks from API

@@ -1419,69 +1419,119 @@ const CanvasScenes = (() => {
   // ══════════════════════════════════════════════════════════
   //  SCENE: FOREST — layered tree silhouettes, mist, fireflies
   // ══════════════════════════════════════════════════════════
-  // Draw one organic tree canopy at screen position (cx, baseY)
-  // tw = half-width, th = height, ctx must already have fillStyle set
-  function _drawOrganicTree(cx, baseY, tw, th, seed) {
-    const c = _ctx;
-    const style = seed < 0.45 ? 'pine' : seed < 0.78 ? 'broad' : 'tall';
-    if (style === 'pine') {
-      // Layered tiered pine — organic curves
-      const tiers = 4;
-      for (let i = 0; i < tiers; i++) {
-        const frac  = i / tiers;
-        const tierY = baseY - th * frac;
-        const tierW = tw * (0.9 - frac * 0.55);
-        const tierH = th * 0.32;
-        c.beginPath();
-        c.moveTo(cx, tierY - tierH);
-        c.bezierCurveTo(cx + tierW * 0.3, tierY - tierH * 0.6, cx + tierW, tierY - tierH * 0.15, cx + tierW * 0.6, tierY);
-        c.bezierCurveTo(cx + tierW * 0.2, tierY + tierH * 0.08, cx - tierW * 0.2, tierY + tierH * 0.08, cx - tierW * 0.6, tierY);
-        c.bezierCurveTo(cx - tierW, tierY - tierH * 0.15, cx - tierW * 0.3, tierY - tierH * 0.6, cx, tierY - tierH);
-        c.closePath(); c.fill();
-      }
-      // Trunk
-      c.fillRect(cx - tw * 0.06, baseY - th * 0.12, tw * 0.12, th * 0.12);
-    } else if (style === 'broad') {
-      // Broadleaf — rounded blob canopy
-      const numBlobs = 4 + Math.floor(seed * 3);
-      const topY = baseY - th;
-      for (let bi = 0; bi < numBlobs; bi++) {
-        const bSeed = (seed * 100 + bi * 37) % 100 / 100;
-        const bx = cx + (bSeed - 0.5) * tw * 1.2;
-        const by = topY + bSeed * th * 0.45;
-        const br = tw * (0.35 + bSeed * 0.3);
-        c.beginPath(); c.arc(bx, by, br, 0, Math.PI * 2); c.fill();
-      }
-      // Trunk
-      c.fillRect(cx - tw * 0.07, baseY - th * 0.25, tw * 0.14, th * 0.25);
-    } else {
-      // Tall narrow pine — simple elegant spire
-      c.beginPath();
-      c.moveTo(cx, baseY - th);
-      c.bezierCurveTo(cx + tw * 0.1, baseY - th * 0.7, cx + tw * 0.55, baseY - th * 0.35, cx + tw * 0.38, baseY);
-      c.lineTo(cx - tw * 0.38, baseY);
-      c.bezierCurveTo(cx - tw * 0.55, baseY - th * 0.35, cx - tw * 0.1, baseY - th * 0.7, cx, baseY - th);
-      c.closePath(); c.fill();
-    }
-  }
-
-  // Returns screen x of a world-space tree (world coords 0–WORLD_W), wrapping across canvas
-  function _treeScreenX(worldX, panOff, worldW, w) {
+  // Returns screen x of a world-space tree (world coords 0–WORLD_W), wrapping seamlessly
+  function _treeScreenX(worldX, panOff, worldW) {
     const raw = worldX - panOff;
     const mod = ((raw % worldW) + worldW) % worldW;
-    // Centre the wrap on screen: shift so trees near 0 or worldW wrap around
     return mod > worldW * 0.75 ? mod - worldW : mod;
   }
 
+  // Draw a majestic giant tree — trunk + massive spreading canopy
+  // cx=screen centre x, groundY=ground line, tw=trunk half-width, th=total height, seed=0-1
+  function _drawGiantTree(cx, groundY, tw, th, seed) {
+    const c   = _ctx;
+    const s2  = (seed * 137.5) % 1;
+    const s3  = (seed * 97.3)  % 1;
+    const typ = seed < 0.38 ? 'emergent' : seed < 0.68 ? 'broad' : 'conical';
+
+    // Trunk — thick, tapered, buttressed
+    const trunkW  = tw * (typ === 'emergent' ? 0.22 : 0.17);
+    const trunkH  = th * (typ === 'conical'  ? 0.28 : 0.35);
+    const trunkTop = groundY - trunkH;
+    c.beginPath();
+    c.moveTo(cx - trunkW * 2.2, groundY);          // wide buttress base left
+    c.bezierCurveTo(cx - trunkW * 1.6, groundY - trunkH * 0.12,
+                    cx - trunkW,        trunkTop   + trunkH * 0.18,
+                    cx - trunkW,        trunkTop);
+    c.lineTo(cx + trunkW, trunkTop);
+    c.bezierCurveTo(cx + trunkW,        trunkTop   + trunkH * 0.18,
+                    cx + trunkW * 1.6,  groundY - trunkH * 0.12,
+                    cx + trunkW * 2.2,  groundY);
+    c.closePath(); c.fill();
+
+    if (typ === 'emergent') {
+      // Emergent rainforest giant — umbrella crown high above canopy
+      const crownCx = cx + (s2 - 0.5) * tw * 0.4;
+      const crownY  = groundY - th;
+      const crownR  = tw * (1.3 + s3 * 0.8);
+      // Main spreading crown — 7 overlapping lobes
+      for (let li = 0; li < 7; li++) {
+        const ang  = (li / 7) * Math.PI + s2 * 0.4;
+        const lx   = crownCx + Math.cos(ang) * crownR * 0.7;
+        const ly   = crownY  + Math.sin(ang) * crownR * 0.4;
+        const lr   = crownR * (0.55 + ((li * 37) % 100 / 100) * 0.35);
+        c.beginPath(); c.arc(lx, ly, lr, 0, Math.PI * 2); c.fill();
+      }
+      // Central mass
+      c.beginPath(); c.arc(crownCx, crownY, crownR * 0.65, 0, Math.PI * 2); c.fill();
+      // Lower branch masses draping down
+      for (let bi = 0; bi < 4; bi++) {
+        const bx = crownCx + (((bi * 53) % 100 / 100) - 0.5) * crownR * 1.4;
+        const by = crownY + crownR * (0.3 + ((bi * 37) % 100 / 100) * 0.4);
+        c.beginPath(); c.arc(bx, by, crownR * 0.38, 0, Math.PI * 2); c.fill();
+      }
+
+    } else if (typ === 'broad') {
+      // Broadleaf canopy — wide irregular spreading crown
+      const crownCx = cx;
+      const crownY  = groundY - th * 0.72;
+      const spread  = tw * (1.6 + s2 * 1.0);
+      // Primary branch masses
+      const masses = 8 + Math.floor(s3 * 5);
+      for (let mi = 0; mi < masses; mi++) {
+        const ms  = (mi * 61 + seed * 100) % 100 / 100;
+        const ms2 = (mi * 43 + seed * 77)  % 100 / 100;
+        // Spread outward and upward
+        const ang = -Math.PI + (mi / masses) * Math.PI * 2 + s2 * 0.6;
+        const dist = spread * (0.3 + ms * 0.65);
+        const mx   = crownCx + Math.cos(ang) * dist;
+        const my   = crownY  + Math.sin(ang) * dist * 0.55 - ms2 * th * 0.12;
+        const mr   = spread  * (0.28 + ms2 * 0.30);
+        c.beginPath(); c.arc(mx, my, mr, 0, Math.PI * 2); c.fill();
+      }
+      // Dense central fill
+      c.beginPath(); c.arc(crownCx, crownY, spread * 0.55, 0, Math.PI * 2); c.fill();
+
+    } else {
+      // Conical / layered tropical — stacked tiers widening near base
+      const tiers = 5 + Math.floor(s2 * 3);
+      const topY  = groundY - th;
+      for (let ti = 0; ti < tiers; ti++) {
+        const tf    = ti / tiers;
+        const tierY = topY + tf * (th * 0.78);
+        const tierW = tw * (0.18 + tf * 1.35 + s3 * 0.3);
+        const tierH = th * (0.18 + tf * 0.06);
+        // Organic drooping tier shape
+        c.beginPath();
+        c.moveTo(cx, tierY - tierH * 0.9);
+        c.bezierCurveTo(cx + tierW * 0.5,  tierY - tierH * 0.4,
+                        cx + tierW * 1.05, tierY - tierH * 0.05,
+                        cx + tierW * 0.75, tierY + tierH * 0.22);
+        c.bezierCurveTo(cx + tierW * 0.35, tierY + tierH * 0.12,
+                        cx - tierW * 0.35, tierY + tierH * 0.12,
+                        cx - tierW * 0.75, tierY + tierH * 0.22);
+        c.bezierCurveTo(cx - tierW * 1.05, tierY - tierH * 0.05,
+                        cx - tierW * 0.5,  tierY - tierH * 0.4,
+                        cx, tierY - tierH * 0.9);
+        c.closePath(); c.fill();
+      }
+    }
+  }
+
   function _forestFrame(t, mode) {
-    const w = _canvas.width, h = _canvas.height;
+    const w  = _canvas.width, h = _canvas.height;
     const hr = new Date().getHours() + new Date().getMinutes() / 60;
     const isNight = hr < 6 || hr >= 19.5;
     const isDusk  = !isNight && (hr < 7 || hr >= 17.5);
 
+    // ── Vertical pan: groundY moves as you tilt up/down ─────────
+    // _panAlt: +50=looking up, -50=looking down
+    const altShift = (_panAlt / 50) * h * 0.32;
+    const groundY  = h * 0.68 + altShift;   // horizon/ground line on screen
+
     // ── Sky ─────────────────────────────────────────────────────
     const skyP = _skyPalette(hr, 'nature');
-    const sg = _ctx.createLinearGradient(0, 0, 0, h * 0.75);
+    const sg = _ctx.createLinearGradient(0, 0, 0, groundY);
     sg.addColorStop(0,   _tint(skyP.top, 0, 10, 0));
     sg.addColorStop(0.5, _tint(skyP.mid, 0, 12, 0));
     sg.addColorStop(1,   _tint(skyP.bot, 8, 18, 8));
@@ -1490,111 +1540,105 @@ const CanvasScenes = (() => {
     _drawStarsAndMoon(t, hr, mode);
     if (!isNight) _drawSun(hr);
 
-    // ── Distant hill canopy (bg haze) ───────────────────────────
-    const hillCol = isNight ? 'rgba(10,24,14,0.55)'
-                 : isDusk   ? 'rgba(22,40,18,0.48)'
-                             : 'rgba(32,60,28,0.38)';
+    // ── Distant hill silhouette ──────────────────────────────────
+    const hillBase = groundY - h * 0.14;
+    const hillCol  = isNight ? 'rgba(10,24,14,0.55)' : isDusk ? 'rgba(22,40,18,0.48)' : 'rgba(32,60,28,0.40)';
     _ctx.fillStyle = hillCol;
     _ctx.beginPath();
-    _ctx.moveTo(0, h * 0.54);
-    for (let xi = 0; xi <= 12; xi++) {
-      const bx = xi * w / 12;
-      const seed2 = (xi * 83) % 100 / 100;
-      const by = h * (0.40 + seed2 * 0.12) + Math.sin(t * 0.0003 + xi) * 2;
-      xi === 0 ? _ctx.lineTo(bx, by) : _ctx.bezierCurveTo(bx - w/24, h * (0.44 + seed2*0.10), bx - w/24, by, bx, by);
+    _ctx.moveTo(0, hillBase + h * 0.14);
+    for (let xi = 0; xi <= 14; xi++) {
+      const bx   = xi * w / 14;
+      const bs   = (xi * 83) % 100 / 100;
+      const by   = hillBase - h * (0.05 + bs * 0.09) + Math.sin(t * 0.0003 + xi) * 1.5;
+      xi === 0 ? _ctx.lineTo(bx, by)
+               : _ctx.bezierCurveTo(bx - w/28, hillBase - h*(0.04+bs*0.07), bx - w/28, by, bx, by);
     }
-    _ctx.lineTo(w, h * 0.54); _ctx.closePath(); _ctx.fill();
+    _ctx.lineTo(w, hillBase + h * 0.14); _ctx.closePath(); _ctx.fill();
 
-    // Atmospheric depth haze over distant canopy
-    const hazeY = h * 0.40;
-    const haze = _ctx.createLinearGradient(0, hazeY, 0, hazeY + h * 0.16);
-    const hazeRgb = isNight ? '20,35,25' : isDusk ? '120,90,60' : '180,210,170';
+    // Depth haze over hills
+    const hazeY   = hillBase - h * 0.04;
+    const hazeRgb = isNight ? '20,35,25' : isDusk ? '120,90,60' : '175,210,165';
+    const haze    = _ctx.createLinearGradient(0, hazeY, 0, hazeY + h * 0.18);
     haze.addColorStop(0,   `rgba(${hazeRgb},0)`);
-    haze.addColorStop(0.5, `rgba(${hazeRgb},0.18)`);
+    haze.addColorStop(0.5, `rgba(${hazeRgb},0.20)`);
     haze.addColorStop(1,   `rgba(${hazeRgb},0)`);
-    _ctx.fillStyle = haze; _ctx.fillRect(0, hazeY, w, h * 0.16);
+    _ctx.fillStyle = haze; _ctx.fillRect(0, hazeY, w, h * 0.18);
 
-    // ── Light shafts (daytime/dusk only) ────────────────────────
+    // ── Light shafts ─────────────────────────────────────────────
     if (!isNight) {
-      const shaftAlpha = isDusk ? 0.045 : 0.028;
-      for (let si = 0; si < 5; si++) {
-        const sx = w * (0.1 + si * 0.18 + Math.sin(t * 0.0004 + si) * 0.04);
-        const sw = w * (0.04 + si % 2 * 0.02);
-        const shaft = _ctx.createLinearGradient(0, h * 0.28, 0, h * 0.75);
-        shaft.addColorStop(0,   `rgba(220,240,180,0)`);
-        shaft.addColorStop(0.3, `rgba(220,240,180,${shaftAlpha})`);
-        shaft.addColorStop(1,   `rgba(220,240,180,0)`);
-        _ctx.fillStyle = shaft;
+      const sA = isDusk ? 0.050 : 0.032;
+      for (let si = 0; si < 6; si++) {
+        const sx = w * (0.08 + si * 0.16 + Math.sin(t * 0.0004 + si) * 0.04);
+        const sw = w * (0.035 + (si % 3) * 0.015);
+        const shft = _ctx.createLinearGradient(0, 0, 0, groundY);
+        shft.addColorStop(0,   `rgba(220,242,185,0)`);
+        shft.addColorStop(0.25,`rgba(220,242,185,${sA})`);
+        shft.addColorStop(1,   `rgba(220,242,185,0)`);
+        _ctx.fillStyle = shft;
         _ctx.beginPath();
-        _ctx.moveTo(sx - sw, h * 0.28);
-        _ctx.lineTo(sx + sw * 2, h * 0.75);
-        _ctx.lineTo(sx - sw * 2, h * 0.75);
-        _ctx.lineTo(sx + sw, h * 0.28);
+        _ctx.moveTo(sx - sw, 0);
+        _ctx.lineTo(sx + sw * 2.5, groundY);
+        _ctx.lineTo(sx - sw * 2.5, groundY);
+        _ctx.lineTo(sx + sw, 0);
         _ctx.closePath(); _ctx.fill();
       }
     }
 
-    // ── Tree layers — world-space x coords wrap seamlessly ──────
-    // World width = 2×canvas (covers 360° pan)
+    // ── Tree layers (4) — world-space, seamless wrap ─────────────
     const WORLD_W = w * 2;
+    // altShift pulls trees up (tilt up = see tops) or down (tilt down = see roots)
+    // Nearer layers shift more with tilt
     const LAYERS = [
-      // { yFrac, hFrac, fillRgba, count, wMin, wMax, panScale }
-      { yFrac: 0.50, hFrac: 0.20, rgba: isNight?'15,32,18,0.55':'24,50,22,0.52', count: 28, wMin:0.025, wMax:0.048, ps:0.06 },
-      { yFrac: 0.57, hFrac: 0.26, rgba: isNight?'10,24,13,0.72':'16,38,16,0.72', count: 22, wMin:0.035, wMax:0.065, ps:0.10 },
-      { yFrac: 0.63, hFrac: 0.33, rgba: isNight?'6,16,9,0.88':'9,26,10,0.88',   count: 16, wMin:0.050, wMax:0.090, ps:0.15 },
-      { yFrac: 0.70, hFrac: 0.42, rgba: isNight?'3,10,5,0.97':'5,16,6,0.96',    count: 11, wMin:0.070, wMax:0.120, ps:0.22 },
+      { hFrac:0.32, altF:0.45, rgba: isNight?'14,30,17,0.55':'22,48,20,0.52', count:24, twMin:0.035, twMax:0.060, ps:0.06 },
+      { hFrac:0.44, altF:0.60, rgba: isNight?'9,22,12,0.72' :'14,35,14,0.72', count:18, twMin:0.050, twMax:0.085, ps:0.10 },
+      { hFrac:0.60, altF:0.78, rgba: isNight?'5,14,8,0.88'  :'8,24,9,0.88',   count:13, twMin:0.070, twMax:0.115, ps:0.15 },
+      { hFrac:0.82, altF:1.00, rgba: isNight?'2,8,4,0.97'   :'4,14,5,0.96',   count: 9, twMin:0.095, twMax:0.155, ps:0.22 },
     ];
 
     LAYERS.forEach((L, li) => {
-      const baseY  = h * L.yFrac;
       const treeH  = h * L.hFrac;
+      // groundY for this layer shifted by altitude pan (near layers shift more)
+      const layerG = groundY + altShift * (L.altF - 1) * 0.4;
       const panOff = (_panAz / 360) * WORLD_W * L.ps;
-      _ctx.fillStyle = `rgba(${L.rgba})`;
 
       for (let ti = 0; ti < L.count; ti++) {
         const seed  = (li * 97 + ti * 137) % 1000 / 1000;
         const seed2 = (li * 53 + ti * 113) % 1000 / 1000;
-        // Spread trees across world width
         const worldX = seed * WORLD_W;
-        let sx = _treeScreenX(worldX, panOff, WORLD_W, w);
-        // Also draw a copy one world-width away for seamless wrap
-        const copies = [sx, sx + WORLD_W, sx - WORLD_W];
-        const tw = (L.wMin + seed2 * (L.wMax - L.wMin)) * w;
-        const th = treeH * (0.55 + seed * 0.55);
-
-        copies.forEach(cx => {
-          if (cx + tw * 1.5 < 0 || cx - tw * 1.5 > w) return;
+        const sx     = _treeScreenX(worldX, panOff, WORLD_W);
+        const tw     = (L.twMin + seed2 * (L.twMax - L.twMin)) * w;
+        const th     = treeH * (0.60 + seed * 0.55);
+        // Draw primary + one wraparound copy
+        [sx, sx + WORLD_W, sx - WORLD_W].forEach(cx => {
+          if (cx + tw * 2 < 0 || cx - tw * 2 > w) return;
           _ctx.fillStyle = `rgba(${L.rgba})`;
-          _drawOrganicTree(cx, baseY, tw, th, seed);
+          _drawGiantTree(cx, layerG, tw, th, seed);
         });
       }
     });
 
-    // ── Ground ───────────────────────────────────────────────────
-    const gnd = _ctx.createLinearGradient(0, h * 0.73, 0, h);
-    if (isNight) {
-      gnd.addColorStop(0, 'rgba(4,12,6,0.98)'); gnd.addColorStop(1, '#010603');
-    } else {
-      gnd.addColorStop(0, 'rgba(8,22,10,0.97)'); gnd.addColorStop(1, '#020a03');
+    // ── Ground / forest floor ─────────────────────────────────────
+    if (groundY < h) {
+      const gnd = _ctx.createLinearGradient(0, groundY, 0, h);
+      gnd.addColorStop(0, isNight ? 'rgba(4,11,5,0.99)' : 'rgba(7,20,8,0.98)');
+      gnd.addColorStop(1, isNight ? '#010502' : '#020803');
+      _ctx.fillStyle = gnd; _ctx.fillRect(0, groundY, w, h - groundY);
+      // Moss ribbon
+      const moss = _ctx.createLinearGradient(0, groundY, 0, groundY + h * 0.07);
+      moss.addColorStop(0, 'rgba(18,48,18,0.40)'); moss.addColorStop(1, 'rgba(10,28,10,0)');
+      _ctx.fillStyle = moss; _ctx.fillRect(0, groundY, w, h * 0.07);
     }
-    _ctx.fillStyle = gnd; _ctx.fillRect(0, h * 0.73, w, h * 0.27);
-
-    // Ground moss highlight
-    const moss = _ctx.createLinearGradient(0, h * 0.73, 0, h * 0.80);
-    moss.addColorStop(0, `rgba(20,50,20,0.35)`); moss.addColorStop(1, 'rgba(10,30,10,0)');
-    _ctx.fillStyle = moss; _ctx.fillRect(0, h * 0.73, w, h * 0.07);
 
     // ── Ground mist ribbons ──────────────────────────────────────
     for (let mi = 0; mi < 4; mi++) {
-      const my = h * (0.55 + mi * 0.055) + Math.sin(t * 0.003 + mi * 2.1) * 10;
-      const mg = _ctx.createLinearGradient(0, my - 14, 0, my + 14);
-      const mistA = 0.07 + mi * 0.025;
-      mg.addColorStop(0,   'rgba(190,215,200,0)');
+      const my   = groundY - h * (0.13 - mi * 0.04) + Math.sin(t * 0.003 + mi * 2.1) * 10;
+      const mg   = _ctx.createLinearGradient(0, my - 14, 0, my + 14);
+      const mistA = 0.08 + mi * 0.025;
+      mg.addColorStop(0, 'rgba(190,215,200,0)');
       mg.addColorStop(0.5, `rgba(190,215,200,${mistA})`);
-      mg.addColorStop(1,   'rgba(190,215,200,0)');
+      mg.addColorStop(1, 'rgba(190,215,200,0)');
       _ctx.fillStyle = mg;
-      const drift = Math.sin(t * 0.0015 + mi * 1.7) * w * 0.03;
-      _ctx.fillRect(drift, my - 14, w, 28);
+      _ctx.fillRect(Math.sin(t * 0.0015 + mi * 1.7) * w * 0.03, my - 14, w, 28);
     }
 
     // ── Fireflies ────────────────────────────────────────────────
@@ -1623,9 +1667,13 @@ const CanvasScenes = (() => {
     const hr = new Date().getHours() + new Date().getMinutes() / 60;
     if (!_snowParticles) _initSnow();
 
+    // Vertical pan: tilt up = see more sky/peaks, tilt down = see more ground
+    const altShift = (_panAlt / 50) * h * 0.30;
+    const groundY  = h * 0.72 + altShift;   // snow ground line
+
     // Cold sky — blue-white gradient
     const isNight = hr < 6 || hr >= 20;
-    const sg = _ctx.createLinearGradient(0, 0, 0, h * 0.65);
+    const sg = _ctx.createLinearGradient(0, 0, 0, groundY);
     if (isNight) {
       sg.addColorStop(0,   '#040a18'); sg.addColorStop(0.5, '#081428'); sg.addColorStop(1, '#0c1a34');
     } else {
@@ -1636,72 +1684,78 @@ const CanvasScenes = (() => {
     if (isNight) _drawStarsAndMoon(t, hr, mode);
     else         _drawSun(hr);
 
-    // Mountain ridges — 3 layers, far (pale blue) → near (dark slate)
-    // Draw across 3× canvas width so panning never reveals empty edge
+    // Mountain ridges — 3 layers anchored relative to groundY
+    // ridgeTop = where the tallest peak reaches above groundY
+    // Draw 3× canvas wide so horizontal pan never reveals empty edge
     const RIDGES = [
-      { yFrac: 0.42, hFrac: 0.28, r: 180, g: 200, b: 228, a: 0.55, count: 18, ps: 0.10 },
-      { yFrac: 0.50, hFrac: 0.35, r: 120, g: 148, b: 188, a: 0.80, count: 13, ps: 0.16 },
-      { yFrac: 0.58, hFrac: 0.42, r:  55, g:  75, b: 110, a: 0.96, count: 10, ps: 0.24 },
+      { offY: -0.30, hFrac: 0.28, r: 180, g: 200, b: 228, a: 0.55, count: 18, ps: 0.10 },
+      { offY: -0.22, hFrac: 0.35, r: 120, g: 148, b: 188, a: 0.80, count: 13, ps: 0.16 },
+      { offY: -0.14, hFrac: 0.42, r:  55, g:  75, b: 110, a: 0.96, count: 10, ps: 0.24 },
     ];
 
     RIDGES.forEach((R, ri) => {
-      // panOff in screen pixels — shifts ridge left/right as you pan
-      const panOff = (_panAz / 360) * w * 3 * R.ps;
-      const xL = -w;          // draw starts 1 canvas-width to the left
-      const xR =  w * 2;      // draw ends  1 canvas-width to the right
-      const totalW = xR - xL;
-      const step = totalW / R.count;
-      const baseY = h * R.yFrac + h * R.hFrac;
+      // ridgeBase = groundY + small offset (ridge roots into snow plain)
+      const ridgeBase = groundY + h * 0.05;
+      // ridgeMid  = the "neutral" Y from which peaks rise (moves with tilt)
+      const ridgeMid  = groundY + h * R.offY;
+      const panOff    = (_panAz / 360) * w * 3 * R.ps;
+      const xL = -w, xR = w * 2;
+      const step = (xR - xL) / R.count;
 
-      // Helper: peak Y and snow-line Y for peak index pi
       const peakY = pi => {
         const seed = (ri * 53 + (((pi % R.count) + R.count) % R.count) * 71) % 100 / 100;
-        return h * R.yFrac - h * R.hFrac * (0.38 + seed * 0.62);
+        return ridgeMid - h * R.hFrac * (0.38 + seed * 0.62);
       };
 
       // Ridge silhouette
       _ctx.fillStyle = `rgba(${R.r},${R.g},${R.b},${R.a})`;
       _ctx.beginPath();
-      _ctx.moveTo(xL - panOff, baseY);
+      _ctx.moveTo(xL - panOff, ridgeBase);
       for (let pi = 0; pi <= R.count; pi++) {
         const px  = xL + pi * step - panOff;
         const py  = peakY(pi);
         if (pi === 0) { _ctx.lineTo(px, py); continue; }
         const ppy = peakY(pi - 1);
-        _ctx.quadraticCurveTo(px - step * 0.5, (py + ppy) * 0.45, px, py);
+        _ctx.quadraticCurveTo(px - step * 0.5, (py + ppy) * 0.48, px, py);
       }
-      _ctx.lineTo(xR - panOff, baseY);
+      _ctx.lineTo(xR - panOff, ridgeBase);
       _ctx.closePath(); _ctx.fill();
 
-      // Snow cap overlay — upper ~38% of each peak
+      // Snow cap overlay — upper 38% of each peak
       _ctx.fillStyle = `rgba(242,250,255,${R.a * 0.60})`;
       _ctx.beginPath();
-      _ctx.moveTo(xL - panOff, h * R.yFrac);
+      _ctx.moveTo(xL - panOff, ridgeMid);
       for (let pi = 0; pi <= R.count; pi++) {
-        const px    = xL + pi * step - panOff;
-        const py    = peakY(pi);
-        const snow  = py + (h * R.yFrac - py) * 0.38;
+        const px   = xL + pi * step - panOff;
+        const py   = peakY(pi);
+        const snow = py + (ridgeMid - py) * 0.38;
         if (pi === 0) { _ctx.lineTo(px, snow); continue; }
         const ppy   = peakY(pi - 1);
-        const psnow = ppy + (h * R.yFrac - ppy) * 0.38;
-        _ctx.quadraticCurveTo(px - step * 0.5, (snow + psnow) * 0.45, px, snow);
+        const psnow = ppy + (ridgeMid - ppy) * 0.38;
+        _ctx.quadraticCurveTo(px - step * 0.5, (snow + psnow) * 0.48, px, snow);
       }
-      _ctx.lineTo(xR - panOff, h * R.yFrac);
+      _ctx.lineTo(xR - panOff, ridgeMid);
       _ctx.closePath(); _ctx.fill();
     });
 
     // Atmospheric mist at mountain bases
-    const mistY = h * 0.60;
-    const mist  = _ctx.createLinearGradient(0, mistY - h*0.06, 0, mistY + h*0.06);
+    const mistY = groundY - h * 0.10;
+    const mist  = _ctx.createLinearGradient(0, mistY - h*0.06, 0, mistY + h*0.07);
     mist.addColorStop(0,   'rgba(200,220,240,0)');
-    mist.addColorStop(0.5, 'rgba(200,220,240,0.22)');
+    mist.addColorStop(0.5, 'rgba(200,220,240,0.24)');
     mist.addColorStop(1,   'rgba(200,220,240,0)');
-    _ctx.fillStyle = mist; _ctx.fillRect(0, mistY - h*0.06, w, h*0.12);
+    _ctx.fillStyle = mist; _ctx.fillRect(0, mistY - h*0.06, w, h*0.13);
 
-    // Snow-covered ground
-    const gnd = _ctx.createLinearGradient(0, h * 0.72, 0, h);
-    gnd.addColorStop(0, 'rgba(220,234,248,0.95)'); gnd.addColorStop(1, '#b8cce0');
-    _ctx.fillStyle = gnd; _ctx.fillRect(0, h * 0.72, w, h * 0.28);
+    // Snow-covered ground (only if groundY < h)
+    if (groundY < h) {
+      const gnd = _ctx.createLinearGradient(0, groundY, 0, h);
+      gnd.addColorStop(0, 'rgba(222,236,250,0.97)'); gnd.addColorStop(1, '#b0c8e2');
+      _ctx.fillStyle = gnd; _ctx.fillRect(0, groundY, w, h - groundY);
+      // Subtle snow surface shimmer
+      const shimmer = _ctx.createLinearGradient(0, groundY, 0, groundY + h * 0.06);
+      shimmer.addColorStop(0, 'rgba(255,255,255,0.35)'); shimmer.addColorStop(1, 'rgba(255,255,255,0)');
+      _ctx.fillStyle = shimmer; _ctx.fillRect(0, groundY, w, h * 0.06);
+    }
 
     // Falling snow
     _snowParticles.forEach(p => {
