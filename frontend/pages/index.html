@@ -979,12 +979,12 @@ function setVolume(value) {
 let _scenePreviewTimer = null;
 const PRO_SCENES = new Set(['space', 'forest', 'snow']);
 
-// Map scene name → canvas mode string
+// Map scene name → canvas setScene key (CanvasScenes.setScene handles the rest)
 const SCENE_MODES = {
-  sea:    'default',   // existing ocean world
-  space:  'sleep',     // deep-night star field (reuses sleep palette) — temporary until dedicated scene
-  forest: 'nature',    // nature mode — temporary
-  snow:   'focus',     // focus mode cold palette — temporary
+  sea:    'sea',
+  space:  'space',
+  forest: 'forest',
+  snow:   'snow',
 };
 
 function switchScene(scene) {

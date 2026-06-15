@@ -388,6 +388,28 @@ def api_admin_approve(sub_id): return admin_approve_submission(sub_id)
 @require_admin
 def api_admin_reject(sub_id): return admin_reject_submission(sub_id)
 
+@app.route('/api/admin/set-plan', methods=['POST'])
+@require_admin
+def api_admin_set_plan():
+    """Set a user's plan for testing. Body: {email, plan}
+    plan: 'free' | 'pro' | 'pro_teacher'
+    """
+    data  = request.get_json() or {}
+    email = data.get('email', '').strip().lower()
+    plan  = data.get('plan', 'free')
+    if plan not in ('free', 'pro', 'pro_teacher'):
+        return jsonify({'error': 'plan must be free, pro, or pro_teacher'}), 400
+    if not email:
+        return jsonify({'error': 'email required'}), 400
+    conn = get_db()
+    row  = conn.execute('SELECT id FROM users WHERE email=?', (email,)).fetchone()
+    if not row:
+        return jsonify({'error': f'No user with email {email}'}), 404
+    conn.execute('UPDATE users SET plan=? WHERE email=?', (plan, email))
+    conn.commit()
+    conn.close()
+    return jsonify({'ok': True, 'email': email, 'plan': plan})
+
 # ════════════════════════════════════
 #  Auth routes
 # ════════════════════════════════════

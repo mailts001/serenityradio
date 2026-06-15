@@ -1353,21 +1353,295 @@ const CanvasScenes = (() => {
     if (mode === 'yoga')  _drawBreathGlow(t);
   }
 
+  // ══════════════════════════════════════════════════════════
+  //  SCENE: SPACE — deep starfield, nebula wash, no horizon
+  // ══════════════════════════════════════════════════════════
+  function _spaceFrame(t) {
+    const w = _canvas.width, h = _canvas.height;
+
+    // Deep space background — very dark, slight blue-purple gradient
+    const bg = _ctx.createLinearGradient(0, 0, 0, h);
+    bg.addColorStop(0,   '#00000f');
+    bg.addColorStop(0.4, '#020414');
+    bg.addColorStop(1,   '#010208');
+    _ctx.fillStyle = bg; _ctx.fillRect(0, 0, w, h);
+
+    // Nebula wash — two large radial colour clouds, drift slowly
+    const nb1x = w * (0.30 + 0.08 * Math.sin(t * 0.0003));
+    const nb1y = h * (0.38 + 0.05 * Math.cos(t * 0.0004));
+    const n1 = _ctx.createRadialGradient(nb1x, nb1y, 0, nb1x, nb1y, w * 0.55);
+    n1.addColorStop(0,   'rgba(60,20,120,0.18)');
+    n1.addColorStop(0.4, 'rgba(100,40,160,0.09)');
+    n1.addColorStop(1,   'rgba(40,10,80,0)');
+    _ctx.fillStyle = n1; _ctx.beginPath(); _ctx.arc(nb1x, nb1y, w*0.55, 0, Math.PI*2); _ctx.fill();
+
+    const nb2x = w * (0.72 + 0.06 * Math.cos(t * 0.00025));
+    const nb2y = h * (0.55 + 0.06 * Math.sin(t * 0.00035));
+    const n2 = _ctx.createRadialGradient(nb2x, nb2y, 0, nb2x, nb2y, w * 0.45);
+    n2.addColorStop(0,   'rgba(20,60,120,0.16)');
+    n2.addColorStop(0.5, 'rgba(10,80,140,0.07)');
+    n2.addColorStop(1,   'rgba(0,40,80,0)');
+    _ctx.fillStyle = n2; _ctx.beginPath(); _ctx.arc(nb2x, nb2y, w*0.45, 0, Math.PI*2); _ctx.fill();
+
+    // Full-sky star field — force nightness=1, no horizon clip
+    _panAlt = Math.max(_panAlt, 0); // space: never look below horizon
+    const oldHy = h * 0.65;
+    // Override star screen to show full canvas (no horizon clip)
+    _starPositions = null;
+    const stars = _getStarPositions(w, h);
+    stars.forEach(s => {
+      const twinkle = 0.70 + 0.30 * Math.sin(t * 0.016 + s.mag * 4.1);
+      const a = twinkle;
+      const r = Math.max(0.5, 3.2 - s.mag * 0.9);
+      if (s.mag < 1.2) {
+        const glow = _ctx.createRadialGradient(s.sx, s.sy, 0, s.sx, s.sy, r*5);
+        glow.addColorStop(0, `rgba(220,235,255,${a*0.40})`);
+        glow.addColorStop(1, 'rgba(180,210,255,0)');
+        _ctx.fillStyle = glow; _ctx.beginPath(); _ctx.arc(s.sx, s.sy, r*5, 0, Math.PI*2); _ctx.fill();
+      }
+      _ctx.beginPath(); _ctx.arc(s.sx, s.sy, r, 0, Math.PI*2);
+      _ctx.fillStyle = s.mag < 0.5 ? `rgba(255,255,220,${a})` : s.mag < 1.5 ? `rgba(220,235,255,${a})` : `rgba(255,248,230,${a})`;
+      _ctx.fill();
+    });
+
+    // Slow-moving distant galaxy smear
+    const gx = w * (0.55 + 0.04 * Math.sin(t * 0.0002));
+    const gy = h * 0.25;
+    _ctx.save(); _ctx.rotate(0.4);
+    const gal = _ctx.createRadialGradient(gx, gy, 0, gx, gy, w * 0.18);
+    gal.addColorStop(0,   'rgba(200,210,255,0.06)');
+    gal.addColorStop(0.5, 'rgba(180,195,255,0.02)');
+    gal.addColorStop(1,   'rgba(160,180,255,0)');
+    _ctx.fillStyle = gal; _ctx.beginPath(); _ctx.arc(gx, gy, w*0.18, 0, Math.PI*2); _ctx.fill();
+    _ctx.restore();
+  }
+
+  // ══════════════════════════════════════════════════════════
+  //  SCENE: FOREST — layered tree silhouettes, mist, fireflies
+  // ══════════════════════════════════════════════════════════
+  function _forestFrame(t, mode) {
+    const w = _canvas.width, h = _canvas.height;
+    const hr = new Date().getHours() + new Date().getMinutes() / 60;
+
+    // Sky — deep green-tinted twilight always
+    const skyP = _skyPalette(hr, 'nature');
+    const sg = _ctx.createLinearGradient(0, 0, 0, h * 0.72);
+    sg.addColorStop(0,   _tint(skyP.top, 0, 8, 0));
+    sg.addColorStop(0.5, _tint(skyP.mid, 0, 10, 0));
+    sg.addColorStop(1,   _tint(skyP.bot, 5, 15, 5));
+    _ctx.fillStyle = sg; _ctx.fillRect(0, 0, w, h);
+
+    // Stars at night
+    _drawStarsAndMoon(t, hr, mode);
+
+    // Ground fog layer — sits just above tree tops
+    const fogY = h * 0.58;
+    const fog  = _ctx.createLinearGradient(0, fogY, 0, fogY + h * 0.18);
+    fog.addColorStop(0,   'rgba(200,220,210,0.28)');
+    fog.addColorStop(0.5, 'rgba(185,210,200,0.12)');
+    fog.addColorStop(1,   'rgba(170,200,190,0)');
+    _ctx.fillStyle = fog; _ctx.fillRect(0, fogY, w, h * 0.18);
+
+    // 4 layers of tree silhouettes — far (pale) → near (dark)
+    const LAYERS = [
+      { yFrac: 0.52, hFrac: 0.22, col: 'rgba(18,38,22,0.50)', count: 22, wMin: 0.030, wMax: 0.055 },
+      { yFrac: 0.58, hFrac: 0.26, col: 'rgba(12,28,16,0.70)', count: 18, wMin: 0.040, wMax: 0.075 },
+      { yFrac: 0.63, hFrac: 0.32, col: 'rgba(8,20,12,0.85)',  count: 14, wMin: 0.055, wMax: 0.100 },
+      { yFrac: 0.70, hFrac: 0.38, col: 'rgba(4,14,8,0.95)',   count: 10, wMin: 0.075, wMax: 0.130 },
+    ];
+
+    LAYERS.forEach((L, li) => {
+      _ctx.fillStyle = L.col;
+      const baseY = h * L.yFrac;
+      const treeH = h * L.hFrac;
+      // Seed per layer so trees don't shift every frame
+      for (let ti = 0; ti < L.count; ti++) {
+        const seed = (li * 97 + ti * 137) % 1000 / 1000;
+        const tx   = (seed * 1.1 - 0.05 + (li % 2 === 0 ? 0 : 0.04)) * w;
+        const tw   = (L.wMin + seed * (L.wMax - L.wMin)) * w;
+        const th   = treeH * (0.6 + seed * 0.5);
+        // Pan offset — nearer layers shift more (parallax)
+        const panOff = ((_panAz - 180) / 180) * w * (0.08 + li * 0.04);
+        const x = tx - panOff;
+        if (x + tw < -tw || x - tw > w * 1.1) continue;
+        // Pine tree silhouette — triangle stack
+        _ctx.beginPath();
+        _ctx.moveTo(x, baseY);
+        _ctx.lineTo(x - tw * 0.5, baseY);
+        _ctx.lineTo(x - tw * 0.35, baseY - th * 0.35);
+        _ctx.lineTo(x - tw * 0.25, baseY - th * 0.35);
+        _ctx.lineTo(x - tw * 0.18, baseY - th * 0.62);
+        _ctx.lineTo(x - tw * 0.12, baseY - th * 0.62);
+        _ctx.lineTo(x,             baseY - th);
+        _ctx.lineTo(x + tw * 0.12, baseY - th * 0.62);
+        _ctx.lineTo(x + tw * 0.18, baseY - th * 0.62);
+        _ctx.lineTo(x + tw * 0.25, baseY - th * 0.35);
+        _ctx.lineTo(x + tw * 0.35, baseY - th * 0.35);
+        _ctx.lineTo(x + tw * 0.5,  baseY);
+        _ctx.closePath(); _ctx.fill();
+      }
+    });
+
+    // Ground fill below trees
+    const gnd = _ctx.createLinearGradient(0, h * 0.72, 0, h);
+    gnd.addColorStop(0, 'rgba(4,14,8,0.98)'); gnd.addColorStop(1, '#010805');
+    _ctx.fillStyle = gnd; _ctx.fillRect(0, h * 0.72, w, h * 0.28);
+
+    // Fireflies
+    _drawFireflies(t, hr, mode);
+
+    // Mist ribbons drifting between tree layers
+    for (let mi = 0; mi < 3; mi++) {
+      const my = h * (0.56 + mi * 0.05) + Math.sin(t * 0.003 + mi * 2) * 8;
+      const mg = _ctx.createLinearGradient(0, my - 12, 0, my + 12);
+      mg.addColorStop(0,   'rgba(200,220,210,0)');
+      mg.addColorStop(0.5, `rgba(200,220,210,${0.08 + mi * 0.03})`);
+      mg.addColorStop(1,   'rgba(200,220,210,0)');
+      _ctx.fillStyle = mg;
+      const drift = Math.sin(t * 0.002 + mi * 1.5) * w * 0.02;
+      _ctx.fillRect(drift, my - 12, w, 24);
+    }
+  }
+
+  // ══════════════════════════════════════════════════════════
+  //  SCENE: SNOW — mountain silhouettes, falling snow, cold sky
+  // ══════════════════════════════════════════════════════════
+  let _snowParticles = null;
+  function _initSnow() {
+    const w = _canvas.width, h = _canvas.height;
+    _snowParticles = Array.from({length: 160}, () => ({
+      x:     Math.random() * w,
+      y:     Math.random() * h,
+      r:     0.5 + Math.random() * 2.2,
+      speed: 0.3 + Math.random() * 0.8,
+      drift: (Math.random() - 0.5) * 0.4,
+      phase: Math.random() * Math.PI * 2,
+      alpha: 0.3 + Math.random() * 0.6,
+    }));
+  }
+
+  function _snowFrame(t, mode) {
+    const w = _canvas.width, h = _canvas.height;
+    const hr = new Date().getHours() + new Date().getMinutes() / 60;
+    if (!_snowParticles) _initSnow();
+
+    // Cold sky — blue-white gradient
+    const isNight = hr < 6 || hr >= 20;
+    const sg = _ctx.createLinearGradient(0, 0, 0, h * 0.65);
+    if (isNight) {
+      sg.addColorStop(0,   '#040a18'); sg.addColorStop(0.5, '#081428'); sg.addColorStop(1, '#0c1a34');
+    } else {
+      sg.addColorStop(0,   '#b8d4f0'); sg.addColorStop(0.4, '#d0e4f8'); sg.addColorStop(1, '#e8f2fc');
+    }
+    _ctx.fillStyle = sg; _ctx.fillRect(0, 0, w, h);
+
+    if (isNight) _drawStarsAndMoon(t, hr, mode);
+    else         _drawSun(hr);
+
+    // Mountain ridges — 3 layers, far (pale blue) → near (dark slate)
+    const RIDGES = [
+      { yFrac: 0.42, hFrac: 0.28, r: 180, g: 200, b: 228, a: 0.55, count: 7  },
+      { yFrac: 0.50, hFrac: 0.35, r: 120, g: 148, b: 188, a: 0.80, count: 5  },
+      { yFrac: 0.58, hFrac: 0.42, r:  55, g:  75, b: 110, a: 0.96, count: 4  },
+    ];
+
+    RIDGES.forEach((R, ri) => {
+      const panOff = ((_panAz - 180) / 180) * w * (0.12 + ri * 0.06);
+      _ctx.fillStyle = `rgba(${R.r},${R.g},${R.b},${R.a})`;
+      _ctx.beginPath();
+      const baseY = h * R.yFrac + h * R.hFrac;
+      _ctx.moveTo(-w * 0.1 - panOff, baseY);
+      // Generate peaks from seed
+      const step = w * 1.2 / R.count;
+      for (let pi = 0; pi <= R.count; pi++) {
+        const seed = (ri * 53 + pi * 71) % 100 / 100;
+        const px = -w * 0.1 + pi * step - panOff;
+        const py = h * R.yFrac - h * R.hFrac * (0.4 + seed * 0.6);
+        if (pi === 0) _ctx.lineTo(px, py);
+        else {
+          const prev_seed = (ri * 53 + (pi-1) * 71) % 100 / 100;
+          const cpx = px - step * 0.5;
+          const cpy = h * R.yFrac - h * R.hFrac * (0.3 + (seed + prev_seed) * 0.3);
+          _ctx.quadraticCurveTo(cpx, cpy, px, py);
+        }
+      }
+      _ctx.lineTo(w * 1.1 - panOff, baseY);
+      _ctx.closePath(); _ctx.fill();
+
+      // Snow cap — white overlay on upper 30% of each peak
+      _ctx.fillStyle = `rgba(240,248,255,${R.a * 0.55})`;
+      _ctx.beginPath();
+      _ctx.moveTo(-w * 0.1 - panOff, h * R.yFrac);
+      for (let pi = 0; pi <= R.count; pi++) {
+        const seed = (ri * 53 + pi * 71) % 100 / 100;
+        const px = -w * 0.1 + pi * step - panOff;
+        const peakY = h * R.yFrac - h * R.hFrac * (0.4 + seed * 0.6);
+        const snowLine = peakY + (h * R.yFrac - peakY) * 0.35; // top 35%
+        if (pi === 0) _ctx.lineTo(px, snowLine);
+        else {
+          const prev_seed = (ri * 53 + (pi-1) * 71) % 100 / 100;
+          const cpx = px - step * 0.5;
+          const cpy = h * R.yFrac - h * R.hFrac * (0.4 + (seed + prev_seed) * 0.35);
+          _ctx.quadraticCurveTo(cpx, cpy + (h * R.yFrac - cpy) * 0.35, px, snowLine);
+        }
+      }
+      _ctx.lineTo(w * 1.1 - panOff, h * R.yFrac);
+      _ctx.closePath(); _ctx.fill();
+    });
+
+    // Snow-covered ground
+    const gnd = _ctx.createLinearGradient(0, h * 0.72, 0, h);
+    gnd.addColorStop(0, 'rgba(220,234,248,0.95)'); gnd.addColorStop(1, '#b8cce0');
+    _ctx.fillStyle = gnd; _ctx.fillRect(0, h * 0.72, w, h * 0.28);
+
+    // Falling snow
+    _snowParticles.forEach(p => {
+      p.y += p.speed;
+      p.x += p.drift + Math.sin(t * 0.01 + p.phase) * 0.3;
+      if (p.y > h + 4) { p.y = -4; p.x = Math.random() * w; }
+      if (p.x > w + 4) p.x = -4;
+      if (p.x < -4)    p.x = w + 4;
+      _ctx.beginPath(); _ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+      _ctx.fillStyle = `rgba(255,255,255,${p.alpha})`;
+      _ctx.fill();
+    });
+  }
+
   // ── Public API ─────────────────────────────────────────────
+  // _activeSceneType: 'sea' | 'space' | 'forest' | 'snow'
+  let _activeSceneType = 'sea';
+
   function setScene(channel) {
     cancelAnimationFrame(_raf);
     _current = channel;
     if (!_canvas) return;
 
-    const mode = (channel === 'default' || channel === 'auto') ? 'default' : channel;
-    // Tell ambient audio to adjust its mix for this mode
+    // Map channel/scene name → scene type and canvas mode
+    const sceneMap = {
+      sea: 'sea', default: 'sea', auto: 'sea',
+      space: 'space',
+      forest: 'forest', nature: 'forest',
+      snow: 'snow',   focus: 'snow',
+      sleep: 'sea', yoga: 'sea',   // channel aliases → sea
+    };
+    _activeSceneType = sceneMap[channel] || 'sea';
+    const mode = { sea:'default', space:'sleep', forest:'nature', snow:'focus' }[_activeSceneType] || 'default';
+
     if (typeof AmbientAudio !== 'undefined') AmbientAudio.setMode(mode);
+
+    // Reset snow particles on scene entry
+    if (_activeSceneType === 'snow') _snowParticles = null;
 
     let t = 0;
     function frame() {
       _raf = requestAnimationFrame(frame);
       t++;
-      _worldFrame(t, mode);
+      switch (_activeSceneType) {
+        case 'space':  _spaceFrame(t);       break;
+        case 'forest': _forestFrame(t, mode); break;
+        case 'snow':   _snowFrame(t, mode);   break;
+        default:       _worldFrame(t, mode);  break;
+      }
     }
     frame();
   }
