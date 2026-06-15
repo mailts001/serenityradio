@@ -105,6 +105,9 @@
   .mood-controls{display:flex;justify-content:center;gap:12px;margin-top:15px;}
   .mood-btn{background:var(--bg3);border:1px solid var(--border);border-radius:20px;padding:6px 14px;font-size:12px;cursor:pointer;color:var(--text-muted);transition:all .2s;}
   .mood-btn:hover{border-color:var(--sage);color:var(--sage-light);}
+  .active-scene{border-color:var(--sage)!important;color:var(--sage-light)!important;background:rgba(122,158,126,.18)!important;}
+  .scene-btn.pro-locked{opacity:.65;}
+  .scene-btn.pro-locked::after{content:'✦';font-size:9px;margin-left:4px;color:var(--gold,#c8a96e);}
   .current-mood{text-align:center;margin-top:10px;font-size:12px;color:var(--sage-light);}
 
   .particle{position:fixed;border-radius:50%;pointer-events:none;z-index:0;animation:floatUp linear infinite;opacity:0;}
@@ -405,7 +408,16 @@
       <span id="vol-label" style="font-size:12px;color:var(--text-muted);min-width:28px">72%</span>
     </div>
     <div class="current-mood" id="current-mood">Loading mood...</div>
-    <div class="mood-controls">
+
+    <!-- Scene / Mood switcher -->
+    <div style="text-align:center;margin-top:10px;margin-bottom:4px;font-size:10px;color:var(--text-muted);letter-spacing:.08em;text-transform:uppercase">Scene</div>
+    <div class="mood-controls" id="scene-btns" style="flex-wrap:wrap;gap:8px;">
+      <button class="mood-btn scene-btn active-scene" id="scene-sea"     onclick="switchScene('sea')"    title="Tropical ocean — free for everyone">🌊 Sea</button>
+      <button class="mood-btn scene-btn"              id="scene-space"   onclick="switchScene('space')"  title="Deep space — Listener Pro">🌌 Space</button>
+      <button class="mood-btn scene-btn"              id="scene-forest"  onclick="switchScene('forest')" title="Highland forest — Listener Pro">🌲 Forest</button>
+      <button class="mood-btn scene-btn"              id="scene-snow"    onclick="switchScene('snow')"   title="Snow peaks — Listener Pro">🏔️ Snow</button>
+    </div>
+    <div class="mood-controls" style="margin-top:6px;">
       <button class="mood-btn" onclick="toggleShuffle()" id="shuffle-btn">🔀 Shuffle OFF</button>
       <button class="mood-btn" onclick="refreshPlaylist()">↻ Refresh</button>
     </div>
@@ -803,7 +815,8 @@ function loadTrack(index) {
 
 // Allow favorites panel to inject and play a track
 function loadFavoriteTrack(track) {
-  tracks.unshift(track);
+  // Remove any existing copy of this track, then put it first
+  tracks = [track, ...tracks.filter(t => t.src !== track.src)];
   currentTrack = 0;
   loadTrack(0);
   if (!isPlaying) togglePlay();
@@ -959,6 +972,70 @@ function setVolume(value) {
   if (audioElement) audioElement.volume = value / 100;
   document.getElementById('vol-label').textContent = value + '%';
 }
+
+// ── SCENE / MOOD SWITCHER ──────────────────────────────────────
+// Sea is free for everyone. Space / Forest / Snow are Pro scenes.
+// Non-Pro users get a 30-second preview, then a friendly upgrade nudge.
+let _scenePreviewTimer = null;
+const PRO_SCENES = new Set(['space', 'forest', 'snow']);
+
+// Map scene name → canvas mode string
+const SCENE_MODES = {
+  sea:    'default',   // existing ocean world
+  space:  'sleep',     // deep-night star field (reuses sleep palette) — temporary until dedicated scene
+  forest: 'nature',    // nature mode — temporary
+  snow:   'focus',     // focus mode cold palette — temporary
+};
+
+function switchScene(scene) {
+  // Clear any running preview countdown
+  if (_scenePreviewTimer) { clearTimeout(_scenePreviewTimer); _scenePreviewTimer = null; }
+
+  const isPro = typeof Auth !== 'undefined' && Auth.isPro();
+
+  if (PRO_SCENES.has(scene) && !isPro) {
+    // Give a 30-second free preview, then nudge upgrade
+    _applyScene(scene);
+    showToast(`✦ 30-second preview of ${scene.charAt(0).toUpperCase()+scene.slice(1)} scene`);
+    _scenePreviewTimer = setTimeout(() => {
+      // Return to sea
+      _applyScene('sea');
+      // Show upgrade prompt
+      if (typeof Auth !== 'undefined') {
+        Auth.requirePro('scenes',
+          `Unlock all 4 immersive scenes — Sea, Space, Forest & Snow. Free accounts enjoy the Sea view.`);
+      }
+    }, 30000);
+    return;
+  }
+
+  _applyScene(scene);
+}
+
+function _applyScene(scene) {
+  const mode = SCENE_MODES[scene] || 'default';
+  if (typeof CanvasScenes !== 'undefined') CanvasScenes.setScene(mode);
+
+  // Update button highlights
+  document.querySelectorAll('.scene-btn').forEach(b => b.classList.remove('active-scene'));
+  const activeBtn = document.getElementById('scene-' + scene);
+  if (activeBtn) activeBtn.classList.add('active-scene');
+
+  // Mark pro scenes visually
+  document.querySelectorAll('.scene-btn').forEach(b => {
+    const sc = b.id.replace('scene-', '');
+    if (PRO_SCENES.has(sc) && !(typeof Auth !== 'undefined' && Auth.isPro())) {
+      b.classList.add('pro-locked');
+    } else {
+      b.classList.remove('pro-locked');
+    }
+  });
+}
+
+// Mark pro scene buttons on auth state change
+document.addEventListener('auth:changed', () => _applyScene(
+  document.querySelector('.scene-btn.active-scene')?.id?.replace('scene-','') || 'sea'
+));
 
 // ── SHUFFLE & REFRESH FUNCTIONS ──
 async function toggleShuffle() {

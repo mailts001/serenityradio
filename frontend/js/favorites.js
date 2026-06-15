@@ -104,10 +104,10 @@ const Favorites = (() => {
   }
 
   function _loadQueue(queue) {
-    // Inject the whole queue into the global tracks array and play from pos 0
     if (typeof tracks !== 'undefined' && typeof loadTrack === 'function') {
-      // Prepend favorites queue before existing tracks
-      tracks.unshift(...queue);
+      // Put favourites first, then remaining library tracks that aren't in the queue
+      const qSrcs = new Set(queue.map(q => q.src));
+      tracks = [...queue, ...tracks.filter(t => !qSrcs.has(t.src))];
       currentTrack = 0;
       loadTrack(0);
       if (!isPlaying && typeof togglePlay === 'function') togglePlay();
