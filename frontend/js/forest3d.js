@@ -1,7 +1,6 @@
 /* ══════════════════════════════════════════════════════════
    Forest3D — Three.js infinite procedural forest
-   Mobile-optimised: instancing, fog, ~15k triangles
-   Controls: drag to pan/tilt · pinch to zoom · scroll to walk
+   Controls: drag pan/tilt · scroll/pinch zoom · WASD walk
    ══════════════════════════════════════════════════════════ */
 
 const Forest3D = (() => {
@@ -11,37 +10,51 @@ const Forest3D = (() => {
   const CHUNK   = 48;
   const GRID    = 5;
   const HALF    = 2;
-  const TREES   = 8;
+  const TREES   = 10;              // more plants per chunk
   const TOTAL_T = GRID * GRID * TREES;
   const TOTAL_C = TOTAL_T * 3;
+  const TOTAL_MUSH = 60;           // glowing mushrooms
+  const TOTAL_FLOW = 80;           // luminous flowers
+
+  // Plant archetypes: [hMin, hRange, trunkWidthMult, crXZmult, crYmult, r, g, b]
+  const PTYPES = [
+    [14, 26, 1.0, 0.65, 1.8,  0.10, 0.35, 0.10],  // 0: tall conifer
+    [7,  12, 2.4, 1.7,  0.65, 0.22, 0.46, 0.14],  // 1: broad oak
+    [2,   4, 0.5, 2.4,  0.45, 0.28, 0.52, 0.18],  // 2: ground shrub
+    [9,  14, 0.8, 1.0,  1.3,  0.18, 0.48, 0.12],  // 3: palm-like
+    [12, 14, 0.4, 0.65, 1.0,  0.36, 0.56, 0.24],  // 4: slim birch
+  ];
 
   // ── Module state ─────────────────────────────────────────────
   let _R, _scene, _cam, _raf;
-  let _trunkMesh, _canopyMesh, _cloudMesh, _fireMesh;
-  let _sunLight, _ambLight;
+  let _trunkMesh, _canopyMesh, _cloudMesh, _fireMesh, _mushMesh, _flowMesh;
+  let _sunLight, _ambLight, _hemiLight;
   let _canvas2d = null;
   let _el = null;
+  let _dummy = null;
 
   let _slots = [];
   let _camChunkX = 999, _camChunkZ = 999;
 
-  // Camera state
   const _camPos = { x: 0, y: 5.2, z: 0 };
-  let _camAz   = 0;       // horizontal look (radians)
-  let _camAlt  = 0.08;    // vertical tilt (radians, + = look up)
-  let _camFov  = 62;      // field of view
-  let _walkSpd = 0;       // manual walk impulse (decays)
+  let _camAz   = 0;
+  let _camAlt  = 0.08;
+  let _camFov  = 62;
+  let _walkSpd = 0;
   let _lastT   = 0;
   let _nightMode = false;
+  let _isDusk    = false;
 
-  // Pointer state (mouse & touch)
-  let _ptr = { down: false, x: 0, y: 0, az0: 0, alt0: 0 };
-  let _pinch = { active: false, dist0: 0, fov0: 0 };
+  let _ptr   = { down: false, x: 0, y: 0, az0: 0, alt0: 0 };
+  let _pinch = { active: false, dist0: 0, fov0: 0, midY: 0 };
 
   const _clouds   = [];
   const _birds    = [];
+  const _fireData = [];
+  const _mushData = [];
+  const _flowData = [];
   let   _birdMeshes = [];
-  let   _dummy = null;
+  let   _bindKeys   = {};
 
   // ── Seeded random ─────────────────────────────────────────────
   function rng(seed) {
@@ -51,18 +64,21 @@ const Forest3D = (() => {
 
   // ── Tree data ─────────────────────────────────────────────────
   function _treeData(cx, cz) {
-    const r = rng(cx * 9973 + cz * 9871 + 4567);
+    const r   = rng(cx * 9973 + cz * 9871 + 4567);
     const out = [];
     for (let i = 0; i < TREES; i++) {
       const angle = r() * Math.PI * 2;
-      const dist  = CHUNK * (0.18 + r() * 0.38);
+      const dist  = CHUNK * (0.12 + r() * 0.42);
+      const ptype = Math.floor(r() * PTYPES.length);
+      const pt    = PTYPES[ptype];
       out.push({
-        lx  : Math.cos(angle) * dist + (r() - 0.5) * CHUNK * 0.22,
-        lz  : Math.sin(angle) * dist + (r() - 0.5) * CHUNK * 0.22,
-        h   : 12 + r() * 24,
-        cr  : 2.4 + r() * 3.2,
-        lean: (r() - 0.5) * 0.07,
-        gv  : r(),
+        lx   : Math.cos(angle) * dist + (r() - 0.5) * CHUNK * 0.18,
+        lz   : Math.sin(angle) * dist + (r() - 0.5) * CHUNK * 0.18,
+        h    : pt[0] + r() * pt[1],
+        cr   : 2.0 + r() * 3.5,
+        lean : (r() - 0.5) * 0.06,
+        gv   : r(),
+        ptype: ptype,
       });
     }
     return out;
@@ -80,34 +96,44 @@ const Forest3D = (() => {
     trees.forEach((tr, ti) => {
       const wx = worldX + tr.lx;
       const wz = worldZ + tr.lz;
+      const pt = PTYPES[tr.ptype];
 
-      // Trunk
+      // Trunk — vary width by archetype
+      const trW = pt[2];
       _dummy.position.set(wx, tr.h * 0.5, wz);
-      _dummy.scale.set(1, tr.h, 1);
+      _dummy.scale.set(trW, tr.h, trW);
       _dummy.rotation.set(0, 0, tr.lean);
       _dummy.updateMatrix();
       _trunkMesh.setMatrixAt(tBase + ti, _dummy.matrix);
-      const tv = 0.85 + tr.gv * 0.2;
-      c3.setRGB(0.45 * tv, 0.30 * tv, 0.14 * tv);
+      // Trunk colour: warm brown, birch gets white-grey
+      const isB = tr.ptype === 4;
+      const tv  = 0.80 + tr.gv * 0.2;
+      c3.setRGB(
+        isB ? 0.85 * tv : 0.45 * tv,
+        isB ? 0.85 * tv : 0.30 * tv,
+        isB ? 0.82 * tv : 0.13 * tv
+      );
       _trunkMesh.setColorAt(tBase + ti, c3);
 
-      // Canopy: 3 blobs
-      const r2 = rng(cx * 71 + cz * 53 + ti * 17);
+      // Canopy blobs
+      const r2   = rng(cx * 71 + cz * 53 + ti * 17);
+      const crXZ = pt[3], crY = pt[4];
       for (let ci = 0; ci < 3; ci++) {
-        const offX = (r2() - 0.5) * tr.cr * 0.7;
-        const offZ = (r2() - 0.5) * tr.cr * 0.7;
-        const offY = ci === 0 ? 0 : ci === 1 ? -tr.cr * 0.38 : tr.cr * 0.28;
-        const sxy  = tr.cr * (0.72 + r2() * 0.44);
-        const sy   = sxy * (0.58 + r2() * 0.36);
+        const offX = (r2() - 0.5) * tr.cr * 0.6;
+        const offZ = (r2() - 0.5) * tr.cr * 0.6;
+        const offY = ci === 0 ? 0 : ci === 1 ? -tr.cr * 0.30 : tr.cr * 0.35;
+        const sxy  = tr.cr * crXZ * (0.72 + r2() * 0.44);
+        const sy   = sxy * crY * (0.55 + r2() * 0.30);
         _dummy.position.set(wx + offX, tr.h + offY, wz + offZ);
         _dummy.scale.set(sxy, sy, sxy);
         _dummy.rotation.set(0, r2() * Math.PI, 0);
         _dummy.updateMatrix();
         _canopyMesh.setMatrixAt(cBase + ti * 3 + ci, _dummy.matrix);
-        // Brighter, more vivid greens
-        const gBase = 0.30 + tr.gv * 0.18;
-        const ghi   = ci === 2 ? 0.10 : 0;
-        c3.setRGB(gBase * 0.42 + ghi * 0.2, gBase + ghi, gBase * 0.38 + ghi * 0.1);
+        // Vivid greens per archetype, bright highlight on top blob
+        const gb  = pt[5], gg = pt[6], gblu = pt[7];
+        const hi  = ci === 2 ? 0.12 : 0;
+        const gv2 = 0.85 + tr.gv * 0.3;
+        c3.setRGB((gb + hi * 0.15) * gv2, (gg + hi) * gv2, (gblu + hi * 0.05) * gv2);
         _canopyMesh.setColorAt(cBase + ti * 3 + ci, c3);
       }
     });
@@ -118,7 +144,7 @@ const Forest3D = (() => {
     _canopyMesh.instanceColor.needsUpdate  = true;
   }
 
-  // ── Chunk management ──────────────────────────────────────────
+  // ── Chunks ────────────────────────────────────────────────────
   function _checkChunks() {
     const cx = Math.round(_camPos.x / CHUNK);
     const cz = Math.round(_camPos.z / CHUNK);
@@ -130,17 +156,16 @@ const Forest3D = (() => {
       for (let gx = -HALF; gx <= HALF; gx++)
         desired.set(`${cx+gx},${cz+gz}`, { cx: cx+gx, cz: cz+gz });
 
-    const staleSlots = [];
-    _slots.forEach((sl, idx) => {
+    const stale = [];
+    _slots.forEach((sl, i) => {
       if (desired.has(`${sl.cx},${sl.cz}`)) desired.delete(`${sl.cx},${sl.cz}`);
-      else staleSlots.push(idx);
+      else stale.push(i);
     });
-
     const missing = [...desired.values()];
-    staleSlots.forEach((slotIdx, i) => {
+    stale.forEach((idx, i) => {
       if (i >= missing.length) return;
-      _slots[slotIdx] = { cx: missing[i].cx, cz: missing[i].cz };
-      _updateSlot(slotIdx, missing[i].cx, missing[i].cz);
+      _slots[idx] = missing[i];
+      _updateSlot(idx, missing[i].cx, missing[i].cz);
     });
   }
 
@@ -159,17 +184,13 @@ const Forest3D = (() => {
     _clouds.length = 0;
     for (let i = 0; i < 12; i++) {
       _clouds.push({
-        x: (r() - 0.5) * CHUNK * GRID * 0.9,
-        y: 30 + r() * 22,
-        z: (r() - 0.5) * CHUNK * GRID * 0.9,
-        sx: 10 + r() * 18, sy: 2.2 + r() * 2.8, sz: 6 + r() * 12,
-        vx: 0.006 + r() * 0.010,
-        phase: r() * Math.PI * 2,
+        x: (r()-0.5)*CHUNK*GRID*0.9, y: 30+r()*22, z: (r()-0.5)*CHUNK*GRID*0.9,
+        sx: 10+r()*18, sy: 2.2+r()*2.8, sz: 6+r()*12,
+        vx: 0.006+r()*0.010, phase: r()*Math.PI*2,
       });
     }
     _refreshClouds();
   }
-
   function _refreshClouds() {
     _clouds.forEach((cl, i) => {
       _dummy.position.set(cl.x, cl.y, cl.z);
@@ -180,7 +201,6 @@ const Forest3D = (() => {
     });
     _cloudMesh.instanceMatrix.needsUpdate = true;
   }
-
   function _updateClouds(dt) {
     const worldW = CHUNK * GRID;
     _clouds.forEach(cl => {
@@ -190,38 +210,103 @@ const Forest3D = (() => {
     _refreshClouds();
   }
 
+  // ── Glowing mushrooms (MeshBasicMaterial — always bright) ─────
+  function _initMushrooms() {
+    const r = rng(33333);
+    _mushData.length = 0;
+    for (let i = 0; i < TOTAL_MUSH; i++) {
+      _mushData.push({
+        x: (r()-0.5)*CHUNK*GRID*0.8, y: 0, z: (r()-0.5)*CHUNK*GRID*0.8,
+        s: 0.18 + r() * 0.32,
+        hue: r(),          // 0=orange 0.5=cyan 0.75=violet
+        phase: r()*Math.PI*2,
+      });
+    }
+    _refreshMushrooms(0);
+  }
+  function _refreshMushrooms(t) {
+    const c3 = new THREE.Color();
+    _mushData.forEach((m, i) => {
+      _dummy.position.set(m.x, m.y + m.s * 0.5, m.z);
+      _dummy.scale.setScalar(m.s);
+      _dummy.updateMatrix();
+      _mushMesh.setMatrixAt(i, _dummy.matrix);
+      // Pulse glow
+      const pulse = 0.65 + 0.35 * Math.sin(t * 0.0012 + m.phase);
+      if (m.hue < 0.33)      c3.setRGB(pulse, pulse * 0.55, pulse * 0.1);   // orange
+      else if (m.hue < 0.66) c3.setRGB(pulse * 0.2, pulse, pulse * 0.7);    // teal
+      else                   c3.setRGB(pulse * 0.7, pulse * 0.2, pulse);     // violet
+      _mushMesh.setColorAt(i, c3);
+    });
+    _mushMesh.instanceMatrix.needsUpdate = true;
+    _mushMesh.instanceColor.needsUpdate  = true;
+  }
+
+  // ── Luminous flowers (tiny always-bright dots) ────────────────
+  function _initFlowers() {
+    const r = rng(44444);
+    _flowData.length = 0;
+    for (let i = 0; i < TOTAL_FLOW; i++) {
+      _flowData.push({
+        x: (r()-0.5)*CHUNK*GRID*0.9, z: (r()-0.5)*CHUNK*GRID*0.9,
+        s: 0.08 + r() * 0.14,
+        r: r(), g: r(), b: r(),
+        phase: r()*Math.PI*2,
+      });
+    }
+    _refreshFlowers(0);
+  }
+  function _refreshFlowers(t) {
+    const c3 = new THREE.Color();
+    _flowData.forEach((f, i) => {
+      _dummy.position.set(f.x, 0.05, f.z);
+      _dummy.scale.setScalar(f.s);
+      _dummy.updateMatrix();
+      _flowMesh.setMatrixAt(i, _dummy.matrix);
+      // Bright saturated colours — unlit so always vivid
+      const pulse = 0.75 + 0.25 * Math.sin(t * 0.0008 + f.phase);
+      const mx = Math.max(f.r, f.g, f.b);
+      c3.setRGB(f.r/mx * pulse, f.g/mx * pulse, f.b/mx * pulse);
+      _flowMesh.setColorAt(i, c3);
+    });
+    _flowMesh.instanceMatrix.needsUpdate = true;
+    _flowMesh.instanceColor.needsUpdate  = true;
+  }
+
   // ── Fireflies ─────────────────────────────────────────────────
-  const _fireData = [];
   function _initFireflies() {
     const r = rng(11111);
     _fireData.length = 0;
-    for (let i = 0; i < 30; i++) {
+    for (let i = 0; i < 60; i++) {   // more fireflies
       _fireData.push({
-        x: (r() - 0.5) * CHUNK * 2, y: 0.8 + r() * 3.5,
-        z: (r() - 0.5) * CHUNK * 2,
-        vx: (r() - 0.5) * 0.012, vz: (r() - 0.5) * 0.012,
-        phase: r() * Math.PI * 2, speed: 0.8 + r() * 1.2,
+        x: (r()-0.5)*CHUNK*2, y: 0.5+r()*4.0, z: (r()-0.5)*CHUNK*2,
+        vx: (r()-0.5)*0.014, vz: (r()-0.5)*0.014,
+        phase: r()*Math.PI*2, speed: 0.7+r()*1.4,
+        cr: r(), cg: r(), cb: r(),   // per-firefly colour
       });
     }
   }
-
   function _updateFireflies(t, dt) {
     const c3 = new THREE.Color();
+    const wrap = CHUNK * 1.6;
     _fireData.forEach((f, i) => {
       f.x += f.vx * dt * 0.04;
-      f.y += Math.sin(t * 0.0008 * f.speed + f.phase) * 0.008;
+      f.y += Math.sin(t * 0.0008 * f.speed + f.phase) * 0.010;
       f.z += f.vz * dt * 0.04;
-      const wrap = CHUNK * 1.5;
-      if (f.x < _camPos.x - wrap) f.x += wrap * 2;
-      if (f.x > _camPos.x + wrap) f.x -= wrap * 2;
-      if (f.z < _camPos.z - wrap) f.z += wrap * 2;
-      if (f.z > _camPos.z + wrap) f.z -= wrap * 2;
+      if (f.x < _camPos.x-wrap) f.x += wrap*2;
+      if (f.x > _camPos.x+wrap) f.x -= wrap*2;
+      if (f.z < _camPos.z-wrap) f.z += wrap*2;
+      if (f.z > _camPos.z+wrap) f.z -= wrap*2;
       _dummy.position.set(f.x, f.y, f.z);
-      _dummy.scale.setScalar(0.18);
+      _dummy.scale.setScalar(0.20);
       _dummy.updateMatrix();
       _fireMesh.setMatrixAt(i, _dummy.matrix);
-      const bri = 0.4 + 0.6 * Math.sin(t * 0.003 * f.speed + f.phase);
-      c3.setRGB(bri * 0.8, bri, bri * 0.3);
+      // Night: bright pulsing; day: very faint (still visible)
+      const nightBri = 0.45 + 0.55 * Math.sin(t * 0.0025 * f.speed + f.phase);
+      const dayBri   = 0.08 + 0.06 * Math.sin(t * 0.0025 * f.speed + f.phase);
+      const bri = _nightMode ? nightBri : (_isDusk ? nightBri * 0.5 : dayBri);
+      const mx  = Math.max(f.cr, f.cg, f.cb, 0.01);
+      c3.setRGB(f.cr/mx * bri, f.cg/mx * bri, f.cb/mx * bri);
       _fireMesh.setColorAt(i, c3);
     });
     _fireMesh.instanceMatrix.needsUpdate = true;
@@ -234,21 +319,19 @@ const Forest3D = (() => {
     _birds.length = 0;
     _birdMeshes.forEach(m => _scene.remove(m));
     _birdMeshes = [];
-    const mat = new THREE.MeshBasicMaterial({ color: 0x333322 });
-    for (let i = 0; i < 3; i++) {
+    const mat = new THREE.MeshBasicMaterial({ color: 0x222211 });
+    for (let i = 0; i < 5; i++) {
       _birds.push({
-        orbitR: 18 + r() * 24, orbitY: 18 + r() * 16,
-        speed: 0.0004 + r() * 0.0006, phase: r() * Math.PI * 2,
-        tilt: (r() - 0.5) * 0.3,
+        orbitR: 18+r()*30, orbitY: 14+r()*20,
+        speed: 0.0003+r()*0.0007, phase: r()*Math.PI*2,
+        tilt: (r()-0.5)*0.3,
       });
-      const geo = new THREE.ConeGeometry(0.18, 0.6, 3);
+      const geo = new THREE.ConeGeometry(0.20, 0.65, 3);
       geo.rotateX(Math.PI / 2);
-      const mesh = new THREE.Mesh(geo, mat);
-      _scene.add(mesh);
-      _birdMeshes.push(mesh);
+      _birdMeshes.push(new THREE.Mesh(geo, mat));
+      _scene.add(_birdMeshes[i]);
     }
   }
-
   function _updateBirds(t) {
     _birds.forEach((b, i) => {
       const angle = t * b.speed * 1000 + b.phase;
@@ -262,65 +345,69 @@ const Forest3D = (() => {
     });
   }
 
-  // ── Lighting & sky ────────────────────────────────────────────
+  // ── Lighting ──────────────────────────────────────────────────
   function _applyTimeOfDay() {
     const hr = new Date().getHours() + new Date().getMinutes() / 60;
     _nightMode = hr < 6 || hr >= 20;
-    const isDusk = !_nightMode && (hr < 7.5 || hr >= 17.5);
+    _isDusk    = !_nightMode && (hr < 7.5 || hr >= 17.5);
 
     if (_nightMode) {
-      _scene.background.setStyle('#0d1a10');
-      _scene.fog.color.setStyle('#0d1a10');
-      _ambLight.color.setStyle('#203830');
-      _ambLight.intensity = 0.7;
-      _sunLight.color.setStyle('#4060ff');
-      _sunLight.intensity = 0.4;
+      _scene.background.setStyle('#0b1612');
+      _scene.fog.color.setStyle('#0b1612');
+      _ambLight.color.setStyle('#1e3828');  _ambLight.intensity = 0.9;
+      _sunLight.color.setStyle('#4060ff');  _sunLight.intensity = 0.5;
       _sunLight.position.set(-40, 60, -50);
-    } else if (isDusk) {
+      _hemiLight.color.setStyle('#1e4028'); _hemiLight.groundColor.setStyle('#0a200a');
+      _hemiLight.intensity = 0.6;
+      _cloudMesh.material.opacity = 0.30;
+    } else if (_isDusk) {
       _scene.background.setStyle('#e8905a');
-      _scene.fog.color.setStyle('#d07844');
-      _ambLight.color.setStyle('#d08858');
-      _ambLight.intensity = 1.2;
-      _sunLight.color.setStyle('#ffb060');
-      _sunLight.intensity = 1.8;
+      _scene.fog.color.setStyle('#c87840');
+      _ambLight.color.setStyle('#d09060');  _ambLight.intensity = 1.5;
+      _sunLight.color.setStyle('#ffb060');  _sunLight.intensity = 2.0;
       _sunLight.position.set(hr > 12 ? -80 : 80, 30, 40);
+      _hemiLight.color.setStyle('#e0a060'); _hemiLight.groundColor.setStyle('#503010');
+      _hemiLight.intensity = 0.8;
+      _cloudMesh.material.opacity = 0.85;
     } else {
-      // Bright daytime — vivid blue sky
-      _scene.background.setStyle('#74b8e8');
-      _scene.fog.color.setStyle('#a8d0ea');
-      _ambLight.color.setStyle('#c8e8d8');
-      _ambLight.intensity = 1.6;
-      _sunLight.color.setStyle('#fff8e8');
-      _sunLight.intensity = 2.0;
+      // Bright daytime
+      _scene.background.setStyle('#5ab0e8');
+      _scene.fog.color.setStyle('#8ecce8');
+      _ambLight.color.setStyle('#d8f0e8');  _ambLight.intensity = 2.2;
+      _sunLight.color.setStyle('#fff8e0');  _sunLight.intensity = 2.5;
       _sunLight.position.set(60, 90, 50);
+      _hemiLight.color.setStyle('#90d8f0'); _hemiLight.groundColor.setStyle('#5a9c30');
+      _hemiLight.intensity = 1.0;
+      _cloudMesh.material.opacity = 0.95;
     }
 
-    _cloudMesh.material.opacity = _nightMode ? 0.45 : 0.92;
-    _fireMesh.visible = _nightMode || isDusk;
+    // Mushrooms & flowers glow stronger at night
+    _mushMesh.material.opacity = _nightMode ? 1.0 : (_isDusk ? 0.85 : 0.65);
   }
 
-  // ── Camera update ─────────────────────────────────────────────
+  // ── Camera ────────────────────────────────────────────────────
   function _updateCamera(dt, t) {
-    // Auto-drift forward (slow)
-    const autoSpd = 0.008;
-    _camPos.x += Math.sin(_camAz) * autoSpd * dt;
-    _camPos.z -= Math.cos(_camAz) * autoSpd * dt;
+    // WASD
+    const spd = 0.022;
+    if (_bindKeys['KeyW']||_bindKeys['ArrowUp'])    { _camPos.x += Math.sin(_camAz)*spd*dt; _camPos.z -= Math.cos(_camAz)*spd*dt; }
+    if (_bindKeys['KeyS']||_bindKeys['ArrowDown'])  { _camPos.x -= Math.sin(_camAz)*spd*dt; _camPos.z += Math.cos(_camAz)*spd*dt; }
+    if (_bindKeys['KeyA']||_bindKeys['ArrowLeft'])  { _camPos.x -= Math.cos(_camAz)*spd*dt*0.7; _camPos.z -= Math.sin(_camAz)*spd*dt*0.7; }
+    if (_bindKeys['KeyD']||_bindKeys['ArrowRight']) { _camPos.x += Math.cos(_camAz)*spd*dt*0.7; _camPos.z += Math.sin(_camAz)*spd*dt*0.7; }
 
-    // Manual walk impulse (from scroll/pinch)
+    // Manual walk impulse
     if (Math.abs(_walkSpd) > 0.001) {
       _camPos.x += Math.sin(_camAz) * _walkSpd * dt;
       _camPos.z -= Math.cos(_camAz) * _walkSpd * dt;
-      _walkSpd *= Math.pow(0.88, dt / 16);  // decay
+      _walkSpd *= Math.pow(0.88, dt / 16);
     }
 
-    // Gentle breathing height
+    // Auto slow drift
+    _camPos.x += Math.sin(_camAz) * 0.006 * dt;
+    _camPos.z -= Math.cos(_camAz) * 0.006 * dt;
     _camPos.y = 5.2 + Math.sin(t * 0.00028) * 0.45;
+    _camAlt   = Math.max(-0.60, Math.min(0.60, _camAlt));
 
-    // Canopy gentle sway
     _canopyMesh.rotation.z = Math.sin(t * 0.00055) * 0.012;
-
-    // Clamp tilt
-    _camAlt = Math.max(-0.55, Math.min(0.55, _camAlt));
 
     const lookX = _camPos.x + Math.sin(_camAz) * Math.cos(_camAlt) * 25;
     const lookY = _camPos.y + Math.sin(_camAlt) * 25;
@@ -329,14 +416,13 @@ const Forest3D = (() => {
     _cam.lookAt(lookX, lookY, lookZ);
   }
 
-  // ── Input binding ─────────────────────────────────────────────
-  function _dist2(t1, t2) {
-    const dx = t1.clientX - t2.clientX, dy = t1.clientY - t2.clientY;
-    return Math.sqrt(dx * dx + dy * dy);
+  // ── Input ─────────────────────────────────────────────────────
+  function _dist2(a, b) {
+    const dx = a.clientX - b.clientX, dy = a.clientY - b.clientY;
+    return Math.sqrt(dx*dx + dy*dy);
   }
 
   function _bindInput(el) {
-    // ── Mouse ──────────────────────────────────────────────────
     el.addEventListener('mousedown', e => {
       _ptr.down = true;
       _ptr.x = e.clientX; _ptr.y = e.clientY;
@@ -344,61 +430,44 @@ const Forest3D = (() => {
     });
     window.addEventListener('mousemove', e => {
       if (!_ptr.down) return;
-      const dx = e.clientX - _ptr.x;
-      const dy = e.clientY - _ptr.y;
-      _camAz  = _ptr.az0  - dx * 0.0030;
-      _camAlt = _ptr.alt0 + dy * 0.0025;
+      _camAz  = _ptr.az0  - (e.clientX - _ptr.x) * 0.0030;
+      _camAlt = _ptr.alt0 + (e.clientY - _ptr.y) * 0.0025;
     });
     window.addEventListener('mouseup', () => { _ptr.down = false; });
 
-    // Scroll wheel → walk forward/back
     el.addEventListener('wheel', e => {
       e.preventDefault();
       _walkSpd -= e.deltaY * 0.0008;
-      _walkSpd = Math.max(-0.35, Math.min(0.35, _walkSpd));
+      _walkSpd = Math.max(-0.38, Math.min(0.38, _walkSpd));
     }, { passive: false });
 
-    // Double-click → cycle time of day (for fun)
     el.addEventListener('dblclick', _applyTimeOfDay);
 
-    // ── Touch ──────────────────────────────────────────────────
     el.addEventListener('touchstart', e => {
       e.preventDefault();
       if (e.touches.length === 1) {
-        _ptr.down = true;
+        _ptr.down = true; _pinch.active = false;
         _ptr.x = e.touches[0].clientX; _ptr.y = e.touches[0].clientY;
         _ptr.az0 = _camAz; _ptr.alt0 = _camAlt;
-        _pinch.active = false;
       } else if (e.touches.length === 2) {
-        _ptr.down = false;
-        _pinch.active = true;
+        _ptr.down = false; _pinch.active = true;
         _pinch.dist0 = _dist2(e.touches[0], e.touches[1]);
         _pinch.fov0  = _camFov;
-        // mid-point Y for two-finger swipe
-        _ptr.y = (e.touches[0].clientY + e.touches[1].clientY) * 0.5;
-        _ptr.alt0 = _camAlt;
+        _pinch.midY  = (e.touches[0].clientY + e.touches[1].clientY) * 0.5;
       }
     }, { passive: false });
 
     el.addEventListener('touchmove', e => {
       e.preventDefault();
       if (e.touches.length === 1 && _ptr.down) {
-        const dx = e.touches[0].clientX - _ptr.x;
-        const dy = e.touches[0].clientY - _ptr.y;
-        _camAz  = _ptr.az0  - dx * 0.0035;
-        _camAlt = _ptr.alt0 + dy * 0.0028;
+        _camAz  = _ptr.az0  - (e.touches[0].clientX - _ptr.x) * 0.0035;
+        _camAlt = _ptr.alt0 + (e.touches[0].clientY - _ptr.y) * 0.0028;
       } else if (e.touches.length === 2 && _pinch.active) {
-        // Pinch to zoom (FOV)
         const d = _dist2(e.touches[0], e.touches[1]);
-        const scale = _pinch.dist0 / Math.max(d, 10);
-        _camFov = Math.max(28, Math.min(90, _pinch.fov0 * scale));
-        _cam.fov = _camFov;
-        _cam.updateProjectionMatrix();
-
-        // Two-finger swipe up/down → walk
+        _camFov = Math.max(28, Math.min(90, _pinch.fov0 * (_pinch.dist0 / Math.max(d, 10))));
+        _cam.fov = _camFov; _cam.updateProjectionMatrix();
         const midY = (e.touches[0].clientY + e.touches[1].clientY) * 0.5;
-        const dy   = _ptr.y - midY;
-        _walkSpd = dy * 0.0018;
+        _walkSpd = (_pinch.midY - midY) * 0.0018;
       }
     }, { passive: false });
 
@@ -407,7 +476,6 @@ const Forest3D = (() => {
       if (e.touches.length === 0) _ptr.down = false;
     }, { passive: true });
 
-    // Double-tap → cycle time of day
     let _lastTap = 0;
     el.addEventListener('touchend', () => {
       const now = Date.now();
@@ -415,85 +483,86 @@ const Forest3D = (() => {
       _lastTap = now;
     }, { passive: true });
 
-    // ── Keyboard (desktop) ─────────────────────────────────────
-    const _keys = {};
-    window.addEventListener('keydown', e => { _keys[e.code] = true; });
-    window.addEventListener('keyup',   e => { _keys[e.code] = false; });
-    // Expose keys for camera update
-    _bindInput._keys = _keys;
-  }
-
-  // ── Handle keyboard walk in camera update ─────────────────────
-  function _applyKeys(dt) {
-    const keys = _bindInput._keys;
-    if (!keys) return;
-    const spd = 0.024;
-    if (keys['KeyW'] || keys['ArrowUp'])    { _camPos.x += Math.sin(_camAz) * spd * dt; _camPos.z -= Math.cos(_camAz) * spd * dt; }
-    if (keys['KeyS'] || keys['ArrowDown'])  { _camPos.x -= Math.sin(_camAz) * spd * dt; _camPos.z += Math.cos(_camAz) * spd * dt; }
-    if (keys['KeyA'] || keys['ArrowLeft'])  { _camPos.x -= Math.cos(_camAz) * spd * dt * 0.7; _camPos.z -= Math.sin(_camAz) * spd * dt * 0.7; }
-    if (keys['KeyD'] || keys['ArrowRight']) { _camPos.x += Math.cos(_camAz) * spd * dt * 0.7; _camPos.z += Math.sin(_camAz) * spd * dt * 0.7; }
+    window.addEventListener('keydown', e => { _bindKeys[e.code] = true; });
+    window.addEventListener('keyup',   e => { _bindKeys[e.code] = false; });
   }
 
   // ── Build scene ───────────────────────────────────────────────
   function _build() {
-    const trunkGeo  = new THREE.CylinderGeometry(0.13, 0.35, 1, 5, 1);
+    const trunkGeo  = new THREE.CylinderGeometry(0.13, 0.38, 1, 6, 1);
     const canopyGeo = new THREE.SphereGeometry(1, 5, 4);
     const cloudGeo  = new THREE.SphereGeometry(1, 6, 4);
-    const fireGeo   = new THREE.SphereGeometry(1, 3, 2);
+    const fireGeo   = new THREE.SphereGeometry(1, 4, 3);
+    const mushGeo   = new THREE.SphereGeometry(1, 5, 4);   // mushroom cap
+    const flowGeo   = new THREE.SphereGeometry(1, 4, 3);
 
     const trunkMat  = new THREE.MeshLambertMaterial({ vertexColors: true });
     const canopyMat = new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true });
-    const cloudMat  = new THREE.MeshLambertMaterial({ color: 0xf0f8f0, transparent: true, opacity: 0.92 });
-    const fireMat   = new THREE.MeshBasicMaterial({ vertexColors: true });
+    const cloudMat  = new THREE.MeshLambertMaterial({ color: 0xf5faf5, transparent: true, opacity: 0.95 });
+    const fireMat   = new THREE.MeshBasicMaterial({ vertexColors: true });         // unlit = always bright
+    const mushMat   = new THREE.MeshBasicMaterial({ vertexColors: true, transparent: true, opacity: 1.0 });
+    const flowMat   = new THREE.MeshBasicMaterial({ vertexColors: true });         // unlit flowers
 
     _trunkMesh  = new THREE.InstancedMesh(trunkGeo,  trunkMat,  TOTAL_T);
     _canopyMesh = new THREE.InstancedMesh(canopyGeo, canopyMat, TOTAL_C);
     _cloudMesh  = new THREE.InstancedMesh(cloudGeo,  cloudMat,  12);
-    _fireMesh   = new THREE.InstancedMesh(fireGeo,   fireMat,   30);
+    _fireMesh   = new THREE.InstancedMesh(fireGeo,   fireMat,   60);
+    _mushMesh   = new THREE.InstancedMesh(mushGeo,   mushMat,   TOTAL_MUSH);
+    _flowMesh   = new THREE.InstancedMesh(flowGeo,   flowMat,   TOTAL_FLOW);
 
-    _trunkMesh.frustumCulled  = false;
-    _canopyMesh.frustumCulled = false;
-    _cloudMesh.frustumCulled  = false;
-    _fireMesh.frustumCulled   = false;
-    _fireMesh.visible = false;
+    [_trunkMesh,_canopyMesh,_cloudMesh,_fireMesh,_mushMesh,_flowMesh]
+      .forEach(m => { m.frustumCulled = false; });
 
-    _scene.add(_trunkMesh, _canopyMesh, _cloudMesh, _fireMesh);
+    _scene.add(_trunkMesh, _canopyMesh, _cloudMesh, _fireMesh, _mushMesh, _flowMesh);
 
-    // Ground — bright lush green
+    // Ground
     const ground = new THREE.Mesh(
-      new THREE.PlaneGeometry(CHUNK * GRID * 5, CHUNK * GRID * 5),
-      new THREE.MeshLambertMaterial({ color: 0x3a8020 })
+      new THREE.PlaneGeometry(CHUNK * GRID * 6, CHUNK * GRID * 6),
+      new THREE.MeshLambertMaterial({ color: 0x3c8a20 })
     );
     ground.rotation.x = -Math.PI / 2;
     _scene.add(ground);
 
-    _ambLight = new THREE.AmbientLight(0xc8e8d8, 1.6);
-    _sunLight = new THREE.DirectionalLight(0xfff8e8, 2.0);
+    // Lights
+    _ambLight  = new THREE.AmbientLight(0xd8f0e8, 2.2);
+    _sunLight  = new THREE.DirectionalLight(0xfff8e0, 2.5);
     _sunLight.position.set(60, 90, 50);
-    _scene.add(_ambLight, _sunLight);
+    _hemiLight = new THREE.HemisphereLight(0x90d8f0, 0x5a9c30, 1.0);  // sky + ground bounce
+    _scene.add(_ambLight, _sunLight, _hemiLight);
 
     _fillGrid();
     _initClouds();
     _initFireflies();
+    _initMushrooms();
+    _initFlowers();
     _initBirds();
     _applyTimeOfDay();
     setInterval(_applyTimeOfDay, 60000);
   }
 
-  // ── Animation loop ────────────────────────────────────────────
+  // ── Loop ─────────────────────────────────────────────────────
   function _loop(now) {
     _raf = requestAnimationFrame(_loop);
     const dt = Math.min(now - _lastT, 50);
     _lastT = now;
 
-    _applyKeys(dt);
     _updateCamera(dt, now);
     _updateClouds(dt);
     _updateFireflies(now, dt);
+    _refreshMushrooms(now);
+    _refreshFlowers(now);
     _updateBirds(now);
     _checkChunks();
-
     _R.render(_scene, _cam);
+  }
+
+  // ── Resize (incl. fullscreen) ─────────────────────────────────
+  function _onResize() {
+    if (!_R || !_cam) return;
+    const w = window.innerWidth, h = window.innerHeight;
+    _R.setSize(w, h);
+    _cam.aspect = w / h;
+    _cam.updateProjectionMatrix();
   }
 
   // ── Public: start ─────────────────────────────────────────────
@@ -519,14 +588,14 @@ const Forest3D = (() => {
       _R.setSize(window.innerWidth, window.innerHeight);
 
       _scene = new THREE.Scene();
-      _scene.background = new THREE.Color(0x74b8e8);
-      _scene.fog = new THREE.FogExp2(0xa8d0ea, 0.008);  // lighter, less dense
+      _scene.background = new THREE.Color(0x5ab0e8);
+      _scene.fog = new THREE.FogExp2(0x8ecce8, 0.007);   // light, far horizon
 
       _cam = new THREE.PerspectiveCamera(
-        _camFov, window.innerWidth / window.innerHeight, 0.4, 320
+        _camFov, window.innerWidth / window.innerHeight, 0.4, 350
       );
 
-      _dummy = new THREE.Object3D();  // safe: THREE is loaded
+      _dummy = new THREE.Object3D();
 
       _camPos.x = 0; _camPos.y = 5.2; _camPos.z = 0;
       _camAz = 0; _camAlt = 0.08; _camChunkX = 999; _camChunkZ = 999;
@@ -535,6 +604,10 @@ const Forest3D = (() => {
       _bindInput(_el);
 
       window.addEventListener('resize', _onResize);
+      // Fix blank screen on fullscreen toggle
+      document.addEventListener('fullscreenchange', () => setTimeout(_onResize, 80));
+      document.addEventListener('webkitfullscreenchange', () => setTimeout(_onResize, 80));
+
       _lastT = performance.now();
       _loop(_lastT);
     }
@@ -553,24 +626,19 @@ const Forest3D = (() => {
   function stop() {
     cancelAnimationFrame(_raf);
     window.removeEventListener('resize', _onResize);
+    document.removeEventListener('fullscreenchange', _onResize);
+    document.removeEventListener('webkitfullscreenchange', _onResize);
     if (_el) { _el.remove(); _el = null; }
     if (_R)  { _R.dispose(); _R = null; }
     _birdMeshes = [];
-    _scene = _cam = _trunkMesh = _canopyMesh = _cloudMesh = _fireMesh = null;
+    _scene = _cam = _trunkMesh = _canopyMesh = _cloudMesh =
+      _fireMesh = _mushMesh = _flowMesh = null;
     _slots = [];
+    _bindKeys = {};
     if (_canvas2d) { _canvas2d.style.display = ''; _canvas2d = null; }
   }
 
-  function _onResize() {
-    if (!_R) return;
-    _R.setSize(window.innerWidth, window.innerHeight);
-    _cam.aspect = window.innerWidth / window.innerHeight;
-    _cam.updateProjectionMatrix();
-  }
-
-  function syncPan(azDeg) {
-    _camAz = azDeg * Math.PI / 180;
-  }
+  function syncPan(azDeg) { _camAz = azDeg * Math.PI / 180; }
 
   return { start, stop, syncPan };
 })();
