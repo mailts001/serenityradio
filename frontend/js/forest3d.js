@@ -70,7 +70,7 @@ const Forest3D = (() => {
   }
 
   // ── Update one chunk's instance slice ────────────────────────
-  const _dummy = new THREE.Object3D();
+  let _dummy = null;   // initialised after THREE loads in _realStart()
 
   function _updateSlot(slotIdx, cx, cz) {
     const trees   = _treeData(cx, cz);
@@ -476,6 +476,8 @@ const Forest3D = (() => {
       _cam = new THREE.PerspectiveCamera(
         62, window.innerWidth / window.innerHeight, 0.4, 280
       );
+
+      _dummy = new THREE.Object3D();   // safe now — THREE is loaded
 
       _camPos.x = 0; _camPos.y = 5.2; _camPos.z = 0;
       _camAz = 0; _camChunkX = 999; _camChunkZ = 999;
