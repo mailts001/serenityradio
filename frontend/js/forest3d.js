@@ -29,8 +29,8 @@ const Forest3D = (() => {
   // ── Module state ─────────────────────────────────────────────
   let _R, _scene, _cam, _raf;
   let _trunkMesh, _canopyMesh, _cloudMesh, _fireMesh, _mushMesh, _flowMesh;
-  let _sunLight, _moonLight, _ambLight, _hemiLight;
   let _lastW = 0, _lastH = 0;   // for per-frame fullscreen resize check
+  let _nightTint = new Array(3).fill(1);   // RGB multiplier applied to vertex colours at night
   let _canvas2d = null;
   let _el = null;
   let _dummy = null;
@@ -111,13 +111,14 @@ const Forest3D = (() => {
       _dummy.rotation.set(0, 0, tr.lean);
       _dummy.updateMatrix();
       _trunkMesh.setMatrixAt(tBase + ti, _dummy.matrix);
-      // Trunk colour: warm brown, birch gets white-grey
+      // Trunk colour: warm brown, birch gets white-grey; tinted by time of day
       const isB = tr.ptype === 4;
       const tv  = 0.80 + tr.gv * 0.2;
+      const tr_ = _nightTint;
       c3.setRGB(
-        isB ? 0.85 * tv : 0.45 * tv,
-        isB ? 0.85 * tv : 0.30 * tv,
-        isB ? 0.82 * tv : 0.13 * tv
+        (isB ? 0.82 * tv : 0.52 * tv) * tr_[0],
+        (isB ? 0.82 * tv : 0.36 * tv) * tr_[1],
+        (isB ? 0.80 * tv : 0.18 * tv) * tr_[2]
       );
       _trunkMesh.setColorAt(tBase + ti, c3);
 
@@ -135,11 +136,12 @@ const Forest3D = (() => {
         _dummy.rotation.set(0, r2() * Math.PI, 0);
         _dummy.updateMatrix();
         _canopyMesh.setMatrixAt(cBase + ti * 3 + ci, _dummy.matrix);
-        // Vivid greens per archetype, bright highlight on top blob
+        // Vivid greens per archetype; tinted by time of day
         const gb  = pt[5], gg = pt[6], gblu = pt[7];
         const hi  = ci === 2 ? 0.12 : 0;
         const gv2 = 0.85 + tr.gv * 0.3;
-        c3.setRGB((gb + hi * 0.15) * gv2, (gg + hi) * gv2, (gblu + hi * 0.05) * gv2);
+        const tr_ = _nightTint;
+        c3.setRGB((gb + hi * 0.15) * gv2 * tr_[0], (gg + hi) * gv2 * tr_[1], (gblu + hi * 0.05) * gv2 * tr_[2]);
         _canopyMesh.setColorAt(cBase + ti * 3 + ci, c3);
       }
     });
@@ -351,51 +353,44 @@ const Forest3D = (() => {
     });
   }
 
-  // ── Lighting ──────────────────────────────────────────────────
+  // ── Time of day — tints sky, fog, clouds and rebuilds vertex colours ─
   function _applyTimeOfDay() {
     const hr = new Date().getHours() + new Date().getMinutes() / 60;
     _nightMode = hr < 6 || hr >= 20;
     _isDusk    = !_nightMode && (hr < 7.5 || hr >= 17.5);
 
     if (_nightMode) {
-      // Night: deep blue sky, bright MOON as key light, ambient fill so forest is visible
       _scene.background.setStyle('#0d1e2a');
       _scene.fog.color.setStyle('#0d1e2a');
-      _ambLight.color.setStyle('#3a5878');  _ambLight.intensity = 1.2;  // blue ambient fill
-      _sunLight.intensity = 0;                                           // sun off
-      _moonLight.color.setStyle('#a0c8f0'); _moonLight.intensity = 2.0; // bright moon
-      _moonLight.position.set(-40, 80, -30);
-      _hemiLight.color.setStyle('#2a4860'); _hemiLight.groundColor.setStyle('#1a3020');
-      _hemiLight.intensity = 0.9;
-      _cloudMesh.material.color.setStyle('#334466');
-      _cloudMesh.material.opacity = 0.45;
-      // Night-tint canopy (dark teal-blue)
-      _canopyMesh.material.color = new THREE.Color(0.55, 0.75, 0.90);
+      // Blue-moonlit tint: darken greens, add blue cast
+      _nightTint[0] = 0.40;   // red channel — dim
+      _nightTint[1] = 0.55;   // green — dim
+      _nightTint[2] = 0.90;   // blue  — boosted (moonlight)
+      _cloudMesh.material.color.setStyle('#3a5878');
+      _cloudMesh.material.opacity = 0.50;
     } else if (_isDusk) {
       _scene.background.setStyle('#e8905a');
       _scene.fog.color.setStyle('#c87840');
-      _ambLight.color.setStyle('#e0b080');  _ambLight.intensity = 1.8;
-      _sunLight.color.setStyle('#ffb060');  _sunLight.intensity = 2.2;
-      _sunLight.position.set(hr > 12 ? -80 : 80, 30, 40);
-      _moonLight.intensity = 0;
-      _hemiLight.color.setStyle('#e0a060'); _hemiLight.groundColor.setStyle('#704020');
-      _hemiLight.intensity = 1.0;
+      // Warm golden-hour tint
+      _nightTint[0] = 1.0;
+      _nightTint[1] = 0.78;
+      _nightTint[2] = 0.42;
       _cloudMesh.material.color.setStyle('#f0c090');
       _cloudMesh.material.opacity = 0.88;
-      _canopyMesh.material.color = new THREE.Color(1, 1, 1);
     } else {
-      // Bright daytime
       _scene.background.setStyle('#4eb8f0');
       _scene.fog.color.setStyle('#88cce8');
-      _ambLight.color.setStyle('#ffffff');  _ambLight.intensity = 1.4;
-      _sunLight.color.setStyle('#fff8e0');  _sunLight.intensity = 2.8;
-      _sunLight.position.set(60, 90, 50);
-      _moonLight.intensity = 0;
-      _hemiLight.color.setStyle('#b0e0ff'); _hemiLight.groundColor.setStyle('#60b030');
-      _hemiLight.intensity = 1.4;
+      // Neutral day — full colours
+      _nightTint[0] = 1.0;
+      _nightTint[1] = 1.0;
+      _nightTint[2] = 1.0;
       _cloudMesh.material.color.setStyle('#ffffff');
       _cloudMesh.material.opacity = 0.96;
-      _canopyMesh.material.color = new THREE.Color(1, 1, 1);  // full vertex colour
+    }
+
+    // Rebuild all tree vertex colours with new tint
+    if (_trunkMesh) {
+      _slots.forEach((sl, i) => _updateSlot(i, sl.cx, sl.cz));
     }
 
     // Mushrooms & flowers glow stronger at night
@@ -513,12 +508,13 @@ const Forest3D = (() => {
     const mushGeo   = new THREE.SphereGeometry(1, 5, 4);   // mushroom cap
     const flowGeo   = new THREE.SphereGeometry(1, 4, 3);
 
-    const trunkMat  = new THREE.MeshLambertMaterial({ vertexColors: true });
-    const canopyMat = new THREE.MeshBasicMaterial({ vertexColors: true });  // unlit — always vivid
-    const cloudMat  = new THREE.MeshBasicMaterial({ color: 0xf5faf5, transparent: true, opacity: 0.95 });
-    const fireMat   = new THREE.MeshBasicMaterial({ vertexColors: true });         // unlit = always bright
+    // ALL MeshBasicMaterial — unlit, colours are always exactly what we set
+    const trunkMat  = new THREE.MeshBasicMaterial({ vertexColors: true });
+    const canopyMat = new THREE.MeshBasicMaterial({ vertexColors: true });
+    const cloudMat  = new THREE.MeshBasicMaterial({ color: 0xf0f8ff, transparent: true, opacity: 0.92 });
+    const fireMat   = new THREE.MeshBasicMaterial({ vertexColors: true });
     const mushMat   = new THREE.MeshBasicMaterial({ vertexColors: true, transparent: true, opacity: 1.0 });
-    const flowMat   = new THREE.MeshBasicMaterial({ vertexColors: true });         // unlit flowers
+    const flowMat   = new THREE.MeshBasicMaterial({ vertexColors: true });
 
     _trunkMesh  = new THREE.InstancedMesh(trunkGeo,  trunkMat,  TOTAL_T);
     _canopyMesh = new THREE.InstancedMesh(canopyGeo, canopyMat, TOTAL_C);
@@ -540,14 +536,7 @@ const Forest3D = (() => {
     ground.rotation.x = -Math.PI / 2;
     _scene.add(ground);
 
-    // Lights
-    _ambLight  = new THREE.AmbientLight(0xffffff, 1.0);   // base fill
-    _sunLight  = new THREE.DirectionalLight(0xfff8e0, 2.5);
-    _sunLight.position.set(60, 90, 50);
-    _moonLight = new THREE.DirectionalLight(0x8ab4e8, 1.4); // cool blue moon
-    _moonLight.position.set(-40, 70, -30);
-    _hemiLight = new THREE.HemisphereLight(0x90d8f0, 0x5a9c30, 1.2);
-    _scene.add(_ambLight, _sunLight, _moonLight, _hemiLight);
+    // No lights needed — all materials are MeshBasicMaterial (unlit)
 
     _fillGrid();
     _initClouds();
@@ -617,6 +606,9 @@ const Forest3D = (() => {
       });
       _R.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
       _R.setSize(window.innerWidth, window.innerHeight);
+      // Correct colour space so vertex colours render at full brightness
+      if (THREE.sRGBEncoding !== undefined) _R.outputEncoding = THREE.sRGBEncoding;
+      if (THREE.SRGBColorSpace !== undefined) _R.outputColorSpace = THREE.SRGBColorSpace;
 
       _scene = new THREE.Scene();
       _scene.background = new THREE.Color(0x5ab0e8);
