@@ -1,12 +1,12 @@
 'use strict';
 /* ═══════════════════════════════════════════════════════════════════
    TRAIN3D  —  Vintage railway carriage interior
-   Three.js r149  ·  opaque WebGL renderer
+   Three.js r149  ·  transparent WebGL renderer
    ───────────────────────────────────────────────────────────────────
-   Approach: the bg-canvas 2D scenery animation is captured each frame
-   as a THREE.CanvasTexture and rendered on a large plane behind the
-   window wall.  No CSS alpha compositing needed — the scenery appears
-   through the window opening as a proper 3D texture plane.
+   Approach: renderer uses alpha:true + setClearColor(0,0,0,0).
+   Pixels not covered by 3D geometry are fully transparent → the
+   2D bg-canvas (drawn by canvas_scenes.js _trainFrame) shows through
+   via normal CSS z-index compositing.  No CanvasTexture needed.
    ═══════════════════════════════════════════════════════════════════ */
 const Train3D = (() => {
 
@@ -35,17 +35,14 @@ const Train3D = (() => {
   let _lastNow = 0;
   let _carriageGroup = null;
 
-  // ── Outdoor scenery bg (CanvasTexture set as scene.background)
-  let _canvas2d = null;
-  let _bgTex    = null;
+  // (no bg-canvas capture needed — transparent renderer shows bg-canvas via CSS)
 
   // ─────────────────────────────────────────────────────────────────
   //  PUBLIC API
   // ─────────────────────────────────────────────────────────────────
-  function start(canvas2d) {
+  function start(canvas2d) {   // canvas2d param kept for API compat; not used
     if (_running) return;
     _running  = true;
-    _canvas2d = canvas2d || null;
 
     _el = document.createElement('canvas');
     _el.id = 'train3d-canvas';
@@ -82,9 +79,6 @@ const Train3D = (() => {
       });
       _scene = null;
     }
-    if (_scene) _scene.background = null;
-    if (_bgTex)  { _bgTex.dispose(); _bgTex = null; }
-    _canvas2d = null;
     if (_R) { _R.dispose(); _R = null; }
     _cam = null;
     _carriageGroup = null;
@@ -99,13 +93,15 @@ const Train3D = (() => {
   function _launch() {
     if (!_running || !_el) return;
 
-    // ── Renderer — opaque (bg scenery rendered as texture plane inside scene)
+    // ── Renderer — transparent so window opening shows bg-canvas underneath
     _R = new THREE.WebGLRenderer({
-      canvas:           _el,
-      antialias:        true,
-      powerPreference:  'high-performance',
+      canvas:              _el,
+      alpha:               true,
+      premultipliedAlpha:  false,
+      antialias:           true,
+      powerPreference:     'high-performance',
     });
-    _R.setClearColor(0x0b1a0f);    // dark green fallback (never visible if bg plane covers view)
+    _R.setClearColor(0x000000, 0);  // fully transparent clear — bg-canvas shows through
     _R.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
     _R.shadowMap.enabled = false;
 
@@ -120,21 +116,6 @@ const Train3D = (() => {
 
     _buildLights();
     _buildCarriage();
-
-    // ── Outdoor scenery background ────────────────────────────────
-    // Set the 2D bg-canvas as scene.background.  Three.js renders this as a
-    // fullscreen quad BEFORE any geometry, so it is always visible through
-    // the window opening regardless of depth-buffer state.
-    if (_canvas2d) {
-      _bgTex = new THREE.CanvasTexture(_canvas2d);
-      // Disable mipmaps — bg-canvas is non-POT (e.g. 1920×1080).
-      _bgTex.generateMipmaps = false;
-      _bgTex.minFilter        = THREE.LinearFilter;
-      _bgTex.magFilter        = THREE.LinearFilter;
-      _bgTex.wrapS            = THREE.ClampToEdgeWrapping;
-      _bgTex.wrapT            = THREE.ClampToEdgeWrapping;
-      _scene.background = _bgTex;
-    }
 
     _checkResize();
 
@@ -660,9 +641,6 @@ const Train3D = (() => {
     // Look slightly toward the centre of the window
     const lookY = 1.02 + Math.sin(_swayT * 0.7) * 0.008;
     _cam.lookAt(_cam.position.x * 0.08, lookY, WIN_Z);
-
-    // Refresh outdoor scenery texture from bg-canvas each frame
-    if (_bgTex) _bgTex.needsUpdate = true;
 
     _R.render(_scene, _cam);
   }

@@ -629,10 +629,9 @@ const Aquarium3D = (() => {
           geo.setAttribute('uv',       new THREE.BufferAttribute(uv, 2));
           geo.setIndex(new THREE.BufferAttribute(idx, 1));
 
-          // THREE.js textures default to flipY=true (top-down), but WebGL Samples
-          // UVs use OpenGL convention (V=0 at bottom).  Keep flipY=false to match.
-          tex.flipY = false;
-          tex.needsUpdate = true;
+          // THREE.js default flipY=true is correct: JPG images are top-down,
+          // and THREE.js flips them on GPU upload to match OpenGL V=0=bottom convention.
+          // The WebGL Samples UV data is already in OpenGL convention → flipY=true ✓
 
           // ── Swap procedural geo → real geo on all fish in this species ──
           const specFish = _fish.filter(f => f.spec.name === spec.name);
