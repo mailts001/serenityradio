@@ -3097,23 +3097,20 @@ const CanvasScenes = (() => {
 
     if (typeof AmbientAudio !== 'undefined') AmbientAudio.setMode(mode);
 
-    // ── Forest: hand off to Three.js Forest3D ─────────────────
-    // ── Train: reset state and use 2D canvas ──────────────────
+    // ── Train: reset scenery state + launch 3D interior overlay ──
     if (_activeSceneType === 'train') {
       if (typeof Forest3D !== 'undefined') Forest3D.stop();
       _tX = 0; _tBI = 0; _tFC = 0; _tBlend = 0;
       _tSnow = null; _tRain = null; _tGlassDrops = [];
       _tSpeed = 1.6; _tZoom = 1.0;
-      // Attach scroll/key speed controls
       window.addEventListener('wheel',   _trainControlEvent, {passive:false});
       window.addEventListener('keydown', _trainControlEvent);
-      // Draw the static frame canvas once (and on resize)
-      const fc = document.getElementById('train-frame-canvas');
-      if (fc) { _drawFrameCanvas(fc); }
+      // Start 3D carriage interior (transparent canvas above bg-canvas)
+      if (typeof Train3D !== 'undefined') Train3D.start();
     } else {
-      // Detach train controls when leaving the scene
       window.removeEventListener('wheel',   _trainControlEvent);
       window.removeEventListener('keydown', _trainControlEvent);
+      if (typeof Train3D !== 'undefined') Train3D.stop();
     }
 
     if (_activeSceneType === 'aquarium') {

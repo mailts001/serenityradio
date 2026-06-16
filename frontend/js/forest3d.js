@@ -585,6 +585,7 @@ const Forest3D = (() => {
   // ── Loop ─────────────────────────────────────────────────────
   function _loop(now) {
     _raf = requestAnimationFrame(_loop);
+    if (!_cam || !_R || !_scene) return;   // guard: stop() may have run between RAF queue and fire
     const dt = Math.min(now - _lastT, 50);
     _lastT = now;
     _checkResize();
