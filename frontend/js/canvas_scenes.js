@@ -2041,13 +2041,34 @@ const CanvasScenes = (() => {
       trees:{type:'sparse',dark:_trgb(50,80,40),light:_trgb(70,108,55),density:35},
       details:['buildings','poles','sign'],
     },
+    // Foliage transition A — sparse scrubland growing into trees
     {
-      name:'tunnel', dur:140,
-      skyT:_trgb(8,8,8), skyB:_trgb(12,12,12),
-      fog:_trgb(10,10,10), fogAmt:0.9,
-      ground:_trgb(10,10,10),
-      hills:[], trees:null, details:[],
-      tunnel:true,
+      name:'foliage-sparse', dur:320,
+      skyT:_trgb(100,155,100), skyB:_trgb(165,205,160),
+      fog:_trgb(155,195,155), fogAmt:0.28,
+      ground:_trgb(40,90,30),
+      hills:[
+        {c:_trgb(32,72,24),  amp:0.14,freq:0.006,spd:0.06,ph:1.2},
+        {c:_trgb(48,92,36),  amp:0.10,freq:0.010,spd:0.18,ph:2.4},
+        {c:_trgb(65,115,50), amp:0.07,freq:0.016,spd:0.34,ph:0.8},
+      ],
+      trees:{type:'deciduous',dark:_trgb(28,72,22),light:_trgb(50,105,38),density:55},
+      details:['poles'],
+    },
+    // Foliage transition B — thick jungle-like canopy before opening to snow
+    {
+      name:'foliage-dense', dur:360,
+      skyT:_trgb(42,95,55), skyB:_trgb(88,150,90),
+      fog:_trgb(120,180,125), fogAmt:0.55,
+      ground:_trgb(22,62,18),
+      hills:[
+        {c:_trgb(18,52,15),  amp:0.20,freq:0.005,spd:0.04,ph:0.0},
+        {c:_trgb(26,68,20),  amp:0.15,freq:0.008,spd:0.11,ph:1.6},
+        {c:_trgb(38,88,30),  amp:0.10,freq:0.013,spd:0.22,ph:3.0},
+        {c:_trgb(55,112,44), amp:0.06,freq:0.020,spd:0.38,ph:1.4},
+      ],
+      trees:{type:'deciduous',dark:_trgb(16,55,14),light:_trgb(28,80,22),density:145},
+      details:['mist'],
     },
     {
       name:'snow', dur:480,
@@ -2063,13 +2084,19 @@ const CanvasScenes = (() => {
       trees:{type:'conifer',dark:_trgb(80,110,130),light:_trgb(230,240,248),density:65},
       details:['snow'],
     },
+    // Foliage exit — snow melts into sparse scrub before opening to sea
     {
-      name:'tunnel', dur:110,
-      skyT:_trgb(8,8,8), skyB:_trgb(12,12,12),
-      fog:_trgb(10,10,10), fogAmt:0.9,
-      ground:_trgb(10,10,10),
-      hills:[], trees:null, details:[],
-      tunnel:true,
+      name:'foliage-exit', dur:280,
+      skyT:_trgb(115,165,185), skyB:_trgb(175,215,230),
+      fog:_trgb(190,220,235), fogAmt:0.30,
+      ground:_trgb(65,105,80),
+      hills:[
+        {c:_trgb(55,88,65),  amp:0.12,freq:0.007,spd:0.07,ph:0.5},
+        {c:_trgb(72,108,85), amp:0.08,freq:0.011,spd:0.20,ph:1.9},
+        {c:_trgb(95,135,110),amp:0.05,freq:0.017,spd:0.38,ph:3.3},
+      ],
+      trees:{type:'deciduous',dark:_trgb(44,80,50),light:_trgb(65,112,70),density:48},
+      details:['poles'],
     },
     {
       name:'sea', dur:440,
@@ -2105,7 +2132,396 @@ const CanvasScenes = (() => {
   let _tBlend  = 0;       // 0=fully biomeA, 1=fully biomeB (transition progress)
   let _tSnow   = null;    // snowflake particles
   let _tRain   = null;    // rain-on-glass drops
+  let _tSpeed  = 1.6;     // base scroll speed px/frame (user adjustable)
+  let _tZoom   = 1.0;     // view zoom (1=normal, <1=zoomed out to see more)
+  // Speed/zoom controls — attached when train scene starts
+  function _trainControlEvent(e) {
+    if (e.type === 'wheel') {
+      _tSpeed = Math.max(0.4, Math.min(6.0, _tSpeed - e.deltaY * 0.008));
+      e.preventDefault();
+    }
+    if (e.type === 'keydown') {
+      if (e.key === 'ArrowRight' || e.key === ']') _tSpeed = Math.min(6.0, _tSpeed + 0.4);
+      if (e.key === 'ArrowLeft'  || e.key === '[') _tSpeed = Math.max(0.4, _tSpeed - 0.4);
+      if (e.key === '+'||e.key==='=') _tZoom = Math.max(0.4, _tZoom - 0.08);
+      if (e.key === '-')               _tZoom = Math.min(1.8, _tZoom + 0.08);
+      if (e.key === '0')               { _tSpeed = 1.6; _tZoom = 1.0; }
+    }
+  }
   let _tGlassDrops = [];  // persistent drops on glass
+
+  // ══════════════════════════════════════════════════════════
+  //  TRAIN WINDOW FRAME — Canvas 2D realistic aluminum frame
+  //  Draws once onto a dedicated overlay canvas (train-frame-canvas)
+  //  Corrugated steel wall, brushed aluminum frame, hex bolts,
+  //  rubber weatherstripping, divider bar, grille, emergency hammer.
+  // ══════════════════════════════════════════════════════════
+  function _drawFrameCanvas(fc) {
+    fc.width  = window.innerWidth;
+    fc.height = window.innerHeight;
+    const c = fc.getContext('2d');
+    const W = fc.width, H = fc.height;
+
+    // ── Config ────────────────────────────────────────────────
+    // Frame thickness (px) — asymmetric like a real coach seat view
+    const FT   = Math.round(Math.min(W,H) * 0.092);   // top/sides
+    const FB   = Math.round(Math.min(W,H) * 0.148);   // bottom sill (wider)
+    const R    = Math.round(FT * 0.45);                // corner radius
+    const BEVEL= Math.round(FT * 0.14);                // 3-D bevel depth
+    const DIV  = Math.round(H * 0.008);                // divider bar height
+    const DIVY = Math.round(H * 0.50);                 // divider Y centre
+
+    // Window opening rect
+    const wx = FT, wy = FT, ww = W - FT*2, wh = H - FT - FB;
+
+    // Colour palette
+    const WALL_DARK  = '#1c1f22';
+    const WALL_MID   = '#252a2e';
+    const WALL_RIDGE = '#1a1d20';
+    const AL_BASE    = '#7a8690';
+    const AL_LIGHT   = '#adbac4';
+    const AL_DARK    = '#4e5b63';
+    const AL_SHINE   = '#d4e0e8';
+    const RUBBER     = '#0f0f0f';
+    const BOLT_BASE  = '#5c6670';
+    const BOLT_HEAD  = '#8a9ba8';
+
+    // ── Corrugated steel wall ─────────────────────────────────
+    // Base wall fill
+    c.fillStyle = WALL_MID;
+    c.fillRect(0, 0, W, H);
+
+    // Vertical corrugation ridges (repeat every ~22px)
+    const ridgeW = Math.round(W * 0.028);
+    for (let rx = 0; rx < W; rx += ridgeW) {
+      // Dark groove
+      const gr = c.createLinearGradient(rx, 0, rx+ridgeW, 0);
+      gr.addColorStop(0,    WALL_RIDGE);
+      gr.addColorStop(0.30, WALL_MID);
+      gr.addColorStop(0.70, WALL_MID);
+      gr.addColorStop(1,    WALL_RIDGE);
+      c.fillStyle = gr;
+      c.fillRect(rx, 0, ridgeW, H);
+    }
+
+    // Rivets — rows along top and bottom panels, and sides
+    function rivet(x, y) {
+      const rg = c.createRadialGradient(x-1.5,y-1.5,0, x,y,5);
+      rg.addColorStop(0, '#9aabb5');
+      rg.addColorStop(0.5, '#6a7a85');
+      rg.addColorStop(1, '#3a454d');
+      c.fillStyle = rg;
+      c.beginPath(); c.arc(x, y, 4.5, 0, Math.PI*2); c.fill();
+      c.strokeStyle = 'rgba(0,0,0,0.55)';
+      c.lineWidth = 0.8;
+      c.beginPath(); c.arc(x, y, 4.5, 0, Math.PI*2); c.stroke();
+    }
+    // Top panel rivets
+    for (let rx = FT + 20; rx < W - FT; rx += 55)  rivet(rx, FT * 0.38);
+    for (let rx = FT + 46; rx < W - FT; rx += 55)  rivet(rx, FT * 0.62);
+    // Bottom sill rivets
+    for (let rx = FT + 20; rx < W - FT; rx += 55)  rivet(rx, H - FB * 0.35);
+    for (let rx = FT + 46; rx < W - FT; rx += 55)  rivet(rx, H - FB * 0.60);
+    // Left side rivets
+    for (let ry = FT + 20; ry < H - FB; ry += 55)  rivet(FT * 0.38, ry);
+    // Right side rivets
+    for (let ry = FT + 20; ry < H - FB; ry += 55)  rivet(W - FT * 0.38, ry);
+
+    // ── Cutout the window opening (clip region for glass) ─────
+    // We draw a solid frame over the wall, then the glass opening is transparent
+    // Accomplished by: draw frame, then clearRect the glass opening
+    // But first we need frame body under it
+
+    // ── Aluminum frame body ───────────────────────────────────
+    function roundRect(cx,cy,cw,ch,cr) {
+      c.beginPath();
+      c.moveTo(cx+cr, cy);
+      c.lineTo(cx+cw-cr, cy);
+      c.quadraticCurveTo(cx+cw, cy, cx+cw, cy+cr);
+      c.lineTo(cx+cw, cy+ch-cr);
+      c.quadraticCurveTo(cx+cw, cy+ch, cx+cw-cr, cy+ch);
+      c.lineTo(cx+cr, cy+ch);
+      c.quadraticCurveTo(cx, cy+ch, cx, cy+ch-cr);
+      c.lineTo(cx, cy+cr);
+      c.quadraticCurveTo(cx, cy, cx+cr, cy);
+      c.closePath();
+    }
+
+    // Outer frame box (covers the entire canvas edges)
+    // Strategy: draw frame using compositing — fill entire canvas with frame material,
+    // then punch out the window opening
+    c.save();
+
+    // Frame base gradient (brushed aluminum)
+    const alG = c.createLinearGradient(0, 0, W, H);
+    alG.addColorStop(0,    AL_LIGHT);
+    alG.addColorStop(0.12, AL_BASE);
+    alG.addColorStop(0.45, AL_DARK);
+    alG.addColorStop(0.55, AL_DARK);
+    alG.addColorStop(0.88, AL_BASE);
+    alG.addColorStop(1,    AL_LIGHT);
+
+    // We'll clip to the frame area (outside = wall already drawn, inside = glass)
+    // Draw the frame as 4 trapezoids for proper 3-D bevel
+
+    // TOP bar
+    c.beginPath();
+    c.moveTo(0,0); c.lineTo(W,0); c.lineTo(W,wy); c.lineTo(0,wy); c.closePath();
+    const topG = c.createLinearGradient(0,0,0,wy);
+    topG.addColorStop(0,   AL_SHINE);
+    topG.addColorStop(0.2, AL_LIGHT);
+    topG.addColorStop(0.7, AL_BASE);
+    topG.addColorStop(1,   AL_DARK);
+    c.fillStyle = topG; c.fill();
+
+    // BOTTOM bar (sill)
+    c.beginPath();
+    c.moveTo(0,wy+wh); c.lineTo(W,wy+wh); c.lineTo(W,H); c.lineTo(0,H); c.closePath();
+    const botG = c.createLinearGradient(0,wy+wh,0,H);
+    botG.addColorStop(0,   AL_DARK);
+    botG.addColorStop(0.2, AL_BASE);
+    botG.addColorStop(0.6, AL_LIGHT);
+    botG.addColorStop(1,   AL_SHINE);
+    c.fillStyle = botG; c.fill();
+
+    // LEFT bar
+    c.beginPath();
+    c.moveTo(0,0); c.lineTo(wx,wy); c.lineTo(wx,wy+wh); c.lineTo(0,H); c.closePath();
+    const leftG = c.createLinearGradient(0,0,wx,0);
+    leftG.addColorStop(0,   AL_SHINE);
+    leftG.addColorStop(0.3, AL_LIGHT);
+    leftG.addColorStop(0.8, AL_BASE);
+    leftG.addColorStop(1,   AL_DARK);
+    c.fillStyle = leftG; c.fill();
+
+    // RIGHT bar
+    c.beginPath();
+    c.moveTo(W,0); c.lineTo(wx+ww,wy); c.lineTo(wx+ww,wy+wh); c.lineTo(W,H); c.closePath();
+    const rightG = c.createLinearGradient(wx+ww,0,W,0);
+    rightG.addColorStop(0,   AL_DARK);
+    rightG.addColorStop(0.4, AL_BASE);
+    rightG.addColorStop(0.8, AL_LIGHT);
+    rightG.addColorStop(1,   AL_SHINE);
+    c.fillStyle = rightG; c.fill();
+
+    // ── Brushed aluminum texture (fine horizontal lines) ──────
+    c.globalAlpha = 0.10;
+    c.strokeStyle = AL_SHINE;
+    c.lineWidth   = 0.5;
+    for (let ly = 0; ly < H; ly += 3) {
+      c.beginPath(); c.moveTo(0,ly); c.lineTo(W,ly); c.stroke();
+    }
+    c.globalAlpha = 1;
+
+    // ── Inner bevel (shadow + highlight inside frame edge) ────
+    // Top inner edge — shadow going inward
+    const bevTopG = c.createLinearGradient(0, wy-BEVEL, 0, wy+BEVEL);
+    bevTopG.addColorStop(0, 'rgba(0,0,0,0.55)');
+    bevTopG.addColorStop(1, 'rgba(0,0,0,0)');
+    c.fillStyle = bevTopG;
+    c.fillRect(wx, wy-BEVEL, ww, BEVEL*2);
+
+    // Bottom inner edge — highlight
+    const bevBotG = c.createLinearGradient(0, wy+wh-BEVEL, 0, wy+wh+BEVEL);
+    bevBotG.addColorStop(0, 'rgba(0,0,0,0)');
+    bevBotG.addColorStop(1, 'rgba(0,0,0,0.50)');
+    c.fillStyle = bevBotG;
+    c.fillRect(wx, wy+wh-BEVEL, ww, BEVEL*2);
+
+    // Left inner edge
+    const bevLeftG = c.createLinearGradient(wx-BEVEL, 0, wx+BEVEL, 0);
+    bevLeftG.addColorStop(0, 'rgba(0,0,0,0.5)');
+    bevLeftG.addColorStop(1, 'rgba(0,0,0,0)');
+    c.fillStyle = bevLeftG;
+    c.fillRect(wx-BEVEL, wy, BEVEL*2, wh);
+
+    // Right inner edge
+    const bevRightG = c.createLinearGradient(wx+ww-BEVEL, 0, wx+ww+BEVEL, 0);
+    bevRightG.addColorStop(0, 'rgba(0,0,0,0)');
+    bevRightG.addColorStop(1, 'rgba(0,0,0,0.5)');
+    c.fillStyle = bevRightG;
+    c.fillRect(wx+ww-BEVEL, wy, BEVEL*2, wh);
+
+    // ── Rubber weatherstripping (thin black inset ring) ───────
+    c.strokeStyle = RUBBER;
+    c.lineWidth   = Math.max(3, FT*0.07);
+    c.strokeRect(wx + BEVEL*0.5, wy + BEVEL*0.5, ww - BEVEL, wh - BEVEL);
+
+    // ── Hex bolts at 4 corners ────────────────────────────────
+    function hexBolt(bx, by, r) {
+      // Outer hex
+      const bg = c.createRadialGradient(bx-r*0.25,by-r*0.25,0, bx,by,r*1.1);
+      bg.addColorStop(0,   BOLT_HEAD);
+      bg.addColorStop(0.6, BOLT_BASE);
+      bg.addColorStop(1,   '#2a3038');
+      c.fillStyle = bg;
+      c.beginPath();
+      for (let i=0;i<6;i++) {
+        const a = i * Math.PI/3 - Math.PI/6;
+        i===0 ? c.moveTo(bx+r*Math.cos(a),by+r*Math.sin(a))
+              : c.lineTo(bx+r*Math.cos(a),by+r*Math.sin(a));
+      }
+      c.closePath(); c.fill();
+      // Hex outline
+      c.strokeStyle = 'rgba(0,0,0,0.6)'; c.lineWidth = 1;
+      c.stroke();
+      // Inner socket
+      c.fillStyle = '#1a2028';
+      c.beginPath();
+      for (let i=0;i<6;i++) {
+        const a = i * Math.PI/3 - Math.PI/6;
+        i===0 ? c.moveTo(bx+r*0.48*Math.cos(a),by+r*0.48*Math.sin(a))
+              : c.lineTo(bx+r*0.48*Math.cos(a),by+r*0.48*Math.sin(a));
+      }
+      c.closePath(); c.fill();
+      // Highlight shimmer
+      c.fillStyle = 'rgba(255,255,255,0.18)';
+      c.beginPath(); c.arc(bx-r*0.22, by-r*0.22, r*0.28, 0, Math.PI*2); c.fill();
+    }
+    const BR = Math.round(FT * 0.28);
+    const BO = Math.round(FT * 0.48);
+    hexBolt(BO,         BO,         BR);
+    hexBolt(W - BO,     BO,         BR);
+    hexBolt(BO,         H - FB*0.6, BR);
+    hexBolt(W - BO,     H - FB*0.6, BR);
+
+    // ── Central horizontal divider bar ────────────────────────
+    {
+      const dY  = DIVY - DIV;
+      const dH  = DIV * 2;
+      const dG  = c.createLinearGradient(0, dY, 0, dY+dH);
+      dG.addColorStop(0,   AL_DARK);
+      dG.addColorStop(0.25,AL_BASE);
+      dG.addColorStop(0.5, AL_LIGHT);
+      dG.addColorStop(0.75,AL_BASE);
+      dG.addColorStop(1,   AL_DARK);
+      c.fillStyle = dG;
+      c.fillRect(wx, dY, ww, dH);
+      // Bevel shadows on divider
+      c.fillStyle = 'rgba(0,0,0,0.35)';
+      c.fillRect(wx, dY, ww, 2);
+      c.fillRect(wx, dY+dH-2, ww, 2);
+      // Brushed lines on divider
+      c.globalAlpha = 0.12;
+      c.strokeStyle = AL_SHINE; c.lineWidth = 0.5;
+      for (let ly = dY+1; ly < dY+dH-1; ly += 2) {
+        c.beginPath(); c.moveTo(wx,ly); c.lineTo(wx+ww,ly); c.stroke();
+      }
+      c.globalAlpha = 1;
+      // Latch/slide handle in centre
+      const lW = Math.round(ww * 0.06), lH = Math.round(dH * 2.5);
+      const lX = wx + ww/2 - lW/2, lY = dY - dH * 0.75;
+      const lG = c.createLinearGradient(lX, 0, lX+lW, 0);
+      lG.addColorStop(0, AL_SHINE); lG.addColorStop(0.5, AL_LIGHT); lG.addColorStop(1, AL_BASE);
+      c.fillStyle = lG;
+      c.beginPath();
+      c.roundRect ? c.roundRect(lX, lY, lW, lH, lW*0.4)
+                  : c.fillRect(lX, lY, lW, lH);
+      c.fill();
+      c.strokeStyle = 'rgba(0,0,0,0.35)'; c.lineWidth = 1;
+      c.strokeRect(lX, lY, lW, lH);
+    }
+
+    // ── Ventilation grille (below window on sill) ─────────────
+    {
+      const gX = wx + ww*0.30, gW = ww*0.40;
+      const gY = wy+wh + FB*0.25, gH = FB*0.28;
+      // Grille frame
+      c.fillStyle = '#2a3038';
+      c.fillRect(gX-3, gY-3, gW+6, gH+6);
+      // Grille slats
+      c.fillStyle = '#1a2028';
+      c.fillRect(gX, gY, gW, gH);
+      const slotH = Math.round(gH / 7);
+      c.fillStyle = '#101518';
+      for (let si=0; si<6; si++) {
+        c.fillRect(gX+2, gY + si*(slotH+1), gW-4, slotH*0.55);
+      }
+      // Grille highlight
+      c.fillStyle = 'rgba(120,140,155,0.25)';
+      c.fillRect(gX, gY, gW, 2);
+    }
+
+    // ── Emergency hammer bracket ──────────────────────────────
+    {
+      const hX = wx + ww*0.78, hY = wy+wh + FB*0.18;
+      const hW = Math.round(FT * 0.50), hH = Math.round(FB * 0.55);
+      // Red bracket box
+      c.fillStyle = '#8b1a1a';
+      c.fillRect(hX, hY, hW, hH);
+      // Darker inner recess
+      c.fillStyle = '#6b1212';
+      c.fillRect(hX+3, hY+3, hW-6, hH-6);
+      // Hammer silhouette (simplified T-shape)
+      c.fillStyle = '#cc3333';
+      const hmX = hX + hW/2, hmY = hY + hH*0.18;
+      // Handle
+      c.fillRect(hmX-2, hmY, 4, hH*0.55);
+      // Head
+      c.fillRect(hmX - hW*0.28, hmY, hW*0.56, hH*0.20);
+      // Warning text
+      c.fillStyle = 'rgba(255,200,200,0.80)';
+      c.font = `bold ${Math.round(FB*0.09)}px sans-serif`;
+      c.textAlign = 'center';
+      c.fillText('⚠', hmX, hY + hH*0.88);
+      c.textAlign = 'left';
+      // Bracket screws
+      rivet(hX+4,   hY+4,   );
+      rivet(hX+hW-4,hY+4    );
+      rivet(hX+4,   hY+hH-4 );
+      rivet(hX+hW-4,hY+hH-4 );
+    }
+
+    // ── Glass area — clearRect to show bg-canvas through ─────
+    // First erase the wall+frame we drew over the window opening
+    c.clearRect(wx + BEVEL*0.5 + 1, wy + BEVEL*0.5 + 1,
+                ww - BEVEL - 2,     wh - BEVEL - 2);
+    // Split by divider — clear upper pane
+    c.clearRect(wx + BEVEL*0.5 + 1,  wy + BEVEL*0.5 + 1,
+                ww - BEVEL - 2,       DIVY - DIV - wy - BEVEL*0.5);
+    // Clear lower pane
+    c.clearRect(wx + BEVEL*0.5 + 1,  DIVY + DIV,
+                ww - BEVEL - 2,       wy+wh - BEVEL*0.5 - DIVY - DIV - 1);
+
+    // ── Glass reflections / smudges overlay ───────────────────
+    // Faint diagonal light catch on upper pane
+    const refG = c.createLinearGradient(wx+ww*0.1, wy+wh*0.05, wx+ww*0.45, wy+wh*0.40);
+    refG.addColorStop(0,   'rgba(255,255,255,0.048)');
+    refG.addColorStop(0.5, 'rgba(255,255,255,0.018)');
+    refG.addColorStop(1,   'rgba(255,255,255,0)');
+    c.fillStyle = refG;
+    c.fillRect(wx+BEVEL, wy+BEVEL, ww-BEVEL*2, DIVY-DIV-wy-BEVEL);
+
+    // Faint fingerprint smudge blobs
+    function smudge(sx, sy, sr) {
+      const sg = c.createRadialGradient(sx,sy,0,sx,sy,sr);
+      sg.addColorStop(0,'rgba(200,215,225,0.055)');
+      sg.addColorStop(1,'rgba(200,215,225,0)');
+      c.fillStyle=sg;
+      c.beginPath(); c.ellipse(sx,sy,sr,sr*0.55,0.4,0,Math.PI*2); c.fill();
+    }
+    smudge(wx+ww*0.35, DIVY*0.72, ww*0.05);
+    smudge(wx+ww*0.62, DIVY*0.55, ww*0.04);
+    smudge(wx+ww*0.48, DIVY*1.18, ww*0.035);
+
+    // Fluorescent light reflection bar (upper pane, faint horizontal band)
+    const flG = c.createLinearGradient(0, wy+wh*0.12, 0, wy+wh*0.20);
+    flG.addColorStop(0,   'rgba(230,240,255,0)');
+    flG.addColorStop(0.5, 'rgba(230,240,255,0.040)');
+    flG.addColorStop(1,   'rgba(230,240,255,0)');
+    c.fillStyle = flG;
+    c.fillRect(wx+BEVEL, wy+BEVEL, ww-BEVEL*2, wh*0.2);
+
+    c.restore();
+  }
+
+  // Redraw frame canvas on window resize
+  window.addEventListener('resize', () => {
+    if (document.body.classList.contains('scene-train')) {
+      const fc = document.getElementById('train-frame-canvas');
+      if (fc) _drawFrameCanvas(fc);
+    }
+  });
 
   // ── Initialise rain-on-glass drops ───────────────────────
   function _initGlass(W, H) {
@@ -2121,9 +2537,17 @@ const CanvasScenes = (() => {
   // ── Main train frame ──────────────────────────────────────
   function _trainFrame(t) {
     const c = _ctx, W = _canvas.width, H = _canvas.height;
-    const SPD = 3.6;
+    const SPD = _tSpeed;
     _tX  += SPD;
     _tFC++;
+
+    // Update HUD every 30 frames
+    if (_tFC % 30 === 0) {
+      const sl = document.getElementById('train-speed-label');
+      const zl = document.getElementById('train-zoom-label');
+      if (sl) sl.textContent = `🚆 ${(_tSpeed/1.6).toFixed(1)}×`;
+      if (zl) zl.textContent = `${_tZoom.toFixed(1)}×`;
+    }
 
     const ba  = _TB[_tBI];
     const bBi = (_tBI + 1) % _TB.length;
@@ -2158,13 +2582,6 @@ const CanvasScenes = (() => {
     c.fillStyle = skyG;
     c.fillRect(0,0,W,H);
 
-    // ── Tunnel ────────────────────────────────────────────────
-    if (ba.tunnel || (bb.tunnel && bl > 0.5)) {
-      _drawTunnel(c, W, H, t);
-      // Dim glass rain during tunnel
-      return;
-    }
-
     // ── Sun / moon / stars ────────────────────────────────────
     const hr = new Date().getHours();
     const isNight = hr < 6 || hr >= 20;
@@ -2173,15 +2590,11 @@ const CanvasScenes = (() => {
     // ── Blended hill layers ───────────────────────────────────
     _drawBlendedHills(c, W, H, ba, bb, bl);
 
-    // ── Trees ─────────────────────────────────────────────────
-    if (ba.trees || bb.trees) {
-      const tA = bl < 0.5 ? ba.trees : null;
-      const tB = bl >= 0.5 ? bb.trees : null;
-      const tree = tA || tB;
-      if (tree) {
-        const gY = H * (1 - _lerp(ba.hills.length?0.28:0.35, bb.hills.length?0.28:0.35, bl));
-        _drawTrees(c, W, H, gY, tree, t, bl < 0.5 ? 1-bl*2 : 0, bl >= 0.5 ? (bl-0.5)*2 : 0);
-      }
+    // ── Trees — cross-fade both biomes simultaneously ─────────
+    {
+      const gY = H * (1 - _lerp(ba.hills.length?0.285:0.32, bb.hills.length?0.285:0.32, bl));
+      if (ba.trees) _drawTrees(c, W, H, gY, ba.trees, t, 1-bl, 0);
+      if (bb.trees) _drawTrees(c, W, H, gY, bb.trees, t, 0, bl);
     }
 
     // ── Sea waves ─────────────────────────────────────────────
@@ -2689,6 +3102,17 @@ const CanvasScenes = (() => {
       if (typeof Forest3D !== 'undefined') Forest3D.stop();
       _tX = 0; _tBI = 0; _tFC = 0; _tBlend = 0;
       _tSnow = null; _tRain = null; _tGlassDrops = [];
+      _tSpeed = 1.6; _tZoom = 1.0;
+      // Attach scroll/key speed controls
+      window.addEventListener('wheel',   _trainControlEvent, {passive:false});
+      window.addEventListener('keydown', _trainControlEvent);
+      // Draw the static frame canvas once (and on resize)
+      const fc = document.getElementById('train-frame-canvas');
+      if (fc) { _drawFrameCanvas(fc); }
+    } else {
+      // Detach train controls when leaving the scene
+      window.removeEventListener('wheel',   _trainControlEvent);
+      window.removeEventListener('keydown', _trainControlEvent);
     }
 
     if (_activeSceneType === 'forest') {
