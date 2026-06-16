@@ -279,7 +279,7 @@
   .wellness-tcm-opt:hover { background: rgba(126,212,168,.12); border-color: rgba(126,212,168,.3); }
 
   /* ── Cinema mode ── */
-  body.cinema-mode > *:not(#cinema-overlay):not(#bg-canvas):not(#forest3d-canvas):not(#train-frame-canvas):not(#train-hud) { display: none !important; }
+  body.cinema-mode > *:not(#cinema-overlay):not(#bg-canvas):not(#forest3d-canvas):not(#aquarium3d-canvas):not(#train-frame-canvas):not(#train-hud) { display: none !important; }
 
   /* ── Train window frame — rendered by canvas ── */
   #train-frame-canvas {
@@ -459,7 +459,8 @@
       <button class="mood-btn scene-btn"              id="scene-space"   onclick="switchScene('space')"  title="Deep space — Listener Pro">🌌 Space</button>
       <button class="mood-btn scene-btn"              id="scene-forest"  onclick="switchScene('forest')" title="Highland forest — Listener Pro">🌲 Forest</button>
       <button class="mood-btn scene-btn"              id="scene-snow"    onclick="switchScene('snow')"   title="Snow peaks — Listener Pro">🏔️ Snow</button>
-      <button class="mood-btn scene-btn"              id="scene-train"   onclick="switchScene('train')"  title="Train journey — Listener Pro">🚂 Train</button>
+      <button class="mood-btn scene-btn"              id="scene-train"   onclick="switchScene('train')"    title="Train journey — Listener Pro">🚂 Train</button>
+      <button class="mood-btn scene-btn"              id="scene-aquarium" onclick="switchScene('aquarium')" title="Live aquarium — Listener Pro">🐠 Aquarium</button>
     </div>
     <div class="mood-controls" style="margin-top:6px;">
       <button class="mood-btn" onclick="toggleShuffle()" id="shuffle-btn">🔀 Shuffle OFF</button>
@@ -1021,15 +1022,16 @@ function setVolume(value) {
 // Sea is free for everyone. Space / Forest / Snow are Pro scenes.
 // Non-Pro users get a 30-second preview, then a friendly upgrade nudge.
 let _scenePreviewTimer = null;
-const PRO_SCENES = new Set(['space', 'forest', 'snow', 'train']);
+const PRO_SCENES = new Set(['space', 'forest', 'snow', 'train', 'aquarium']);
 
 // Map scene name → canvas setScene key (CanvasScenes.setScene handles the rest)
 const SCENE_MODES = {
-  sea:    'sea',
-  space:  'space',
-  forest: 'forest',
-  snow:   'snow',
-  train:  'train',
+  sea:      'sea',
+  space:    'space',
+  forest:   'forest',
+  snow:     'snow',
+  train:    'train',
+  aquarium: 'aquarium',
 };
 
 function switchScene(scene) {
@@ -1048,7 +1050,7 @@ function switchScene(scene) {
       // Show upgrade prompt
       if (typeof Auth !== 'undefined') {
         Auth.requirePro('scenes',
-          `Unlock all 5 immersive scenes — Sea, Space, Forest, Snow & Train Journey. Free accounts enjoy the Sea view.`);
+          `Unlock all 6 immersive scenes — Sea, Space, Forest, Snow, Train Journey & Live Aquarium. Free accounts enjoy the Sea view.`);
       }
     }, 30000);
     return;
@@ -1060,8 +1062,9 @@ function switchScene(scene) {
 function _applyScene(scene) {
   const mode = SCENE_MODES[scene] || 'default';
   if (typeof CanvasScenes !== 'undefined') CanvasScenes.setScene(mode);
-  // Toggle train window frame + body class
-  document.body.classList.toggle('scene-train', scene === 'train');
+  // Toggle scene body classes (train frame, aquarium chrome, etc.)
+  document.body.classList.toggle('scene-train',    scene === 'train');
+  document.body.classList.toggle('scene-aquarium', scene === 'aquarium');
 
   // Update button highlights
   document.querySelectorAll('.scene-btn').forEach(b => b.classList.remove('active-scene'));
@@ -1323,6 +1326,7 @@ setInterval(() => {
 <script src="/js/auth.js"></script>
 <script src="/js/favorites.js"></script>
 <script src="/js/forest3d.js"></script>
+<script src="/js/aquarium3d.js"></script>
 <script src="/js/canvas_scenes.js"></script>
 <script src="/js/ambient_audio.js"></script>
 <script src="/js/wellness.js"></script>

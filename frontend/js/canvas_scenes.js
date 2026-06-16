@@ -3087,6 +3087,7 @@ const CanvasScenes = (() => {
       forest: 'forest',
       snow: 'snow',
       train: 'train',
+      aquarium: 'aquarium',
     };
     _activeSceneType = sceneMap[channel] || 'sea';
 
@@ -3113,6 +3114,15 @@ const CanvasScenes = (() => {
       // Detach train controls when leaving the scene
       window.removeEventListener('wheel',   _trainControlEvent);
       window.removeEventListener('keydown', _trainControlEvent);
+    }
+
+    if (_activeSceneType === 'aquarium') {
+      cancelAnimationFrame(_raf);
+      if (typeof Forest3D   !== 'undefined') Forest3D.stop();
+      if (typeof Aquarium3D !== 'undefined') Aquarium3D.start(_canvas);
+      return;
+    } else {
+      if (typeof Aquarium3D !== 'undefined') Aquarium3D.stop();
     }
 
     if (_activeSceneType === 'forest') {
