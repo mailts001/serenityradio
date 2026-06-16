@@ -1,12 +1,12 @@
 'use strict';
 /* ═══════════════════════════════════════════════════════════════════
    TRAIN3D  —  Vintage railway carriage interior
-   Three.js r149  ·  transparent WebGL overlay
+   Three.js r149  ·  opaque WebGL renderer
    ───────────────────────────────────────────────────────────────────
-   The canvas has alpha:true + clearColor(0,0,0,0).
-   The window opening is EMPTY geometry → bg-canvas scenery shows
-   through perfectly.  The 2-D canvas_scenes.js keeps running the
-   biome scenery animation underneath.
+   Approach: the bg-canvas 2D scenery animation is captured each frame
+   as a THREE.CanvasTexture and rendered on a large plane behind the
+   window wall.  No CSS alpha compositing needed — the scenery appears
+   through the window opening as a proper 3D texture plane.
    ═══════════════════════════════════════════════════════════════════ */
 const Train3D = (() => {
 
@@ -35,12 +35,18 @@ const Train3D = (() => {
   let _lastNow = 0;
   let _carriageGroup = null;
 
+  // ── Outdoor scenery bg (canvas texture plane)
+  let _canvas2d = null;
+  let _bgTex    = null;
+  let _bgMesh   = null;
+
   // ─────────────────────────────────────────────────────────────────
   //  PUBLIC API
   // ─────────────────────────────────────────────────────────────────
-  function start() {
+  function start(canvas2d) {
     if (_running) return;
-    _running = true;
+    _running  = true;
+    _canvas2d = canvas2d || null;
 
     _el = document.createElement('canvas');
     _el.id = 'train3d-canvas';
@@ -77,6 +83,9 @@ const Train3D = (() => {
       });
       _scene = null;
     }
+    if (_bgTex)  { _bgTex.dispose(); _bgTex = null; }
+    _bgMesh   = null;
+    _canvas2d = null;
     if (_R) { _R.dispose(); _R = null; }
     _cam = null;
     _carriageGroup = null;
@@ -91,30 +100,45 @@ const Train3D = (() => {
   function _launch() {
     if (!_running || !_el) return;
 
-    // ── Renderer — transparent background ─────────────────────────
+    // ── Renderer — opaque (bg scenery rendered as texture plane inside scene)
     _R = new THREE.WebGLRenderer({
-      canvas:            _el,
-      antialias:         true,
-      alpha:             true,
-      premultipliedAlpha: false,   // straight alpha — required for CSS compositing over bg-canvas
+      canvas:           _el,
+      antialias:        true,
       powerPreference:  'high-performance',
     });
-    _R.setClearColor(0x000000, 0);            // fully transparent
+    _R.setClearColor(0x0b1a0f);    // dark green fallback (never visible if bg plane covers view)
     _R.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
     _R.shadowMap.enabled = false;
 
     // ── Scene ─────────────────────────────────────────────────────
     _scene = new THREE.Scene();
-    // No scene fog — fog would fog the bg-canvas scenery too
 
     // ── Camera ────────────────────────────────────────────────────
     // Eye-level from passenger seat, looking toward the window wall
-    _cam = new THREE.PerspectiveCamera(56, 1, 0.05, 40);
+    _cam = new THREE.PerspectiveCamera(56, 1, 0.05, 60);
     _cam.position.set(0, 1.15, RD - 0.5);
     _cam.lookAt(0, 1.02, WIN_Z);
 
     _buildLights();
     _buildCarriage();
+
+    // ── Outdoor scenery background plane ──────────────────────────
+    // The 2D canvas (bg-canvas) is captured each frame as a texture and
+    // rendered on this large plane behind the window wall.
+    // This is far more reliable than CSS alpha compositing.
+    if (_canvas2d) {
+      _bgTex = new THREE.CanvasTexture(_canvas2d);
+      // Size the plane to exactly fill the camera FOV at depth Z=-18
+      // Camera at Z=4.5, plane at Z=-18 → distance = 22.5 units
+      // h = 2*tan(28°)*22.5 ≈ 23.9; w = h * aspect (computed in _checkResize)
+      const bgG = new THREE.PlaneGeometry(90, 52);
+      const bgM = new THREE.MeshBasicMaterial({ map: _bgTex });
+      _bgMesh = new THREE.Mesh(bgG, bgM);
+      // Y = camera target Y (1.02) slightly adjusted for tilt at depth 22.5
+      _bgMesh.position.set(0, 0.7, -18);
+      _scene.add(_bgMesh);
+    }
+
     _checkResize();
 
     _lastNow = performance.now();
@@ -172,7 +196,7 @@ const Train3D = (() => {
   }
 
   // ── Shared materials ────────────────────────────────────────────
-  function _wallMat()    { return new THREE.MeshStandardMaterial({ color:0x1a3320, roughness:0.68, metalness:0.05 }); }
+  function _wallMat()    { return new THREE.MeshStandardMaterial({ color:0x1a3320, roughness:0.68, metalness:0.05, side: THREE.DoubleSide }); }
   function _brassMat()   { return new THREE.MeshStandardMaterial({ color:0x9a7830, roughness:0.38, metalness:0.75 }); }
   function _leatherMat() { return new THREE.MeshStandardMaterial({ color:0x7a3e18, roughness:0.82, metalness:0.02 }); }
   function _creamMat()   { return new THREE.MeshStandardMaterial({ color:0xf2eddf, roughness:0.88, metalness:0.00 }); }
@@ -262,21 +286,25 @@ const Train3D = (() => {
     const wm = _wallMat();
     const z  = WIN_Z;
 
-    // Top panel
+    // Panels face the camera at +Z  (no rotation needed for PlaneGeometry —
+    // default normal is +Z which points toward camera).  DoubleSide on wm
+    // ensures they block the bg plane from both sides too.
+
+    // Top panel (above window)
     _add(new THREE.PlaneGeometry(RW * 2, RH - WIN_TOP), wm,
-      0, WIN_TOP + (RH - WIN_TOP) / 2, z, 0, Math.PI);
+      0, WIN_TOP + (RH - WIN_TOP) / 2, z);
 
-    // Bottom panel
+    // Bottom panel (sill area below window)
     _add(new THREE.PlaneGeometry(RW * 2, WIN_BOT), wm,
-      0, WIN_BOT / 2, z, 0, Math.PI);
+      0, WIN_BOT / 2, z);
 
-    // Left panel
-    _add(new THREE.PlaneGeometry(RW - WIN_W, WIN_TOP - WIN_BOT), wm,
-      -(WIN_W + (RW - WIN_W) / 2), WIN_BOT + (WIN_TOP - WIN_BOT) / 2, z, 0, Math.PI);
+    // Left column (WIN_W > RW so these are very narrow / outside room — harmless)
+    _add(new THREE.PlaneGeometry(Math.max(0.01, RW - WIN_W), WIN_TOP - WIN_BOT), wm,
+      -(WIN_W + Math.max(0.01, RW - WIN_W) / 2), WIN_BOT + (WIN_TOP - WIN_BOT) / 2, z);
 
-    // Right panel
-    _add(new THREE.PlaneGeometry(RW - WIN_W, WIN_TOP - WIN_BOT), wm,
-      WIN_W + (RW - WIN_W) / 2, WIN_BOT + (WIN_TOP - WIN_BOT) / 2, z, 0, Math.PI);
+    // Right column
+    _add(new THREE.PlaneGeometry(Math.max(0.01, RW - WIN_W), WIN_TOP - WIN_BOT), wm,
+      WIN_W + Math.max(0.01, RW - WIN_W) / 2, WIN_BOT + (WIN_TOP - WIN_BOT) / 2, z);
   }
 
   // ── Window frame (dark green with brass inlay) ──────────────────
@@ -364,29 +392,22 @@ const Train3D = (() => {
     });
   }
 
-  // ── Subtle glass pane (very low opacity — gives faint reflection)
+  // ── Glass pane — very subtle tint only (window shows bg plane behind)
   function _buildGlassPane() {
     const openW = WIN_W * 2;
-    // Upper pane
-    const glassUpper = new THREE.Mesh(
-      new THREE.PlaneGeometry(openW - 0.02, WIN_DIV - WIN_BOT - 0.04),
-      new THREE.MeshPhysicalMaterial({
-        color:       0x90b8d0,
-        transparent: true,
-        opacity:     0.055,
-        roughness:   0.04,
-        metalness:   0.0,
-        side:        THREE.DoubleSide,
-      }),
-    );
-    glassUpper.position.set(0, WIN_BOT + (WIN_DIV - WIN_BOT) / 2, WIN_Z + 0.02);
-    _carriageGroup.add(glassUpper);
-
-    // Lower pane
-    const glassLower = glassUpper.clone();
-    glassLower.geometry = new THREE.PlaneGeometry(openW - 0.02, WIN_TOP - WIN_DIV - 0.04);
-    glassLower.position.set(0, WIN_DIV + (WIN_TOP - WIN_DIV) / 2, WIN_Z + 0.02);
-    _carriageGroup.add(glassLower);
+    // Extremely low-opacity tinted planes — just enough to hint at glass
+    // but not enough to obscure the bg-texture scenery behind
+    const glassMat = new THREE.MeshPhysicalMaterial({
+      color: 0xa8c8e0, transparent: true, opacity: 0.025,
+      roughness: 0.02, metalness: 0.0, side: THREE.DoubleSide,
+    });
+    [[WIN_BOT + (WIN_DIV - WIN_BOT) / 2, WIN_DIV - WIN_BOT - 0.04],
+     [WIN_DIV + (WIN_TOP - WIN_DIV) / 2, WIN_TOP - WIN_DIV  - 0.04]
+    ].forEach(([py, ph]) => {
+      const m = new THREE.Mesh(new THREE.PlaneGeometry(openW - 0.02, ph), glassMat);
+      m.position.set(0, py, WIN_Z + 0.015);
+      _carriageGroup.add(m);
+    });
   }
 
   // ── Curved ceiling ───────────────────────────────────────────────
@@ -641,6 +662,9 @@ const Train3D = (() => {
     // Look slightly toward the centre of the window
     const lookY = 1.02 + Math.sin(_swayT * 0.7) * 0.008;
     _cam.lookAt(_cam.position.x * 0.08, lookY, WIN_Z);
+
+    // Refresh outdoor scenery texture from bg-canvas each frame
+    if (_bgTex) _bgTex.needsUpdate = true;
 
     _R.render(_scene, _cam);
   }

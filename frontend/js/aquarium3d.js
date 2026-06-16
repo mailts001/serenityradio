@@ -24,13 +24,19 @@ const Aquarium3D = (() => {
   // ── Tank half-extents (world units)
   const TW = 14, TH = 7.5, TD = 12;
 
+  // ── Live tuning parameters (adjusted by control panel)
+  let _tuning = { speed: 1.0, bend: 1.0, wave: 1.0 };
+
   // ── Fish species  (adapted from WebGL Samples g_fishTable, scaled to tank)
-  //    speed/radius are scaled; clock multipliers give Lissajous variety
+  //    xCk/yCk/zCk: per-species Lissajous clock multipliers (same for all fish
+  //    in species → they trace the SAME orbit).  Each fish gets a different
+  //    clockOffset so they're spread around the path → schooling behaviour.
   const SPECIES = [
     {
       name: 'SmallFishA',   // fast schooling orange fish
       count: 22,  speed: 1.0, speedRange: 1.5,
       radius: 8,  radiusRange: 6,
+      xCk: 1.0, yCk: 0.45, zCk: 0.95,   // smooth near-circular orbit
       tailSpeed: 10, heightOffset: -1, heightRange: 4.5,
       fishLength: 1.8, fishWaveLength: 1.0, fishBendAmount: 2.0,
       fishScale: 1.0,
@@ -50,6 +56,7 @@ const Aquarium3D = (() => {
       name: 'SmallFishB',   // fast blue chromis
       count: 20,  speed: 1.5, speedRange: 2.0,
       radius: 6,  radiusRange: 5,
+      xCk: 0.75, yCk: 0.55, zCk: 1.05,
       tailSpeed: 12, heightOffset: 2.5, heightRange: 3.5,
       fishLength: 1.4, fishWaveLength: 1.0, fishBendAmount: 1.8,
       fishScale: 0.8,
@@ -66,6 +73,7 @@ const Aquarium3D = (() => {
       name: 'MediumFishA',  // gold fish, medium
       count: 10,  speed: 0.8, speedRange: 0.8,
       radius: 10, radiusRange: 5,
+      xCk: 0.9, yCk: 0.35, zCk: 0.85,
       tailSpeed: 7, heightOffset: 0, heightRange: 3.5,
       fishLength: 2.8, fishWaveLength: 0.8, fishBendAmount: 1.5,
       fishScale: 1.4,
@@ -84,6 +92,7 @@ const Aquarium3D = (() => {
       name: 'MediumFishB',  // green tropical
       count: 10,  speed: 0.9, speedRange: 1.0,
       radius: 8,  radiusRange: 4,
+      xCk: 1.05, yCk: 0.6, zCk: 0.80,
       tailSpeed: 8, heightOffset: -2, heightRange: 4,
       fishLength: 2.6, fishWaveLength: 0.9, fishBendAmount: 1.8,
       fishScale: 1.2,
@@ -101,6 +110,7 @@ const Aquarium3D = (() => {
       name: 'BigFishA',     // large shark-like grey
       count: 3,   speed: 0.4, speedRange: 0.3,
       radius: 11, radiusRange: 3,
+      xCk: 0.85, yCk: 0.25, zCk: 1.0,
       tailSpeed: 4, heightOffset: 1, heightRange: 2.5,
       fishLength: 5.5, fishWaveLength: 0.6, fishBendAmount: 1.2,
       fishScale: 2.8,
@@ -117,6 +127,7 @@ const Aquarium3D = (() => {
       name: 'BigFishB',     // large slow tropical
       count: 2,   speed: 0.35, speedRange: 0.2,
       radius: 12, radiusRange: 2,
+      xCk: 0.95, yCk: 0.20, zCk: 0.90,
       tailSpeed: 3.5, heightOffset: 0, heightRange: 2,
       fishLength: 6.5, fishWaveLength: 0.5, fishBendAmount: 1.0,
       fishScale: 3.2,
@@ -193,7 +204,11 @@ const Aquarium3D = (() => {
 
     void main() {
       vec3 col = texture2D(uMap, vUv).rgb;
-      gl_FragColor = vec4(col * (uAmbient + vec3(vDiffuse * 0.7)), 1.0);
+      // uAmbient is underwater tint.  vDiffuse adds directional light.
+      // Keep colours visible: clamp total light to [0.25, 1.0] range so fish
+      // textures are always readable regardless of orientation.
+      float light = clamp(dot(uAmbient, vec3(0.333)) + vDiffuse * 0.85, 0.25, 1.0);
+      gl_FragColor = vec4(col * light, 1.0);
     }
   `;
 
@@ -314,15 +329,19 @@ const Aquarium3D = (() => {
   //  BUILD FISH  — one ShaderMaterial clone per fish (independent uniforms)
   // ════════════════════════════════════════════════════════════════════
   function _buildFishForSpecies(spec, tex, geo) {
-    const ambient = new THREE.Color(0x223344);
+    // Brighter ambient — underwater blue-green tint but bright enough to see textures
+    const ambient = new THREE.Color(0x4466aa);
     for (let i = 0; i < spec.count; i++) {
-      // Per-fish randomised Lissajous clock multipliers
-      const xCk = 0.1 + Math.random() * 0.8;
-      const yCk = 0.5 + Math.random() * 1.0;
-      const zCk = 0.1 + Math.random() * 0.8;
-      const clockOffset = Math.random() * Math.PI * 2;
-      const speed = spec.speed + Math.random() * spec.speedRange;
-      const radius = spec.radius + (Math.random() - 0.5) * spec.radiusRange;
+      // All fish in species share the SAME Lissajous multipliers (from spec)
+      // → they trace identical orbits.  Phase offsets spread them around the path
+      // → looks like a school of fish swimming together.
+      const xCk = spec.xCk;
+      const yCk = spec.yCk;
+      const zCk = spec.zCk;
+      // Evenly distribute fish around the orbit, with a small random jitter
+      const clockOffset = (i / spec.count) * Math.PI * 2 + (Math.random() - 0.5) * 0.4;
+      const speed  = spec.speed + Math.random() * spec.speedRange * 0.3;  // tighter speed range
+      const radius = spec.radius + (Math.random() - 0.5) * spec.radiusRange * 0.5;
 
       const mat = new THREE.ShaderMaterial({
         uniforms: {
@@ -354,13 +373,17 @@ const Aquarium3D = (() => {
   //  FISH MOVEMENT  (WebGL Samples Lissajous orbits)
   // ════════════════════════════════════════════════════════════════════
   function _updateFish(clock) {
+    const spd  = _tuning.speed;
+    const bend = _tuning.bend;
+    const wave = _tuning.wave;
     _fish.forEach(f => {
-      const fc  = clock * f.speed + f.clockOffset;
+      const fc  = clock * f.speed * spd + f.clockOffset;
       const r   = f.radius;
       const rY  = f.spec.heightRange;
       const hOff = f.spec.heightOffset;
 
       const xC = fc * f.xCk,  yC = fc * f.yCk,  zC = fc * f.zCk;
+      // nextPos = slightly in the past → worldPos - nextPos ≈ velocity = forward dir
       const xCN = (fc - 0.04) * f.xCk;
       const yCN = (fc - 0.01) * f.yCk;
       const zCN = (fc - 0.01) * f.zCk;
@@ -375,9 +398,12 @@ const Aquarium3D = (() => {
         Math.sin(yCN) * rY + hOff,
         Math.cos(zCN) * r,
       );
-      // Tail animation clock (WebGL Samples: time = (clock*tailSpeed*speed) % 2π)
+      // Apply live-tuning to wave uniforms
+      f.mat.uniforms.uFishBendAmount.value  = f.spec.fishBendAmount  * bend;
+      f.mat.uniforms.uFishWaveLength.value  = f.spec.fishWaveLength  * wave;
+      // Tail animation clock
       f.mat.uniforms.uTime.value =
-        (clock * f.spec.tailSpeed * f.speed + f.clockOffset) % (Math.PI * 2);
+        (clock * f.spec.tailSpeed * f.speed * spd + f.clockOffset) % (Math.PI * 2);
     });
   }
 
@@ -677,11 +703,64 @@ const Aquarium3D = (() => {
   // ════════════════════════════════════════════════════════════════════
   //  PUBLIC API
   // ════════════════════════════════════════════════════════════════════
+  // ════════════════════════════════════════════════════════════════════
+  //  LIVE CONTROLS  (corner HUD for tuning animation parameters)
+  // ════════════════════════════════════════════════════════════════════
+  let _controlPanel = null;
+
+  function _buildControls() {
+    if (_controlPanel) return;
+    const panel = document.createElement('div');
+    panel.id = 'aq-controls';
+    panel.style.cssText = [
+      'position:fixed;bottom:18px;right:18px;z-index:20',
+      'background:rgba(0,10,20,0.78);color:#aaddff',
+      'padding:10px 14px;border-radius:8px;font:12px/1.7 monospace',
+      'pointer-events:auto;user-select:none;min-width:190px',
+      'border:1px solid rgba(80,160,255,0.25)',
+    ].join(';');
+
+    const sliders = [
+      { id:'aq-spd',  label:'Speed',     key:'speed', min:0.1, max:4.0, step:0.05, def:1.0 },
+      { id:'aq-bend', label:'Tail Bend', key:'bend',  min:0.1, max:4.0, step:0.05, def:1.0 },
+      { id:'aq-wave', label:'Wave Freq', key:'wave',  min:0.1, max:4.0, step:0.05, def:1.0 },
+    ];
+
+    panel.innerHTML = '<div style="margin-bottom:6px;font-weight:bold;color:#88ccff">🐟 Aquarium Controls</div>'
+      + sliders.map(s => `
+        <label style="display:flex;align-items:center;gap:6px;margin:3px 0">
+          <span style="width:68px">${s.label}</span>
+          <input id="${s.id}" type="range" min="${s.min}" max="${s.max}"
+            step="${s.step}" value="${s.def}"
+            style="flex:1;accent-color:#44aaff">
+          <span id="${s.id}-v" style="width:32px;text-align:right">${s.def.toFixed(2)}</span>
+        </label>`).join('');
+
+    document.body.appendChild(panel);
+    _controlPanel = panel;
+
+    sliders.forEach(s => {
+      const el = document.getElementById(s.id);
+      const vl = document.getElementById(s.id + '-v');
+      el.addEventListener('input', () => {
+        const v = parseFloat(el.value);
+        _tuning[s.key] = v;
+        vl.textContent  = v.toFixed(2);
+      });
+    });
+  }
+
+  function _removeControls() {
+    if (_controlPanel) { _controlPanel.remove(); _controlPanel = null; }
+  }
+
   function start(canvas2dRef) {
     if (_running) return;
     _running = true;
     _canvas2d = canvas2dRef;
     if (_canvas2d) _canvas2d.style.display = 'none';
+    _tuning = { speed: 1.0, bend: 1.0, wave: 1.0 };
+    _buildControls();
 
     function _launch() {
       if (!_running) return;
@@ -740,6 +819,7 @@ const Aquarium3D = (() => {
 
     if (_el) { _el.remove(); _el = null; }
     if (_canvas2d) { _canvas2d.style.display = ''; _canvas2d = null; }
+    _removeControls();
   }
 
   return { start, stop };
