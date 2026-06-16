@@ -3178,6 +3178,6 @@ document.addEventListener('DOMContentLoaded', () => {
   // Channel buttons only change music — they NEVER touch the scene
   // (channel:changed is handled by channels.js for playlist only)
 
-  // Refresh sky colour every hour (time-of-day driven automatically)
-  setInterval(() => { CanvasScenes.setScene(CanvasScenes.current()); }, 60 * 60 * 1000);
+  // TESTING: hourly sky-refresh timer disabled
+  // setInterval(() => { CanvasScenes.setScene(CanvasScenes.current()); }, 60 * 60 * 1000);
 });

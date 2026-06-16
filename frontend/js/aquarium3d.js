@@ -31,29 +31,58 @@ const Aquarium3D = (() => {
   //    xCk/yCk/zCk: per-species Lissajous clock multipliers (same for all fish
   //    in species → they trace the SAME orbit).  Each fish gets a different
   //    clockOffset so they're spread around the path → schooling behaviour.
+  // ── Shared texture helper: draws a fish-scale pattern across the canvas
+  //    UV layout on LatheGeometry (post rotateX): U=circumference (0=dorsal
+  //    top, 0.5=ventral belly), V=0=tail end, V=1=head end.
+  //    With Three.js flipY=true: canvas Y=0 → head, canvas Y=H → tail.
+  //    Canvas X=0 → dorsal, X=W/2 → belly, X=W → back to dorsal.
+  function _drawScales(ctx, W, H, sz, color) {
+    ctx.strokeStyle = color; ctx.lineWidth = 0.9;
+    for (let row = 0; row <= H / sz + 1; row++) {
+      const xOff = (row & 1) * (sz * 0.5);
+      for (let col = -1; col <= W / sz + 1; col++) {
+        ctx.beginPath();
+        ctx.arc(col * sz + xOff, row * sz, sz * 0.62, 0.05 * Math.PI, 0.95 * Math.PI);
+        ctx.stroke();
+      }
+    }
+  }
+
   const SPECIES = [
     {
-      name: 'SmallFishA',   // fast schooling orange fish
+      name: 'SmallFishA',   // clownfish — bright orange, 3 white rings
       count: 22,  speed: 1.0, speedRange: 1.5,
       radius: 8,  radiusRange: 6,
-      xCk: 1.0, yCk: 0.45, zCk: 0.95,   // smooth near-circular orbit
+      xCk: 1.0, yCk: 0.45, zCk: 0.95,
       tailSpeed: 10, heightOffset: -1, heightRange: 4.5,
       fishLength: 1.8, fishWaveLength: 1.0, fishBendAmount: 2.0,
       fishScale: 1.0,
       tex: (ctx) => {
-        ctx.fillStyle = '#e06010'; ctx.fillRect(0,0,128,128);
-        [24, 66, 106].forEach(cy => {         // horizontal bands → vertical stripes on fish
-          ctx.fillStyle = '#fff';  ctx.fillRect(0, cy-9, 128, 18);
-          ctx.fillStyle = '#000';  ctx.fillRect(0, cy-11,128, 2);
-          ctx.fillStyle = '#000';  ctx.fillRect(0, cy+9, 128, 2);
+        const W=256, H=256; ctx.canvas.width=W; ctx.canvas.height=H;
+        // Base: vivid orange
+        ctx.fillStyle='#e05000'; ctx.fillRect(0,0,W,H);
+        _drawScales(ctx,W,H,18,'rgba(80,10,0,0.20)');
+        // 3 white vertical bands (ring around body) — at head, mid, near-tail
+        [0.12, 0.48, 0.80].forEach(u => {
+          const x = u * W;
+          ctx.fillStyle='rgba(255,255,255,0.90)'; ctx.fillRect(x-11,0,22,H);
+          ctx.fillStyle='rgba(0,0,0,0.55)'; ctx.fillRect(x-12,0,2,H);
+          ctx.fillStyle='rgba(0,0,0,0.55)'; ctx.fillRect(x+10,0,2,H);
         });
-        const g = ctx.createRadialGradient(64,64,12,64,64,72);
-        g.addColorStop(0,'rgba(0,0,0,0)'); g.addColorStop(1,'rgba(0,0,0,0.4)');
-        ctx.fillStyle=g; ctx.fillRect(0,0,128,128);
+        // Belly: lighter (X = W/2 = ventral surface)
+        const belly=ctx.createLinearGradient(W*0.3,0,W*0.5,0);
+        belly.addColorStop(0,'rgba(255,200,130,0)'); belly.addColorStop(1,'rgba(255,200,130,0.45)');
+        ctx.fillStyle=belly; ctx.fillRect(0,0,W,H);
+        const belly2=ctx.createLinearGradient(W*0.7,0,W*0.5,0);
+        belly2.addColorStop(0,'rgba(255,200,130,0)'); belly2.addColorStop(1,'rgba(255,200,130,0.45)');
+        ctx.fillStyle=belly2; ctx.fillRect(0,0,W,H);
+        // Eye: near head (canvas top Y≈0) on right side (X≈W*0.75)
+        ctx.fillStyle='#111'; ctx.beginPath(); ctx.arc(W*0.76, H*0.06, 7, 0, Math.PI*2); ctx.fill();
+        ctx.fillStyle='rgba(255,255,255,0.7)'; ctx.beginPath(); ctx.arc(W*0.76-2, H*0.06-2, 3, 0, Math.PI*2); ctx.fill();
       },
     },
     {
-      name: 'SmallFishB',   // fast blue chromis
+      name: 'SmallFishB',   // blue chromis — vivid blue, iridescent stripe
       count: 20,  speed: 1.5, speedRange: 2.0,
       radius: 6,  radiusRange: 5,
       xCk: 0.75, yCk: 0.55, zCk: 1.05,
@@ -61,16 +90,29 @@ const Aquarium3D = (() => {
       fishLength: 1.4, fishWaveLength: 1.0, fishBendAmount: 1.8,
       fishScale: 0.8,
       tex: (ctx) => {
-        const bg = ctx.createLinearGradient(0,0,0,128);
-        bg.addColorStop(0,'#0055ee'); bg.addColorStop(1,'#00aaff');
-        ctx.fillStyle=bg; ctx.fillRect(0,0,128,128);
-        const sh = ctx.createRadialGradient(50,40,4,50,40,55);
-        sh.addColorStop(0,'rgba(255,255,255,0.4)'); sh.addColorStop(1,'rgba(0,0,0,0)');
-        ctx.fillStyle=sh; ctx.fillRect(0,0,128,128);
+        const W=256, H=256; ctx.canvas.width=W; ctx.canvas.height=H;
+        // Base blue-to-cyan gradient (dorsal to belly)
+        const bg=ctx.createLinearGradient(0,0,W,0);
+        bg.addColorStop(0,'#0040cc'); bg.addColorStop(0.5,'#00ccff'); bg.addColorStop(1,'#0040cc');
+        ctx.fillStyle=bg; ctx.fillRect(0,0,W,H);
+        _drawScales(ctx,W,H,14,'rgba(0,20,100,0.22)');
+        // Iridescent silver-cyan mid-lateral stripe (horizontal band at Y=H/2)
+        const stripe=ctx.createLinearGradient(0,H*0.42,0,H*0.58);
+        stripe.addColorStop(0,'rgba(130,255,255,0)');
+        stripe.addColorStop(0.5,'rgba(200,255,255,0.65)');
+        stripe.addColorStop(1,'rgba(130,255,255,0)');
+        ctx.fillStyle=stripe; ctx.fillRect(0,0,W,H);
+        // Specular highlight (dorsal shimmer)
+        const spec=ctx.createLinearGradient(0,0,W*0.18,0);
+        spec.addColorStop(0,'rgba(255,255,255,0.35)'); spec.addColorStop(1,'rgba(255,255,255,0)');
+        ctx.fillStyle=spec; ctx.fillRect(0,0,W,H);
+        // Eye
+        ctx.fillStyle='#080c18'; ctx.beginPath(); ctx.arc(W*0.76, H*0.06, 6, 0, Math.PI*2); ctx.fill();
+        ctx.fillStyle='rgba(200,240,255,0.7)'; ctx.beginPath(); ctx.arc(W*0.75, H*0.055, 2.5, 0, Math.PI*2); ctx.fill();
       },
     },
     {
-      name: 'MediumFishA',  // gold fish, medium
+      name: 'MediumFishA',  // goldfish — metallic gold scales
       count: 10,  speed: 0.8, speedRange: 0.8,
       radius: 10, radiusRange: 5,
       xCk: 0.9, yCk: 0.35, zCk: 0.85,
@@ -78,18 +120,34 @@ const Aquarium3D = (() => {
       fishLength: 2.8, fishWaveLength: 0.8, fishBendAmount: 1.5,
       fishScale: 1.4,
       tex: (ctx) => {
-        const bg = ctx.createLinearGradient(0,0,0,128);
-        bg.addColorStop(0,'#e8c020'); bg.addColorStop(0.5,'#ffd840'); bg.addColorStop(1,'#c89010');
-        ctx.fillStyle=bg; ctx.fillRect(0,0,128,128);
-        ctx.fillStyle='rgba(255,200,0,0.4)';
-        ctx.fillRect(0,52,128,24);
-        const g = ctx.createRadialGradient(64,64,15,64,64,68);
-        g.addColorStop(0,'rgba(0,0,0,0)'); g.addColorStop(1,'rgba(0,0,0,0.3)');
-        ctx.fillStyle=g; ctx.fillRect(0,0,128,128);
+        const W=256, H=256; ctx.canvas.width=W; ctx.canvas.height=H;
+        // Rich metallic gold base
+        const bg=ctx.createLinearGradient(0,0,W,0);
+        bg.addColorStop(0,'#c88000'); bg.addColorStop(0.5,'#ffe040'); bg.addColorStop(1,'#c88000');
+        ctx.fillStyle=bg; ctx.fillRect(0,0,W,H);
+        _drawScales(ctx,W,H,20,'rgba(100,40,0,0.25)');
+        // Orange tint on rear body (tail end = canvas bottom)
+        const tail=ctx.createLinearGradient(0,H*0.6,0,H);
+        tail.addColorStop(0,'rgba(220,100,0,0)'); tail.addColorStop(1,'rgba(220,100,0,0.5)');
+        ctx.fillStyle=tail; ctx.fillRect(0,0,W,H);
+        // White belly shimmer
+        const belly=ctx.createLinearGradient(W*0.35,0,W*0.5,0);
+        belly.addColorStop(0,'rgba(255,255,200,0)'); belly.addColorStop(1,'rgba(255,255,200,0.55)');
+        ctx.fillStyle=belly; ctx.fillRect(0,0,W,H);
+        const belly2=ctx.createLinearGradient(W*0.65,0,W*0.5,0);
+        belly2.addColorStop(0,'rgba(255,255,200,0)'); belly2.addColorStop(1,'rgba(255,255,200,0.55)');
+        ctx.fillStyle=belly2; ctx.fillRect(0,0,W,H);
+        // Dark dorsal ridge
+        const dors=ctx.createLinearGradient(0,0,W*0.12,0);
+        dors.addColorStop(0,'rgba(0,0,0,0.30)'); dors.addColorStop(1,'rgba(0,0,0,0)');
+        ctx.fillStyle=dors; ctx.fillRect(0,0,W,H);
+        // Eye
+        ctx.fillStyle='#1a0800'; ctx.beginPath(); ctx.arc(W*0.78, H*0.07, 8, 0, Math.PI*2); ctx.fill();
+        ctx.fillStyle='rgba(255,240,100,0.6)'; ctx.beginPath(); ctx.arc(W*0.77, H*0.065, 3, 0, Math.PI*2); ctx.fill();
       },
     },
     {
-      name: 'MediumFishB',  // green tropical
+      name: 'MediumFishB',  // parrotfish — emerald green with blue fin edges
       count: 10,  speed: 0.9, speedRange: 1.0,
       radius: 8,  radiusRange: 4,
       xCk: 1.05, yCk: 0.6, zCk: 0.80,
@@ -97,17 +155,29 @@ const Aquarium3D = (() => {
       fishLength: 2.6, fishWaveLength: 0.9, fishBendAmount: 1.8,
       fishScale: 1.2,
       tex: (ctx) => {
-        const bg = ctx.createLinearGradient(0,0,0,128);
-        bg.addColorStop(0,'#10aa40'); bg.addColorStop(0.6,'#30cc60'); bg.addColorStop(1,'#008828');
-        ctx.fillStyle=bg; ctx.fillRect(0,0,128,128);
-        ctx.fillStyle='rgba(0,0,0,0.25)'; ctx.fillRect(0,56,128,16);
-        const g = ctx.createRadialGradient(45,45,8,45,45,55);
-        g.addColorStop(0,'rgba(255,255,255,0.3)'); g.addColorStop(1,'rgba(0,0,0,0)');
-        ctx.fillStyle=g; ctx.fillRect(0,0,128,128);
+        const W=256, H=256; ctx.canvas.width=W; ctx.canvas.height=H;
+        const bg=ctx.createLinearGradient(0,0,W,0);
+        bg.addColorStop(0,'#008830'); bg.addColorStop(0.5,'#44cc60'); bg.addColorStop(1,'#008830');
+        ctx.fillStyle=bg; ctx.fillRect(0,0,W,H);
+        _drawScales(ctx,W,H,18,'rgba(0,40,10,0.24)');
+        // Blue fin-edge tint in tail area and dorsal
+        const blue1=ctx.createLinearGradient(0,H*0.7,0,H);
+        blue1.addColorStop(0,'rgba(30,100,200,0)'); blue1.addColorStop(1,'rgba(30,80,200,0.50)');
+        ctx.fillStyle=blue1; ctx.fillRect(0,0,W,H);
+        const dors=ctx.createLinearGradient(0,0,W*0.12,0);
+        dors.addColorStop(0,'rgba(0,80,160,0.40)'); dors.addColorStop(1,'rgba(0,80,160,0)');
+        ctx.fillStyle=dors; ctx.fillRect(0,0,W,H);
+        // Yellow lateral stripe
+        const lat=ctx.createLinearGradient(0,H*0.44,0,H*0.56);
+        lat.addColorStop(0,'rgba(255,220,0,0)'); lat.addColorStop(0.5,'rgba(255,220,0,0.45)'); lat.addColorStop(1,'rgba(255,220,0,0)');
+        ctx.fillStyle=lat; ctx.fillRect(0,0,W,H);
+        // Eye
+        ctx.fillStyle='#050d05'; ctx.beginPath(); ctx.arc(W*0.77, H*0.07, 7, 0, Math.PI*2); ctx.fill();
+        ctx.fillStyle='rgba(180,255,180,0.6)'; ctx.beginPath(); ctx.arc(W*0.76, H*0.065, 3, 0, Math.PI*2); ctx.fill();
       },
     },
     {
-      name: 'BigFishA',     // large shark-like grey
+      name: 'BigFishA',     // reef shark — sleek grey-blue, white belly, black fin tips
       count: 3,   speed: 0.4, speedRange: 0.3,
       radius: 11, radiusRange: 3,
       xCk: 0.85, yCk: 0.25, zCk: 1.0,
@@ -115,16 +185,28 @@ const Aquarium3D = (() => {
       fishLength: 5.5, fishWaveLength: 0.6, fishBendAmount: 1.2,
       fishScale: 2.8,
       tex: (ctx) => {
-        const bg = ctx.createLinearGradient(0,0,0,128);
-        bg.addColorStop(0,'#4a5a64'); bg.addColorStop(0.55,'#7a8a94'); bg.addColorStop(1,'#c8d8e0');
-        ctx.fillStyle=bg; ctx.fillRect(0,0,128,128);
-        for (let y=0;y<128;y+=20){
-          ctx.fillStyle='rgba(0,0,0,0.04)'; ctx.fillRect(0,y,128,10);
-        }
+        const W=256, H=256; ctx.canvas.width=W; ctx.canvas.height=H;
+        // Dorsal: dark blue-grey, belly: cream-white
+        const bg=ctx.createLinearGradient(0,0,W,0);
+        bg.addColorStop(0,'#3a4a58'); bg.addColorStop(0.38,'#8a9aaa'); bg.addColorStop(0.5,'#dce8f0'); bg.addColorStop(0.62,'#8a9aaa'); bg.addColorStop(1,'#3a4a58');
+        ctx.fillStyle=bg; ctx.fillRect(0,0,W,H);
+        // Subtle scale texture (sharks have dermal denticles — tiny)
+        _drawScales(ctx,W,H,10,'rgba(0,0,0,0.07)');
+        // Dark lateral stripe
+        const lat=ctx.createLinearGradient(0,H*0.28,0,H*0.38);
+        lat.addColorStop(0,'rgba(20,30,40,0)'); lat.addColorStop(0.5,'rgba(20,30,40,0.35)'); lat.addColorStop(1,'rgba(20,30,40,0)');
+        ctx.fillStyle=lat; ctx.fillRect(0,0,W,H);
+        // Black fin tips: tail area (canvas bottom)
+        const ftip=ctx.createLinearGradient(0,H*0.80,0,H);
+        ftip.addColorStop(0,'rgba(0,0,0,0)'); ftip.addColorStop(1,'rgba(0,0,0,0.60)');
+        ctx.fillStyle=ftip; ctx.fillRect(0,0,W,H);
+        // Eye (large, dark, near head = canvas top)
+        ctx.fillStyle='#040810'; ctx.beginPath(); ctx.arc(W*0.77, H*0.055, 9, 0, Math.PI*2); ctx.fill();
+        ctx.fillStyle='rgba(180,200,220,0.5)'; ctx.beginPath(); ctx.arc(W*0.77-2, H*0.05, 4, 0, Math.PI*2); ctx.fill();
       },
     },
     {
-      name: 'BigFishB',     // large slow tropical
+      name: 'BigFishB',     // giant tropical — bronze-copper, wide colour bands
       count: 2,   speed: 0.35, speedRange: 0.2,
       radius: 12, radiusRange: 2,
       xCk: 0.95, yCk: 0.20, zCk: 0.90,
@@ -132,15 +214,36 @@ const Aquarium3D = (() => {
       fishLength: 6.5, fishWaveLength: 0.5, fishBendAmount: 1.0,
       fishScale: 3.2,
       tex: (ctx) => {
-        const bg = ctx.createLinearGradient(0,0,0,128);
-        bg.addColorStop(0,'#7a4010'); bg.addColorStop(0.5,'#b05820'); bg.addColorStop(1,'#7a4010');
-        ctx.fillStyle=bg; ctx.fillRect(0,0,128,128);
-        [32, 96].forEach(cy => {
-          ctx.fillStyle='rgba(255,160,0,0.5)'; ctx.fillRect(0,cy-8,128,16);
+        const W=256, H=256; ctx.canvas.width=W; ctx.canvas.height=H;
+        const bg=ctx.createLinearGradient(0,0,W,0);
+        bg.addColorStop(0,'#7a3200'); bg.addColorStop(0.5,'#e07030'); bg.addColorStop(1,'#7a3200');
+        ctx.fillStyle=bg; ctx.fillRect(0,0,W,H);
+        _drawScales(ctx,W,H,24,'rgba(60,10,0,0.22)');
+        // Wide dark-brown alternating bands across body length (vertical in canvas)
+        [0.20, 0.46, 0.72].forEach(u => {
+          const x = u * W;
+          ctx.fillStyle='rgba(50,10,0,0.48)'; ctx.fillRect(x-16,0,32,H);
         });
-        const g = ctx.createRadialGradient(64,64,20,64,64,70);
-        g.addColorStop(0,'rgba(255,255,255,0.2)'); g.addColorStop(1,'rgba(0,0,0,0)');
-        ctx.fillStyle=g; ctx.fillRect(0,0,128,128);
+        // Gold shimmer highlights between bands
+        [0.33, 0.59].forEach(u => {
+          const x = u * W;
+          const g=ctx.createLinearGradient(x-12,0,x,0);
+          g.addColorStop(0,'rgba(255,200,50,0)'); g.addColorStop(1,'rgba(255,200,50,0.38)');
+          ctx.fillStyle=g; ctx.fillRect(x-12,0,12,H);
+          const g2=ctx.createLinearGradient(x+12,0,x,0);
+          g2.addColorStop(0,'rgba(255,200,50,0)'); g2.addColorStop(1,'rgba(255,200,50,0.38)');
+          ctx.fillStyle=g2; ctx.fillRect(x,0,12,H);
+        });
+        // Pale belly
+        const belly=ctx.createLinearGradient(W*0.38,0,W*0.5,0);
+        belly.addColorStop(0,'rgba(255,200,150,0)'); belly.addColorStop(1,'rgba(255,200,150,0.40)');
+        ctx.fillStyle=belly; ctx.fillRect(0,0,W,H);
+        const belly2=ctx.createLinearGradient(W*0.62,0,W*0.5,0);
+        belly2.addColorStop(0,'rgba(255,200,150,0)'); belly2.addColorStop(1,'rgba(255,200,150,0.40)');
+        ctx.fillStyle=belly2; ctx.fillRect(0,0,W,H);
+        // Eye
+        ctx.fillStyle='#1a0800'; ctx.beginPath(); ctx.arc(W*0.78, H*0.06, 10, 0, Math.PI*2); ctx.fill();
+        ctx.fillStyle='rgba(255,200,80,0.55)'; ctx.beginPath(); ctx.arc(W*0.78-2, H*0.055, 4, 0, Math.PI*2); ctx.fill();
       },
     },
   ];
@@ -227,90 +330,186 @@ const Aquarium3D = (() => {
   let _clock = 0;           // seconds elapsed
 
   // ════════════════════════════════════════════════════════════════════
-  //  FISH GEOMETRY  (body Z from –FL/2=tail to +FL/2=head)
+  //  FISH GEOMETRY  (all parts merged into one BufferGeometry)
+  //  Local Z axis: –Z = tail, +Z = head  (matches FISH_VERT shader)
   // ════════════════════════════════════════════════════════════════════
+
+  // Helper: merge a list of geometries (indexed or not) → non-indexed result
+  function _mergeGeos(geos) {
+    // Convert each to non-indexed
+    const parts = geos.map(g => {
+      if (!g) return null;
+      const ni = g.index ? g.toNonIndexed() : g;
+      if (!ni.attributes.normal) ni.computeVertexNormals();
+      return ni;
+    }).filter(Boolean);
+
+    let total = 0;
+    parts.forEach(g => { total += g.attributes.position.count; });
+
+    const pos = new Float32Array(total * 3);
+    const nrm = new Float32Array(total * 3);
+    const uvs = new Float32Array(total * 2);
+    let off = 0;
+    parts.forEach(g => {
+      const n = g.attributes.position.count;
+      pos.set(g.attributes.position.array, off * 3);
+      nrm.set(g.attributes.normal.array,   off * 3);
+      uvs.set(g.attributes.uv ? g.attributes.uv.array : new Float32Array(n * 2), off * 2);
+      off += n;
+    });
+
+    const merged = new THREE.BufferGeometry();
+    merged.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+    merged.setAttribute('normal',   new THREE.BufferAttribute(nrm, 3));
+    merged.setAttribute('uv',       new THREE.BufferAttribute(uvs, 2));
+    return merged;
+  }
+
+  // Helper: create non-indexed geometry from raw triangle vertex array + uv array
+  function _triGeo(verts, uvArr) {
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(verts), 3));
+    if (uvArr) g.setAttribute('uv', new THREE.BufferAttribute(new Float32Array(uvArr), 2));
+    g.computeVertexNormals();
+    return g;
+  }
+
+  // ── Body (LatheGeometry, torpedo profile)
   function _fishBodyGeo(FL) {
-    // LatheGeometry profile: Vector2(radius, y_along_spine)
-    // y goes from –FL/2 (tail) to +FL/2 (head)
     const pts = [
-      new THREE.Vector2(0.005,      -FL * 0.50),
-      new THREE.Vector2(FL * 0.055, -FL * 0.42),
-      new THREE.Vector2(FL * 0.085, -FL * 0.28),
-      new THREE.Vector2(FL * 0.115, -FL * 0.08),
-      new THREE.Vector2(FL * 0.120,  FL * 0.10),
-      new THREE.Vector2(FL * 0.105,  FL * 0.28),
-      new THREE.Vector2(FL * 0.075,  FL * 0.40),
-      new THREE.Vector2(FL * 0.040,  FL * 0.48),
-      new THREE.Vector2(0.005,       FL * 0.50),
+      new THREE.Vector2(0.005,       -FL * 0.500),   // tail tip
+      new THREE.Vector2(FL * 0.042,  -FL * 0.450),
+      new THREE.Vector2(FL * 0.080,  -FL * 0.340),
+      new THREE.Vector2(FL * 0.108,  -FL * 0.180),
+      new THREE.Vector2(FL * 0.122,  -FL * 0.020),   // widest (slightly rear of midpoint)
+      new THREE.Vector2(FL * 0.118,   FL * 0.130),
+      new THREE.Vector2(FL * 0.108,   FL * 0.270),
+      new THREE.Vector2(FL * 0.090,   FL * 0.390),
+      new THREE.Vector2(FL * 0.062,   FL * 0.460),
+      new THREE.Vector2(FL * 0.032,   FL * 0.490),
+      new THREE.Vector2(0.006,        FL * 0.500),   // head tip (mouth)
     ];
-    const geo = new THREE.LatheGeometry(pts, 10);
-    geo.rotateX(Math.PI / 2);  // spine → Z axis
-    geo.scale(0.38, 1.0, 1.0); // flatten left-right
+    const geo = new THREE.LatheGeometry(pts, 18);  // 18 radial segments = smoother
+    geo.rotateX(Math.PI / 2);    // spine → Z axis
+    geo.scale(0.44, 1.0, 1.0);   // laterally compressed (fish are flat-sided)
     return geo;
   }
 
-  // Tail-fork geometry (two flat lobes at the tail, Z = –FL*0.44)
-  function _tailForkGeo(FL) {
-    const r = FL * 0.14;
-    const v = new Float32Array([
-      // upper lobe
-       0.01, 0.02, -FL*0.44,
-       0.01,-0.02, -FL*0.44,
-      -r,    r*1.5,-FL*0.50,
-      // lower lobe
-       0.01, 0.02, -FL*0.44,
-       0.01,-0.02, -FL*0.44,
-      -r,   -r*1.5,-FL*0.50,
-    ]);
-    const geo = new THREE.BufferGeometry();
-    geo.setAttribute('position', new THREE.BufferAttribute(v, 3));
-    geo.setAttribute('normal',
-      new THREE.BufferAttribute(new Float32Array([
-        0,0,1, 0,0,1, 0,0,1,
-        0,0,-1,0,0,-1,0,0,-1,
-      ]), 3));
-    geo.setAttribute('uv',
-      new THREE.BufferAttribute(new Float32Array([
-        1,0.5, 1,0.5, 0,1,
-        1,0.5, 1,0.5, 0,0,
-      ]), 2));
-    return geo;
+  // ── Dorsal fin (triangular spine on top, 8 triangle fan)
+  function _dorsalFinGeo(FL) {
+    const Z0 = FL * 0.05;    // front of fin (near head)
+    const Z1 = -FL * 0.28;   // rear of fin
+    const BODY_TOP = FL * 0.12;  // approximate body radius at top
+    const H = FL * 0.20;     // fin height
+    const N = 8;
+    const verts = [], uvArr = [];
+    for (let i = 0; i < N; i++) {
+      const t0 = i / N, t1 = (i + 1) / N;
+      const z0 = Z0 + t0 * (Z1 - Z0);
+      const z1 = Z0 + t1 * (Z1 - Z0);
+      // Height profile: tallest at ~30% from front
+      const h0 = H * Math.sin(t0 * Math.PI * 0.95);
+      const h1 = H * Math.sin(t1 * Math.PI * 0.95);
+      const y  = BODY_TOP;
+      // Two triangles per segment (quad)
+      verts.push(0,y,z0,  0,y+h0,z0,  0,y+h1,z1);
+      verts.push(0,y,z0,  0,y+h1,z1,  0,y,z1);
+      // UV: dorsal maps to top-center strip of texture (U: 0.35-0.65, V: 0.78-0.98)
+      uvArr.push(0.35+t0*0.3,0.78,  0.35+t0*0.3,0.98,  0.35+t1*0.3,0.98);
+      uvArr.push(0.35+t0*0.3,0.78,  0.35+t1*0.3,0.98,  0.35+t1*0.3,0.78);
+    }
+    return _triGeo(verts, uvArr);
   }
 
-  // Merge body + tail into one BufferGeometry
+  // ── Caudal fin = proper forked tail with 8 triangles per lobe
+  function _caudalFinGeo(FL) {
+    const AZ = -FL * 0.42;   // Z where fin meets body
+    const FZ = -FL * 0.62;   // Z tip of fin (further back than old 2-triangle tail)
+    const FY = FL * 0.27;    // max Y spread of each lobe
+    const N  = 8;
+    const verts = [], uvArr = [];
+
+    for (const s of [-1, 1]) {  // s=-1 lower lobe, s=+1 upper lobe
+      for (let i = 0; i < N; i++) {
+        const t0 = i / N, t1 = (i + 1) / N;
+
+        // Lobe edge uses a sine arc for natural curvature
+        const a0 = t0 * Math.PI * 0.88, a1 = t1 * Math.PI * 0.88;
+        const ey0 = s * FY * Math.sin(a0);
+        const ey1 = s * FY * Math.sin(a1);
+        // Z progresses from attachment toward tip
+        const ez0 = AZ + (FZ - AZ) * Math.pow(t0, 0.55);
+        const ez1 = AZ + (FZ - AZ) * Math.pow(t1, 0.55);
+        // Slight X flare
+        const ex0 = Math.cos(a0) * FL * 0.04;
+        const ex1 = Math.cos(a1) * FL * 0.04;
+
+        // Winding: upper lobe CCW (as seen from +X), lower lobe CW
+        if (s > 0) {
+          verts.push(0,0,AZ,  ex0,ey0,ez0,  ex1,ey1,ez1);
+        } else {
+          verts.push(0,0,AZ,  ex1,ey1,ez1,  ex0,ey0,ez0);
+        }
+
+        // UV: tail maps to right stripe of texture
+        const uBase = 0.80, uTip = 0.98;
+        const vCtr = 0.50;
+        uvArr.push(
+          uBase, vCtr,
+          uBase + t0 * (uTip - uBase), vCtr + s * 0.44 * Math.sin(a0),
+          uBase + t1 * (uTip - uBase), vCtr + s * 0.44 * Math.sin(a1),
+        );
+      }
+    }
+    return _triGeo(verts, uvArr);
+  }
+
+  // ── Pectoral fins (two side wings, near head)
+  function _pectoralFinGeo(FL) {
+    const verts = [], uvArr = [];
+    const ZC = FL * 0.18;   // attachment Z (near head side)
+    const BX = FL * 0.044;  // body X at attachment (flattened body)
+    const WR = FL * 0.15;   // fin reach
+    const N  = 5;
+
+    for (const s of [-1, 1]) {  // s=-1 left, s=+1 right (sign of X)
+      for (let i = 0; i < N; i++) {
+        const t0 = i / N, t1 = (i + 1) / N;
+        // Fan from body wall outward
+        const a0 = t0 * Math.PI * 0.72 - 0.2;
+        const a1 = t1 * Math.PI * 0.72 - 0.2;
+        const x0 = s * (BX + Math.cos(a0) * WR);
+        const x1 = s * (BX + Math.cos(a1) * WR);
+        const y0 = Math.sin(a0) * WR * 0.40 - FL * 0.02;
+        const y1 = Math.sin(a1) * WR * 0.40 - FL * 0.02;
+        const z0 = ZC - Math.sin(a0) * WR * 0.28;
+        const z1 = ZC - Math.sin(a1) * WR * 0.28;
+
+        if (s > 0) {
+          verts.push(s*BX, 0, ZC,  x0,y0,z0,  x1,y1,z1);
+        } else {
+          verts.push(s*BX, 0, ZC,  x1,y1,z1,  x0,y0,z0);
+        }
+
+        uvArr.push(
+          0.5 + s*0.07, 0.45,
+          0.5 + s*0.10 + t0*s*0.09, 0.45 - i*0.04,
+          0.5 + s*0.10 + t1*s*0.09, 0.45 - (i+1)*0.04,
+        );
+      }
+    }
+    return _triGeo(verts, uvArr);
+  }
+
+  // ── Create full fish (body + dorsal + caudal + pectoral)
   function _createFishGeo(FL) {
-    const body = _fishBodyGeo(FL);
-    const tail = _tailForkGeo(FL);
-    // Manual merge (Three.js r149 doesn't have BufferGeometryUtils built-in)
-    const bPos = body.attributes.position.array;
-    const bNrm = body.attributes.normal.array;
-    const bUv  = body.attributes.uv.array;
-    const bIdx = body.index.array;
-    const tPos = tail.attributes.position.array;
-    const tNrm = tail.attributes.normal.array;
-    const tUv  = tail.attributes.uv.array;
-
-    const off = bPos.length / 3;
-    const pos = new Float32Array(bPos.length + tPos.length);
-    const nrm = new Float32Array(bNrm.length + tNrm.length);
-    const uvs = new Float32Array(bUv.length  + tUv.length);
-    pos.set(bPos); pos.set(tPos, bPos.length);
-    nrm.set(bNrm); nrm.set(tNrm, bNrm.length);
-    uvs.set(bUv);  uvs.set(tUv,  bUv.length);
-
-    // Tail indices (non-indexed, just sequential after body)
-    const tIdxArr = new Uint32Array(tPos.length / 3);
-    for (let i = 0; i < tIdxArr.length; i++) tIdxArr[i] = off + i;
-
-    const idx = new Uint32Array(bIdx.length + tIdxArr.length);
-    idx.set(bIdx); idx.set(tIdxArr, bIdx.length);
-
-    const geo = new THREE.BufferGeometry();
-    geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
-    geo.setAttribute('normal',   new THREE.BufferAttribute(nrm, 3));
-    geo.setAttribute('uv',       new THREE.BufferAttribute(uvs, 2));
-    geo.setIndex(new THREE.BufferAttribute(idx, 1));
-    return geo;
+    return _mergeGeos([
+      _fishBodyGeo(FL),
+      _dorsalFinGeo(FL),
+      _caudalFinGeo(FL),
+      _pectoralFinGeo(FL),
+    ]);
   }
 
   // ════════════════════════════════════════════════════════════════════
@@ -318,7 +517,7 @@ const Aquarium3D = (() => {
   // ════════════════════════════════════════════════════════════════════
   function _makeTex(drawFn) {
     const c = document.createElement('canvas');
-    c.width = c.height = 128;
+    c.width = c.height = 256;  // higher resolution for scale detail
     drawFn(c.getContext('2d'));
     const t = new THREE.CanvasTexture(c);
     _disposables.push(t);
@@ -401,9 +600,9 @@ const Aquarium3D = (() => {
       // Apply live-tuning to wave uniforms
       f.mat.uniforms.uFishBendAmount.value  = f.spec.fishBendAmount  * bend;
       f.mat.uniforms.uFishWaveLength.value  = f.spec.fishWaveLength  * wave;
-      // Tail animation clock
+      // Tail animation clock (separate tail-speed tuning)
       f.mat.uniforms.uTime.value =
-        (clock * f.spec.tailSpeed * f.speed * spd + f.clockOffset) % (Math.PI * 2);
+        (clock * f.spec.tailSpeed * f.speed * spd * _tuning.tail + f.clockOffset) % (Math.PI * 2);
     });
   }
 
@@ -510,12 +709,15 @@ const Aquarium3D = (() => {
     _buildBubbles();
 
     // ── Fish (one geometry + texture per species, one mesh per fish)
+    _fish = [];
     SPECIES.forEach(spec => {
       const tex = _makeTex(spec.tex);
       const geo = _createFishGeo(spec.fishLength);
       _disposables.push(geo);
       _buildFishForSpecies(spec, tex, geo);
     });
+    // Initialise fish visibility mask
+    _fishMask = _fish.map(() => true);
   }
 
   // ════════════════════════════════════════════════════════════════════
@@ -692,9 +894,10 @@ const Aquarium3D = (() => {
     _updateBubbles();
     _updateFish(_clock);
 
-    // Slow camera sway (like WebGL Samples eyeClock)
-    _cam.position.x = Math.sin(_clock * 0.10) * 2.2;
-    _cam.position.y = 1.5 + Math.sin(_clock * 0.07) * 0.9;
+    // Slow camera sway (speed controlled by _tuningCamSpd slider)
+    const cs = _clock * 0.10 * _tuningCamSpd;
+    _cam.position.x = Math.sin(cs) * 2.2;
+    _cam.position.y = 1.5 + Math.sin(cs * 0.7) * 0.9;
     _cam.lookAt(0, 0, 0);
 
     _R.render(_scene, _cam);
@@ -704,49 +907,123 @@ const Aquarium3D = (() => {
   //  PUBLIC API
   // ════════════════════════════════════════════════════════════════════
   // ════════════════════════════════════════════════════════════════════
-  //  LIVE CONTROLS  (corner HUD for tuning animation parameters)
+  //  LIVE CONTROLS  — comprehensive tuning panel (like WebGL Samples demo)
   // ════════════════════════════════════════════════════════════════════
   let _controlPanel = null;
+  // Extended tuning state
+  let _tuningFog    = true;   // toggle fog
+  let _tuningLight  = 1.0;    // ambient light multiplier
+  let _tuningCamSpd = 1.0;    // camera orbit speed multiplier
+  let _specCountMult = 1.0;   // fraction of each species to render (0–1)
+  // Per-fish rendering mask (true = render this fish)
+  let _fishMask = [];
+
+  // Called when count or countMult changes to show/hide fish
+  function _applyFishMask() {
+    _fish.forEach((f, i) => {
+      f.mesh.visible = i < _fishMask.length ? _fishMask[i] : true;
+    });
+  }
+
+  function _rebuildFishMask() {
+    let idx = 0;
+    SPECIES.forEach(spec => {
+      const show = Math.round(spec.count * _specCountMult);
+      for (let i = 0; i < spec.count; i++) {
+        _fishMask[idx++] = i < show;
+      }
+    });
+    _applyFishMask();
+  }
 
   function _buildControls() {
     if (_controlPanel) return;
     const panel = document.createElement('div');
     panel.id = 'aq-controls';
     panel.style.cssText = [
-      'position:fixed;bottom:18px;right:18px;z-index:20',
-      'background:rgba(0,10,20,0.78);color:#aaddff',
-      'padding:10px 14px;border-radius:8px;font:12px/1.7 monospace',
-      'pointer-events:auto;user-select:none;min-width:190px',
-      'border:1px solid rgba(80,160,255,0.25)',
+      'position:fixed;bottom:14px;right:14px;z-index:20',
+      'background:rgba(0,8,18,0.85);color:#aaddff',
+      'padding:12px 16px;border-radius:10px;font:11px/1.8 monospace',
+      'pointer-events:auto;user-select:none;min-width:210px;max-height:90vh;overflow-y:auto',
+      'border:1px solid rgba(80,160,255,0.30)',
+      'box-shadow:0 4px 20px rgba(0,80,180,0.25)',
     ].join(';');
 
     const sliders = [
-      { id:'aq-spd',  label:'Speed',     key:'speed', min:0.1, max:4.0, step:0.05, def:1.0 },
-      { id:'aq-bend', label:'Tail Bend', key:'bend',  min:0.1, max:4.0, step:0.05, def:1.0 },
-      { id:'aq-wave', label:'Wave Freq', key:'wave',  min:0.1, max:4.0, step:0.05, def:1.0 },
+      // Animation
+      { id:'aq-spd',  label:'Fish Speed',   key:'speed', min:0.05,max:5.0, step:0.05, def:1.0, grp:'Animation' },
+      { id:'aq-bend', label:'Tail Bend',     key:'bend',  min:0.1, max:5.0, step:0.05, def:1.0, grp:null },
+      { id:'aq-wave', label:'Wave Freq',     key:'wave',  min:0.1, max:5.0, step:0.05, def:1.0, grp:null },
+      { id:'aq-tail', label:'Tail Speed',    key:'tail',  min:0.1, max:5.0, step:0.05, def:1.0, grp:null },
+      // Population
+      { id:'aq-cnt',  label:'Fish Count %',  key:'count', min:0.0, max:1.0, step:0.05, def:1.0, grp:'Population' },
+      // Environment
+      { id:'aq-lgt',  label:'Light Intensity',key:'light',min:0.2, max:3.0, step:0.05, def:1.0, grp:'Environment' },
+      { id:'aq-cam',  label:'Camera Speed',  key:'cam',   min:0.0, max:4.0, step:0.05, def:1.0, grp:null },
     ];
 
-    panel.innerHTML = '<div style="margin-bottom:6px;font-weight:bold;color:#88ccff">🐟 Aquarium Controls</div>'
-      + sliders.map(s => `
-        <label style="display:flex;align-items:center;gap:6px;margin:3px 0">
-          <span style="width:68px">${s.label}</span>
-          <input id="${s.id}" type="range" min="${s.min}" max="${s.max}"
-            step="${s.step}" value="${s.def}"
-            style="flex:1;accent-color:#44aaff">
-          <span id="${s.id}-v" style="width:32px;text-align:right">${s.def.toFixed(2)}</span>
-        </label>`).join('');
+    let html = '<div style="margin-bottom:8px;font-size:13px;font-weight:bold;color:#44aaff;letter-spacing:1px">🐟 AQUARIUM SETTINGS</div>';
 
+    let lastGrp = null;
+    sliders.forEach(s => {
+      if (s.grp && s.grp !== lastGrp) {
+        html += `<div style="margin:6px 0 2px;color:#558899;font-size:10px;text-transform:uppercase;letter-spacing:1px">${s.grp}</div>`;
+        lastGrp = s.grp;
+      }
+      html += `<label style="display:flex;align-items:center;gap:6px;margin:2px 0">
+        <span style="width:88px;color:#88bbcc">${s.label}</span>
+        <input id="${s.id}" type="range" min="${s.min}" max="${s.max}" step="${s.step}" value="${s.def}"
+          style="flex:1;accent-color:#22aaff;cursor:pointer">
+        <span id="${s.id}-v" style="width:34px;text-align:right;color:#fff">${s.def.toFixed(2)}</span>
+      </label>`;
+    });
+
+    // Toggles
+    html += '<div style="margin:6px 0 2px;color:#558899;font-size:10px;text-transform:uppercase;letter-spacing:1px">Toggles</div>';
+    html += `<label style="display:flex;align-items:center;gap:8px;margin:2px 0;cursor:pointer">
+      <input id="aq-fog" type="checkbox" checked style="accent-color:#22aaff">
+      <span style="color:#88bbcc">Underwater Fog</span>
+    </label>`;
+
+    html += '<div style="margin-top:8px;color:#335566;font-size:10px">Drag sliders to tune in real-time</div>';
+
+    panel.innerHTML = html;
     document.body.appendChild(panel);
     _controlPanel = panel;
 
+    // Wire up sliders
     sliders.forEach(s => {
       const el = document.getElementById(s.id);
       const vl = document.getElementById(s.id + '-v');
       el.addEventListener('input', () => {
         const v = parseFloat(el.value);
-        _tuning[s.key] = v;
-        vl.textContent  = v.toFixed(2);
+        vl.textContent = v.toFixed(2);
+        switch (s.key) {
+          case 'speed': _tuning.speed = v; break;
+          case 'bend':  _tuning.bend  = v; break;
+          case 'wave':  _tuning.wave  = v; break;
+          case 'tail':  _tuning.tail  = v; break;
+          case 'count': _specCountMult = v; _rebuildFishMask(); break;
+          case 'light': _tuningLight = v;
+            if (_scene) {
+              _scene.traverseVisible(o => {
+                if (o.isLight) { o.intensity = (o.userData.baseIntensity||o.intensity) * v; }
+              });
+            }
+            break;
+          case 'cam':   _tuningCamSpd = v; break;
+        }
       });
+      // Store base intensity for lights
+      if (s.key === 'light' && _scene) {
+        _scene.traverseVisible(o => { if (o.isLight) o.userData.baseIntensity = o.intensity; });
+      }
+    });
+
+    // Fog toggle
+    document.getElementById('aq-fog').addEventListener('change', e => {
+      _tuningFog = e.target.checked;
+      if (_scene) _scene.fog = _tuningFog ? new THREE.Fog(0x002a40, 20, 46) : null;
     });
   }
 
@@ -759,7 +1036,8 @@ const Aquarium3D = (() => {
     _running = true;
     _canvas2d = canvas2dRef;
     if (_canvas2d) _canvas2d.style.display = 'none';
-    _tuning = { speed: 1.0, bend: 1.0, wave: 1.0 };
+    _tuning = { speed: 1.0, bend: 1.0, wave: 1.0, tail: 1.0 };
+    _tuningLight = 1.0; _tuningCamSpd = 1.0; _specCountMult = 1.0;
     _buildControls();
 
     function _launch() {

@@ -128,14 +128,24 @@ const Train3D = (() => {
     // This is far more reliable than CSS alpha compositing.
     if (_canvas2d) {
       _bgTex = new THREE.CanvasTexture(_canvas2d);
-      // Size the plane to exactly fill the camera FOV at depth Z=-18
-      // Camera at Z=4.5, plane at Z=-18 → distance = 22.5 units
-      // h = 2*tan(28°)*22.5 ≈ 23.9; w = h * aspect (computed in _checkResize)
-      const bgG = new THREE.PlaneGeometry(90, 52);
+      // CRITICAL: disable mipmaps — bg-canvas is non-power-of-2 (e.g. 1920×1080).
+      // WebGL1 silently blacks-out non-POT textures with mipmaps enabled.
+      // WebGL2 handles it, but the explicit setting guarantees correct behaviour.
+      _bgTex.generateMipmaps = false;
+      _bgTex.minFilter        = THREE.LinearFilter;
+      _bgTex.magFilter        = THREE.LinearFilter;
+      _bgTex.wrapS            = THREE.ClampToEdgeWrapping;
+      _bgTex.wrapT            = THREE.ClampToEdgeWrapping;
+
+      // Large plane behind window wall — sized to overfill camera FOV at Z=-18
+      // Camera at Z=4.5, plane at Z=-18 → distance ≈ 22.5 units
+      // Visible h = 2*tan(28°)*22.5 ≈ 24. Use 90×54 for generous coverage.
+      const bgG = new THREE.PlaneGeometry(90, 54);
       const bgM = new THREE.MeshBasicMaterial({ map: _bgTex });
       _bgMesh = new THREE.Mesh(bgG, bgM);
-      // Y = camera target Y (1.02) slightly adjusted for tilt at depth 22.5
-      _bgMesh.position.set(0, 0.7, -18);
+      // Centre on what the camera sees at Z=-18
+      // Camera lookAt ≈ (0, 1.02, -4.94); at Z=-18 the ray hits Y ≈ 0.82
+      _bgMesh.position.set(0, 0.82, -18);
       _scene.add(_bgMesh);
     }
 
