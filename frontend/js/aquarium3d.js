@@ -433,7 +433,9 @@ const Aquarium3D = (() => {
       dors.rotation.z = Math.PI;
       g.add(dors);
       // Caudal fin
-      g.add(Object.assign(new THREE.Mesh(_tailGeo(s * 1.18), mat), { position: { x: -s * 1.22, y: 0, z: 0 } }));
+      const caudal = new THREE.Mesh(_tailGeo(s * 1.18), mat);
+      caudal.position.set(-s * 1.22, 0, 0);
+      g.add(caudal);
       // Pectoral fins
       [-1, 1].forEach(side => {
         const fin = new THREE.Mesh(new THREE.ConeGeometry(s * 0.16, s * 0.52, 3), stm);
@@ -456,7 +458,9 @@ const Aquarium3D = (() => {
         g.add(st);
       }
       // Top fin
-      g.add(Object.assign(new THREE.Mesh(_dorsalGeo(s), mat), { position: { x: 0, y: s * 1.52, z: 0 } }));
+      const topFin = new THREE.Mesh(_dorsalGeo(s), mat);
+      topFin.position.set(0, s * 1.52, 0);
+      g.add(topFin);
       // Tail
       const tail = new THREE.Mesh(_tailGeo(s * 0.95), mat);
       tail.position.x = -s * 1.0;
