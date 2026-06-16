@@ -29,7 +29,7 @@
   #train3d-canvas { display:none; position:fixed; inset:0; z-index:1; width:100%; height:100%; pointer-events:none; }
   body.scene-train #train3d-canvas { display:block; }
   /* train-frame-canvas replaced by 3D interior — hide it */
-  body.scene-train #train-frame-canvas { display:none !important; }
+  body.scene-train #train-frame-canvas { display: block; }
 
   .page{position:relative;z-index:2;max-width:900px;margin:0 auto;padding:0 1rem 4rem;}
 
@@ -289,7 +289,7 @@
 
   /* ── Train window frame — rendered by canvas ── */
   #train-frame-canvas {
-    display: none !important;   /* Train3D 3D interior replaces this 2D frame */
+    display: none;   /* shown via body.scene-train rule below */
     position: fixed; inset: 0; z-index: 5;
     pointer-events: none;
     width: 100%; height: 100%;

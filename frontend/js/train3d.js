@@ -164,13 +164,17 @@ const Train3D = (() => {
 
     _buildFloor();
     _buildWalls();
-    _buildWindowWall();
-    _buildWindowFrame();
+    // Window wall, 3D frame bars and glass pane removed — replaced by
+    // the 2D #train-frame-canvas overlay (z:5) which paints the steel
+    // wall + oval aluminium frame and punches a transparent hole so the
+    // bg-canvas outdoor scenery shows through directly.
+    // _buildWindowWall();
+    // _buildWindowFrame();
+    // _buildGlassPane();
     _buildCeiling();
     _buildSeats();
     _buildLuggageRacks();
     _buildCeilingFixtures();
-    _buildGlassPane();
   }
 
   // ── Shared materials ────────────────────────────────────────────

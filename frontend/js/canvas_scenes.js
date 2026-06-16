@@ -3107,6 +3107,9 @@ const CanvasScenes = (() => {
       window.addEventListener('keydown', _trainControlEvent);
       // Start 3D carriage interior (transparent canvas above bg-canvas)
       if (typeof Train3D !== 'undefined') Train3D.start(_canvas);
+      // Draw 2D window frame overlay (steel walls + oval aluminum frame)
+      const _fc = document.getElementById('train-frame-canvas');
+      if (_fc) _drawFrameCanvas(_fc);
     } else {
       window.removeEventListener('wheel',   _trainControlEvent);
       window.removeEventListener('keydown', _trainControlEvent);
