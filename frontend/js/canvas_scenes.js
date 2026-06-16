@@ -3165,12 +3165,14 @@ document.addEventListener('DOMContentLoaded', () => {
   window._activeScene = '__cs__';
 
   // Restore last chosen SCENE (not channel — they are decoupled)
+  // Aquarium requires explicit user intent — never auto-restore on load
   const savedScene = localStorage.getItem('sr_scene') || 'sea';
-  CanvasScenes.setScene(savedScene);
+  const restoreScene = (savedScene === 'aquarium') ? 'sea' : savedScene;
+  CanvasScenes.setScene(restoreScene);
 
   // Highlight the correct scene button on load
   document.querySelectorAll('.scene-btn').forEach(b => b.classList.remove('active-scene'));
-  const activeBtn = document.getElementById('scene-' + savedScene);
+  const activeBtn = document.getElementById('scene-' + restoreScene);
   if (activeBtn) activeBtn.classList.add('active-scene');
 
   // Channel buttons only change music — they NEVER touch the scene
