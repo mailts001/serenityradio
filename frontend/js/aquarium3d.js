@@ -642,8 +642,9 @@ const Aquarium3D = (() => {
   // ────────────────────────────────────────────────────────────────────
   // Boids update
   // ────────────────────────────────────────────────────────────────────
-  const _v3a = new THREE.Vector3();
-  const _v3b = new THREE.Vector3();
+  // Lazily initialised inside _launch() after THREE is available
+  let _v3a = null;
+  let _v3b = null;
 
   function _updateFish(dt) {
     const dt2 = Math.min(dt, 0.05);
@@ -820,6 +821,10 @@ const Aquarium3D = (() => {
       _fish = [];
       _seaweeds = [];
       _disposables = [];
+
+      // Initialise reusable Vector3 scratch objects (needs THREE loaded)
+      _v3a = new THREE.Vector3();
+      _v3b = new THREE.Vector3();
 
       _buildScene();
 
