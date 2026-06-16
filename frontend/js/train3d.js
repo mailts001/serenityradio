@@ -93,10 +93,11 @@ const Train3D = (() => {
 
     // ── Renderer — transparent background ─────────────────────────
     _R = new THREE.WebGLRenderer({
-      canvas:           _el,
-      antialias:        true,
-      alpha:            true,
-      powerPreference: 'high-performance',
+      canvas:            _el,
+      antialias:         true,
+      alpha:             true,
+      premultipliedAlpha: false,   // straight alpha — required for CSS compositing over bg-canvas
+      powerPreference:  'high-performance',
     });
     _R.setClearColor(0x000000, 0);            // fully transparent
     _R.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
@@ -121,8 +122,8 @@ const Train3D = (() => {
   }
 
   function _checkResize() {
-    const cw = (_el.clientWidth) | 0;
-    const ch = (_el.clientHeight) | 0;
+    const cw = (_el.clientWidth  || window.innerWidth)  | 0;
+    const ch = (_el.clientHeight || window.innerHeight) | 0;
     if (cw !== _W || ch !== _H) {
       _W = cw; _H = ch;
       _R.setSize(cw, ch, false);
