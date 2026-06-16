@@ -1980,8 +1980,337 @@ const CanvasScenes = (() => {
     });
   }
 
+  // ══════════════════════════════════════════════════════════
+  //  TRAIN WINDOW SCENE
+  //  Parallax canvas: scrolling biome landscapes viewed through
+  //  a train window. Biomes cycle: forest→tunnel→snow→sea→highland
+  //  Pure canvas 2D — no assets, no WebGL.
+  // ══════════════════════════════════════════════════════════
+
+  // Biome descriptors
+  const _BIOMES = [
+    {
+      name: 'forest',
+      skyTop: '#2d6a4f', skyBot: '#74c69d',
+      groundCol: '#1b4332', groundH: 0.30,
+      fogCol: 'rgba(180,220,190,',
+      hills: [
+        { col: '#1b4332', amp: 0.14, freq: 0.008, phase: 0.0, spd: 0.18 },
+        { col: '#2d6a4f', amp: 0.10, freq: 0.012, phase: 1.2, spd: 0.32 },
+        { col: '#40916c', amp: 0.07, freq: 0.018, phase: 2.5, spd: 0.55 },
+      ],
+      trees: true, treeCol: '#1b4332', treeLightCol: '#2d6a4f',
+      duration: 420,   // frames at 60fps
+    },
+    {
+      name: 'tunnel',
+      skyTop: '#050505', skyBot: '#111',
+      groundCol: '#0a0a0a', groundH: 0.35,
+      fogCol: 'rgba(20,20,20,',
+      hills: [],
+      trees: false,
+      tunnelWalls: true,
+      duration: 120,
+    },
+    {
+      name: 'snow',
+      skyTop: '#8ecae6', skyBot: '#cfe8f5',
+      groundCol: '#e8f4f8', groundH: 0.28,
+      fogCol: 'rgba(220,240,248,',
+      hills: [
+        { col: '#aed9e0', amp: 0.22, freq: 0.006, phase: 0.5, spd: 0.12 },
+        { col: '#c8e6f0', amp: 0.16, freq: 0.009, phase: 1.8, spd: 0.22 },
+        { col: '#dff0f8', amp: 0.10, freq: 0.014, phase: 3.0, spd: 0.40 },
+      ],
+      trees: true, treeCol: '#8ecae6', treeLightCol: '#cfe8f5',
+      snowfall: true,
+      duration: 360,
+    },
+    {
+      name: 'tunnel',
+      skyTop: '#050505', skyBot: '#111',
+      groundCol: '#0a0a0a', groundH: 0.35,
+      fogCol: 'rgba(20,20,20,',
+      hills: [], trees: false, tunnelWalls: true,
+      duration: 100,
+    },
+    {
+      name: 'sea',
+      skyTop: '#0077b6', skyBot: '#90e0ef',
+      groundCol: '#0096c7', groundH: 0.38,
+      fogCol: 'rgba(144,224,239,',
+      hills: [
+        { col: '#0077b6', amp: 0.06, freq: 0.010, phase: 0.0, spd: 0.60 },
+        { col: '#0096c7', amp: 0.04, freq: 0.016, phase: 0.9, spd: 0.90 },
+      ],
+      trees: false, waves: true,
+      duration: 380,
+    },
+    {
+      name: 'highland',
+      skyTop: '#6b705c', skyBot: '#a5a58d',
+      groundCol: '#4a4e3c', groundH: 0.32,
+      fogCol: 'rgba(180,185,165,',
+      hills: [
+        { col: '#4a4e3c', amp: 0.18, freq: 0.007, phase: 0.3, spd: 0.14 },
+        { col: '#6b705c', amp: 0.12, freq: 0.011, phase: 1.5, spd: 0.26 },
+        { col: '#a5a58d', amp: 0.08, freq: 0.016, phase: 2.8, spd: 0.48 },
+      ],
+      trees: true, treeCol: '#4a4e3c', treeLightCol: '#6b705c',
+      duration: 340,
+    },
+  ];
+
+  // Train scene state
+  let _trainX     = 0;     // world scroll position (pixels/frame)
+  let _trainBiome = 0;     // current biome index
+  let _trainFrame_count = 0;
+  let _trainTransition  = 0;  // 0..1 fade between biomes
+  let _trainSnowParts   = null;
+
+  function _trainFrame(t) {
+    const c = _ctx, W = _canvas.width, H = _canvas.height;
+    const spd = 3.2;   // scroll speed (px/frame)
+    _trainX += spd;
+    _trainFrame_count++;
+
+    const biome = _BIOMES[_trainBiome];
+    const nextBiome = _BIOMES[(_trainBiome + 1) % _BIOMES.length];
+
+    // Advance biome
+    if (_trainFrame_count >= biome.duration) {
+      _trainFrame_count = 0;
+      _trainBiome = (_trainBiome + 1) % _BIOMES.length;
+      _trainSnowParts = null;
+      _trainTransition = 1.0;
+    }
+    if (_trainTransition > 0) _trainTransition = Math.max(0, _trainTransition - 0.025);
+
+    const cur = _trainTransition > 0 ? nextBiome : biome;  // draw current after flip
+
+    // ── Sky gradient ──────────────────────────────────────────
+    const skyGrad = c.createLinearGradient(0, 0, 0, H * 0.68);
+    skyGrad.addColorStop(0, cur.skyTop);
+    skyGrad.addColorStop(1, cur.skyBot);
+    c.fillStyle = skyGrad;
+    c.fillRect(0, 0, W, H);
+
+    // ── Tunnel: dark + rushing wall lines ─────────────────────
+    if (cur.tunnelWalls) {
+      c.fillStyle = '#080808';
+      c.fillRect(0, 0, W, H);
+      // Tunnel arc at far end (light at end of tunnel)
+      const cx = W * 0.5, cy = H * 0.42;
+      const exitGrad = c.createRadialGradient(cx, cy, H*0.04, cx, cy, H*0.38);
+      exitGrad.addColorStop(0, 'rgba(255,240,200,0.55)');
+      exitGrad.addColorStop(0.4, 'rgba(180,210,255,0.12)');
+      exitGrad.addColorStop(1, 'rgba(0,0,0,0)');
+      c.fillStyle = exitGrad;
+      c.fillRect(0, 0, W, H);
+      // Rushing wall lines (perspective)
+      c.strokeStyle = 'rgba(60,50,40,0.7)';
+      for (let i = 0; i < 12; i++) {
+        const frac = ((_trainX * 0.8 + i * 38) % (W * 1.4)) / (W * 1.4);
+        const x    = frac * W;
+        c.lineWidth = 1 + frac * 3;
+        c.beginPath();
+        c.moveTo(cx, cy);
+        c.lineTo(x < cx ? 0 : W, cy * 0.6 + (x < cx ? -H*0.1 : H*0.1));
+        c.stroke();
+      }
+      // Brief flash at entry
+      if (_trainTransition > 0.7) {
+        c.fillStyle = `rgba(255,255,255,${(_trainTransition - 0.7) * 2.0})`;
+        c.fillRect(0, 0, W, H);
+      }
+      return;
+    }
+
+    // ── Sun / moon ────────────────────────────────────────────
+    const hr = new Date().getHours();
+    const isNight = hr < 6 || hr >= 20;
+    if (isNight) {
+      // Stars
+      const starR = _rngState(42);
+      for (let i = 0; i < 60; i++) {
+        const sx = starR() * W, sy = starR() * H * 0.5;
+        const br = 0.4 + 0.6 * Math.sin(t * 0.04 + i);
+        c.fillStyle = `rgba(255,255,255,${br * 0.7})`;
+        c.fillRect(sx, sy, 1.5, 1.5);
+      }
+      // Moon
+      c.fillStyle = 'rgba(240,245,255,0.88)';
+      c.beginPath(); c.arc(W*0.78, H*0.12, H*0.045, 0, Math.PI*2); c.fill();
+    } else {
+      // Sun
+      const sunX = W * 0.75, sunY = H * 0.14;
+      const sunG = c.createRadialGradient(sunX, sunY, 0, sunX, sunY, H*0.12);
+      sunG.addColorStop(0,   'rgba(255,255,180,0.95)');
+      sunG.addColorStop(0.3, 'rgba(255,220,80,0.55)');
+      sunG.addColorStop(1,   'rgba(255,180,0,0)');
+      c.fillStyle = sunG;
+      c.fillRect(0, 0, W, H);
+    }
+
+    // ── Parallax hill layers ──────────────────────────────────
+    (cur.hills || []).forEach(hill => {
+      const baseY = H * (1 - cur.groundH - 0.02);
+      c.fillStyle = hill.col;
+      c.beginPath();
+      c.moveTo(0, H);
+      for (let x = 0; x <= W + 4; x += 3) {
+        const wx  = x + _trainX * hill.spd;
+        const y   = baseY - Math.sin(wx * hill.freq + hill.phase) * H * hill.amp
+                          - Math.sin(wx * hill.freq * 1.7 + hill.phase * 1.3) * H * hill.amp * 0.4;
+        x === 0 ? c.moveTo(x, y) : c.lineTo(x, y);
+      }
+      c.lineTo(W, H); c.closePath(); c.fill();
+    });
+
+    // ── Trees ─────────────────────────────────────────────────
+    if (cur.trees) {
+      _drawTrainTrees(c, W, H, cur, t);
+    }
+
+    // ── Sea waves ─────────────────────────────────────────────
+    if (cur.waves) {
+      const wBaseY = H * (1 - cur.groundH);
+      for (let wi = 0; wi < 5; wi++) {
+        const wy = wBaseY + wi * H * 0.022;
+        c.strokeStyle = `rgba(255,255,255,${0.25 - wi*0.04})`;
+        c.lineWidth = 1.5 - wi*0.25;
+        c.beginPath();
+        for (let x = 0; x <= W; x += 6) {
+          const y = wy + Math.sin((x + _trainX * (1.2 + wi*0.3)) * 0.018) * H * 0.012;
+          x === 0 ? c.moveTo(x, y) : c.lineTo(x, y);
+        }
+        c.stroke();
+      }
+    }
+
+    // ── Ground strip ──────────────────────────────────────────
+    const groundY = H * (1 - cur.groundH);
+    c.fillStyle = cur.groundCol;
+    c.fillRect(0, groundY, W, H - groundY);
+
+    // Ground detail: rushing fence posts
+    if (cur.name !== 'sea') {
+      c.strokeStyle = 'rgba(0,0,0,0.22)';
+      c.lineWidth = 2;
+      const postSpacing = 60;
+      const postOff = _trainX % postSpacing;
+      for (let px = -postSpacing + postOff; px < W + postSpacing; px += postSpacing) {
+        c.beginPath();
+        c.moveTo(px, groundY + H*0.005);
+        c.lineTo(px, groundY + H*0.06);
+        c.stroke();
+      }
+      // Horizontal rail wire connecting posts
+      c.beginPath();
+      c.moveTo(0, groundY + H*0.03);
+      c.lineTo(W, groundY + H*0.03);
+      c.stroke();
+    }
+
+    // ── Snowfall ──────────────────────────────────────────────
+    if (cur.snowfall) {
+      if (!_trainSnowParts) {
+        _trainSnowParts = Array.from({ length: 80 }, () => ({
+          x: Math.random() * W, y: Math.random() * H,
+          r: 0.8 + Math.random() * 2.2,
+          vx: -spd * 0.6 - Math.random() * 1.2,
+          vy: 0.4 + Math.random() * 0.8,
+        }));
+      }
+      c.fillStyle = 'rgba(255,255,255,0.82)';
+      _trainSnowParts.forEach(p => {
+        p.x += p.vx; p.y += p.vy;
+        if (p.x < 0) p.x = W;
+        if (p.y > H) { p.y = 0; p.x = Math.random() * W; }
+        c.beginPath(); c.arc(p.x, p.y, p.r, 0, Math.PI*2); c.fill();
+      });
+    }
+
+    // ── Motion blur / speed lines on glass ───────────────────
+    const blur = c.createLinearGradient(0, 0, W, 0);
+    blur.addColorStop(0,   'rgba(0,0,0,0.08)');
+    blur.addColorStop(0.08,'rgba(0,0,0,0)');
+    blur.addColorStop(0.92,'rgba(0,0,0,0)');
+    blur.addColorStop(1,   'rgba(0,0,0,0.08)');
+    c.fillStyle = blur;
+    c.fillRect(0, 0, W, H);
+
+    // ── Biome crossfade ───────────────────────────────────────
+    if (_trainTransition > 0) {
+      c.fillStyle = `rgba(255,255,255,${_trainTransition * 0.85})`;
+      c.fillRect(0, 0, W, H);
+    }
+  }
+
+  // Draw trees along the ground — varies by biome style
+  function _drawTrainTrees(c, W, H, biome, t) {
+    const groundY = H * (1 - biome.groundH);
+    const r = _rngState(77);
+    const isSnow = biome.name === 'snow';
+
+    // 3 depth layers
+    [
+      { count: 6, scale: 0.38, yFrac: 0.98, spd: 0.30, alpha: 0.55 },
+      { count: 9, scale: 0.60, yFrac: 0.99, spd: 0.55, alpha: 0.75 },
+      { count: 7, scale: 0.88, yFrac: 1.00, spd: 1.00, alpha: 0.95 },
+    ].forEach(layer => {
+      for (let i = 0; i < layer.count; i++) {
+        const seed  = i * 137 + Math.floor((_trainX * layer.spd) / (W / layer.count)) * layer.count;
+        const rr    = _rngState(seed + 1000);
+        const baseX = ((rr() * W * 1.4 + _trainX * layer.spd) % (W * 1.6)) - W * 0.1;
+        const h     = H * (0.08 + rr() * 0.13) * layer.scale;
+        const baseY = groundY * layer.yFrac;
+
+        c.globalAlpha = layer.alpha;
+        if (isSnow) {
+          // Conifer with snow cap
+          c.fillStyle = biome.treeCol;
+          c.beginPath();
+          c.moveTo(baseX, baseY);
+          c.lineTo(baseX - h*0.38, baseY);
+          c.lineTo(baseX, baseY - h);
+          c.closePath(); c.fill();
+          // Snow cap
+          c.fillStyle = '#e8f4f8';
+          c.beginPath();
+          c.moveTo(baseX - h*0.12, baseY - h*0.65);
+          c.lineTo(baseX + h*0.12, baseY - h*0.65);
+          c.lineTo(baseX, baseY - h);
+          c.closePath(); c.fill();
+        } else {
+          // Deciduous trunk + round canopy
+          const trunkW = h * 0.08, trunkH = h * 0.38;
+          c.fillStyle = biome.treeCol;
+          c.fillRect(baseX - trunkW/2, baseY - trunkH, trunkW, trunkH);
+          // Canopy
+          c.fillStyle = biome.treeCol;
+          c.beginPath();
+          c.arc(baseX, baseY - trunkH - h*0.30, h*0.38, 0, Math.PI*2);
+          c.fill();
+          // Highlight blob
+          c.fillStyle = biome.treeLightCol;
+          c.beginPath();
+          c.arc(baseX - h*0.08, baseY - trunkH - h*0.38, h*0.20, 0, Math.PI*2);
+          c.fill();
+        }
+      }
+    });
+    c.globalAlpha = 1;
+  }
+
+  // Cheap seedable-ish rng for stable tree positions
+  function _rngState(seed) {
+    let s = Math.abs(seed * 1664525 + 1013904223) | 0;
+    return () => { s = Math.abs((s * 1664525 + 1013904223) | 0); return (s >>> 0) / 4294967296; };
+  }
+
   // ── Public API ─────────────────────────────────────────────
-  // _activeSceneType: 'sea' | 'space' | 'forest' | 'snow'
+  // _activeSceneType: 'sea' | 'space' | 'forest' | 'snow' | 'train'
   let _activeSceneType = 'sea';
 
   function setScene(channel) {
@@ -1995,6 +2324,7 @@ const CanvasScenes = (() => {
       space: 'space',
       forest: 'forest',
       snow: 'snow',
+      train: 'train',
     };
     _activeSceneType = sceneMap[channel] || 'sea';
 
@@ -2005,6 +2335,13 @@ const CanvasScenes = (() => {
     if (typeof AmbientAudio !== 'undefined') AmbientAudio.setMode(mode);
 
     // ── Forest: hand off to Three.js Forest3D ─────────────────
+    // ── Train: reset state and use 2D canvas ──────────────────
+    if (_activeSceneType === 'train') {
+      if (typeof Forest3D !== 'undefined') Forest3D.stop();
+      _trainX = 0; _trainBiome = 0; _trainFrame_count = 0;
+      _trainTransition = 0; _trainSnowParts = null;
+    }
+
     if (_activeSceneType === 'forest') {
       // Stop any 2D animation loop
       cancelAnimationFrame(_raf);
@@ -2024,9 +2361,10 @@ const CanvasScenes = (() => {
       _raf = requestAnimationFrame(frame);
       t++;
       switch (_activeSceneType) {
-        case 'space':  _spaceFrame(t);       break;
-        case 'snow':   _snowFrame(t, mode);   break;
-        default:       _worldFrame(t, mode);  break;
+        case 'space':  _spaceFrame(t);         break;
+        case 'snow':   _snowFrame(t, mode);     break;
+        case 'train':  _trainFrame(t);          break;
+        default:       _worldFrame(t, mode);    break;
       }
     }
     frame();
