@@ -1981,332 +1981,681 @@ const CanvasScenes = (() => {
   }
 
   // ══════════════════════════════════════════════════════════
-  //  TRAIN WINDOW SCENE
-  //  Parallax canvas: scrolling biome landscapes viewed through
-  //  a train window. Biomes cycle: forest→tunnel→snow→sea→highland
-  //  Pure canvas 2D — no assets, no WebGL.
+  //  TRAIN WINDOW SCENE  v2
+  //  Smooth RGB-interpolated biome blending, 6-layer parallax,
+  //  telegraph poles, stone walls, rain-on-glass, atmospheric fog.
   // ══════════════════════════════════════════════════════════
 
-  // Biome descriptors
-  const _BIOMES = [
+  // ── Helpers ───────────────────────────────────────────────
+  // RGB array helpers for smooth colour interpolation
+  function _trgb(r,g,b){ return [r,g,b]; }
+  function _lerp(a,b,t){ return a + (b-a)*t; }
+  function _lerpRGB(a,b,t){ return [_lerp(a[0],b[0],t),_lerp(a[1],b[1],t),_lerp(a[2],b[2],t)]; }
+  function _rgb([r,g,b],a){ return a!=null ? `rgba(${r|0},${g|0},${b|0},${a})` : `rgb(${r|0},${g|0},${b|0})`; }
+  // Fast seeded rng (stable per world-x position)
+  function _srng(seed){
+    let s = Math.abs((seed*1664525+1013904223)|0)>>>0;
+    return ()=>{ s=Math.abs((s*1664525+1013904223)|0)>>>0; return s/4294967296; };
+  }
+
+  // ── Biome descriptors ─────────────────────────────────────
+  // Colors as [R,G,B] so we can lerp between biomes smoothly
+  const _TB = [
     {
-      name: 'forest',
-      skyTop: '#2d6a4f', skyBot: '#74c69d',
-      groundCol: '#1b4332', groundH: 0.30,
-      fogCol: 'rgba(180,220,190,',
-      hills: [
-        { col: '#1b4332', amp: 0.14, freq: 0.008, phase: 0.0, spd: 0.18 },
-        { col: '#2d6a4f', amp: 0.10, freq: 0.012, phase: 1.2, spd: 0.32 },
-        { col: '#40916c', amp: 0.07, freq: 0.018, phase: 2.5, spd: 0.55 },
+      name:'countryside', dur:600,
+      skyT:_trgb(145,200,240), skyB:_trgb(200,235,210),
+      fog:_trgb(200,225,205), fogAmt:0.18,
+      ground:_trgb(55,115,40),
+      hills:[
+        {c:_trgb(45,90,30),  amp:0.13,freq:0.006,spd:0.06,ph:0.0},
+        {c:_trgb(60,110,42), amp:0.09,freq:0.009,spd:0.16,ph:1.8},
+        {c:_trgb(80,135,58), amp:0.06,freq:0.014,spd:0.30,ph:3.2},
+        {c:_trgb(105,160,78),amp:0.04,freq:0.020,spd:0.50,ph:0.9},
       ],
-      trees: true, treeCol: '#1b4332', treeLightCol: '#2d6a4f',
-      duration: 420,   // frames at 60fps
+      trees:{type:'deciduous',dark:_trgb(38,90,28),light:_trgb(62,128,45),density:75},
+      details:['poles','walls','sheep'],
     },
     {
-      name: 'tunnel',
-      skyTop: '#050505', skyBot: '#111',
-      groundCol: '#0a0a0a', groundH: 0.35,
-      fogCol: 'rgba(20,20,20,',
-      hills: [],
-      trees: false,
-      tunnelWalls: true,
-      duration: 120,
-    },
-    {
-      name: 'snow',
-      skyTop: '#8ecae6', skyBot: '#cfe8f5',
-      groundCol: '#e8f4f8', groundH: 0.28,
-      fogCol: 'rgba(220,240,248,',
-      hills: [
-        { col: '#aed9e0', amp: 0.22, freq: 0.006, phase: 0.5, spd: 0.12 },
-        { col: '#c8e6f0', amp: 0.16, freq: 0.009, phase: 1.8, spd: 0.22 },
-        { col: '#dff0f8', amp: 0.10, freq: 0.014, phase: 3.0, spd: 0.40 },
+      name:'forest', dur:500,
+      skyT:_trgb(60,120,80), skyB:_trgb(130,185,140),
+      fog:_trgb(160,205,170), fogAmt:0.32,
+      ground:_trgb(28,70,22),
+      hills:[
+        {c:_trgb(22,58,18),  amp:0.16,freq:0.005,spd:0.05,ph:0.5},
+        {c:_trgb(32,75,26),  amp:0.12,freq:0.008,spd:0.14,ph:2.0},
+        {c:_trgb(45,95,38),  amp:0.08,freq:0.013,spd:0.28,ph:1.1},
+        {c:_trgb(62,120,52), amp:0.05,freq:0.019,spd:0.46,ph:3.5},
       ],
-      trees: true, treeCol: '#8ecae6', treeLightCol: '#cfe8f5',
-      snowfall: true,
-      duration: 360,
+      trees:{type:'deciduous',dark:_trgb(18,60,18),light:_trgb(32,90,28),density:110},
+      details:['poles'],
     },
     {
-      name: 'tunnel',
-      skyTop: '#050505', skyBot: '#111',
-      groundCol: '#0a0a0a', groundH: 0.35,
-      fogCol: 'rgba(20,20,20,',
-      hills: [], trees: false, tunnelWalls: true,
-      duration: 100,
-    },
-    {
-      name: 'sea',
-      skyTop: '#0077b6', skyBot: '#90e0ef',
-      groundCol: '#0096c7', groundH: 0.38,
-      fogCol: 'rgba(144,224,239,',
-      hills: [
-        { col: '#0077b6', amp: 0.06, freq: 0.010, phase: 0.0, spd: 0.60 },
-        { col: '#0096c7', amp: 0.04, freq: 0.016, phase: 0.9, spd: 0.90 },
+      name:'town', dur:280,
+      skyT:_trgb(130,175,220), skyB:_trgb(190,215,240),
+      fog:_trgb(195,215,235), fogAmt:0.22,
+      ground:_trgb(75,85,70),
+      hills:[
+        {c:_trgb(65,75,60),  amp:0.05,freq:0.008,spd:0.06,ph:0.0},
+        {c:_trgb(80,90,75),  amp:0.03,freq:0.012,spd:0.14,ph:1.2},
       ],
-      trees: false, waves: true,
-      duration: 380,
+      trees:{type:'sparse',dark:_trgb(50,80,40),light:_trgb(70,108,55),density:35},
+      details:['buildings','poles','sign'],
     },
     {
-      name: 'highland',
-      skyTop: '#6b705c', skyBot: '#a5a58d',
-      groundCol: '#4a4e3c', groundH: 0.32,
-      fogCol: 'rgba(180,185,165,',
-      hills: [
-        { col: '#4a4e3c', amp: 0.18, freq: 0.007, phase: 0.3, spd: 0.14 },
-        { col: '#6b705c', amp: 0.12, freq: 0.011, phase: 1.5, spd: 0.26 },
-        { col: '#a5a58d', amp: 0.08, freq: 0.016, phase: 2.8, spd: 0.48 },
+      name:'tunnel', dur:140,
+      skyT:_trgb(8,8,8), skyB:_trgb(12,12,12),
+      fog:_trgb(10,10,10), fogAmt:0.9,
+      ground:_trgb(10,10,10),
+      hills:[], trees:null, details:[],
+      tunnel:true,
+    },
+    {
+      name:'snow', dur:480,
+      skyT:_trgb(160,200,230), skyB:_trgb(210,235,248),
+      fog:_trgb(225,240,250), fogAmt:0.35,
+      ground:_trgb(235,245,252),
+      hills:[
+        {c:_trgb(180,210,230),amp:0.22,freq:0.005,spd:0.04,ph:0.8},
+        {c:_trgb(200,225,240),amp:0.16,freq:0.008,spd:0.12,ph:2.2},
+        {c:_trgb(220,235,245),amp:0.10,freq:0.013,spd:0.25,ph:0.4},
+        {c:_trgb(235,243,250),amp:0.06,freq:0.019,spd:0.42,ph:1.8},
       ],
-      trees: true, treeCol: '#4a4e3c', treeLightCol: '#6b705c',
-      duration: 340,
+      trees:{type:'conifer',dark:_trgb(80,110,130),light:_trgb(230,240,248),density:65},
+      details:['snow'],
+    },
+    {
+      name:'tunnel', dur:110,
+      skyT:_trgb(8,8,8), skyB:_trgb(12,12,12),
+      fog:_trgb(10,10,10), fogAmt:0.9,
+      ground:_trgb(10,10,10),
+      hills:[], trees:null, details:[],
+      tunnel:true,
+    },
+    {
+      name:'sea', dur:440,
+      skyT:_trgb(40,130,200), skyB:_trgb(130,210,240),
+      fog:_trgb(140,215,240), fogAmt:0.20,
+      ground:_trgb(18,100,170),
+      hills:[
+        {c:_trgb(15,85,150), amp:0.07,freq:0.008,spd:0.50,ph:0.0},
+        {c:_trgb(22,105,175),amp:0.04,freq:0.014,spd:0.80,ph:1.4},
+      ],
+      trees:null, details:['waves','cliffs','lighthouse'],
+    },
+    {
+      name:'highland', dur:420,
+      skyT:_trgb(110,125,145), skyB:_trgb(165,178,165),
+      fog:_trgb(190,195,185), fogAmt:0.45,
+      ground:_trgb(72,80,60),
+      hills:[
+        {c:_trgb(58,65,48),  amp:0.18,freq:0.006,spd:0.05,ph:0.3},
+        {c:_trgb(72,80,60),  amp:0.13,freq:0.010,spd:0.14,ph:2.0},
+        {c:_trgb(100,110,85),amp:0.08,freq:0.015,spd:0.28,ph:1.0},
+        {c:_trgb(145,155,130),amp:0.05,freq:0.022,spd:0.48,ph:3.2},
+      ],
+      trees:{type:'sparse',dark:_trgb(48,62,40),light:_trgb(68,85,55),density:40},
+      details:['poles','mist'],
     },
   ];
 
-  // Train scene state
-  let _trainX     = 0;     // world scroll position (pixels/frame)
-  let _trainBiome = 0;     // current biome index
-  let _trainFrame_count = 0;
-  let _trainTransition  = 0;  // 0..1 fade between biomes
-  let _trainSnowParts   = null;
+  // ── Train state ───────────────────────────────────────────
+  let _tX      = 0;       // world scroll (px)
+  let _tBI     = 0;       // biome index A
+  let _tFC     = 0;       // frame counter in current biome
+  let _tBlend  = 0;       // 0=fully biomeA, 1=fully biomeB (transition progress)
+  let _tSnow   = null;    // snowflake particles
+  let _tRain   = null;    // rain-on-glass drops
+  let _tGlassDrops = [];  // persistent drops on glass
 
+  // ── Initialise rain-on-glass drops ───────────────────────
+  function _initGlass(W, H) {
+    _tGlassDrops = Array.from({length:55}, () => ({
+      x: Math.random()*W, y: Math.random()*H*0.6,
+      r: 1.2+Math.random()*2.8,
+      vy: 0.4+Math.random()*1.2,
+      streak: 0, streakLen: 15+Math.random()*40,
+      life: Math.random(), phase: Math.random()*Math.PI*2,
+    }));
+  }
+
+  // ── Main train frame ──────────────────────────────────────
   function _trainFrame(t) {
     const c = _ctx, W = _canvas.width, H = _canvas.height;
-    const spd = 3.2;   // scroll speed (px/frame)
-    _trainX += spd;
-    _trainFrame_count++;
+    const SPD = 3.6;
+    _tX  += SPD;
+    _tFC++;
 
-    const biome = _BIOMES[_trainBiome];
-    const nextBiome = _BIOMES[(_trainBiome + 1) % _BIOMES.length];
+    const ba  = _TB[_tBI];
+    const bBi = (_tBI + 1) % _TB.length;
+    const bb  = _TB[bBi];
 
-    // Advance biome
-    if (_trainFrame_count >= biome.duration) {
-      _trainFrame_count = 0;
-      _trainBiome = (_trainBiome + 1) % _BIOMES.length;
-      _trainSnowParts = null;
-      _trainTransition = 1.0;
+    // Blend starts 240 frames BEFORE biome duration ends, then biome flips
+    const BLEND_FRAMES = 240;  // 4s crossfade
+    if (_tFC >= (ba.dur - BLEND_FRAMES)) {
+      _tBlend = Math.min(1, (_tFC - (ba.dur - BLEND_FRAMES)) / BLEND_FRAMES);
+    } else {
+      _tBlend = 0;
     }
-    if (_trainTransition > 0) _trainTransition = Math.max(0, _trainTransition - 0.025);
+    if (_tFC >= ba.dur) {
+      _tFC    = 0;
+      _tBI    = bBi;
+      _tBlend = 0;
+      _tSnow  = null;
+    }
+    const bl = _tBlend;
 
-    const cur = _trainTransition > 0 ? nextBiome : biome;  // draw current after flip
+    // Interpolated colours (smooth biome crossfade)
+    const skyT  = _lerpRGB(ba.skyT,  bb.skyT,  bl);
+    const skyB  = _lerpRGB(ba.skyB,  bb.skyB,  bl);
+    const fogC  = _lerpRGB(ba.fog,   bb.fog,   bl);
+    const fogA  = _lerp(ba.fogAmt,   bb.fogAmt, bl);
+    const grndC = _lerpRGB(ba.ground,bb.ground, bl);
 
-    // ── Sky gradient ──────────────────────────────────────────
-    const skyGrad = c.createLinearGradient(0, 0, 0, H * 0.68);
-    skyGrad.addColorStop(0, cur.skyTop);
-    skyGrad.addColorStop(1, cur.skyBot);
-    c.fillStyle = skyGrad;
-    c.fillRect(0, 0, W, H);
+    // ── Sky ───────────────────────────────────────────────────
+    const skyG = c.createLinearGradient(0,0,0,H*0.70);
+    skyG.addColorStop(0, _rgb(skyT));
+    skyG.addColorStop(1, _rgb(skyB));
+    c.fillStyle = skyG;
+    c.fillRect(0,0,W,H);
 
-    // ── Tunnel: dark + rushing wall lines ─────────────────────
-    if (cur.tunnelWalls) {
-      c.fillStyle = '#080808';
-      c.fillRect(0, 0, W, H);
-      // Tunnel arc at far end (light at end of tunnel)
-      const cx = W * 0.5, cy = H * 0.42;
-      const exitGrad = c.createRadialGradient(cx, cy, H*0.04, cx, cy, H*0.38);
-      exitGrad.addColorStop(0, 'rgba(255,240,200,0.55)');
-      exitGrad.addColorStop(0.4, 'rgba(180,210,255,0.12)');
-      exitGrad.addColorStop(1, 'rgba(0,0,0,0)');
-      c.fillStyle = exitGrad;
-      c.fillRect(0, 0, W, H);
-      // Rushing wall lines (perspective)
-      c.strokeStyle = 'rgba(60,50,40,0.7)';
-      for (let i = 0; i < 12; i++) {
-        const frac = ((_trainX * 0.8 + i * 38) % (W * 1.4)) / (W * 1.4);
-        const x    = frac * W;
-        c.lineWidth = 1 + frac * 3;
-        c.beginPath();
-        c.moveTo(cx, cy);
-        c.lineTo(x < cx ? 0 : W, cy * 0.6 + (x < cx ? -H*0.1 : H*0.1));
-        c.stroke();
-      }
-      // Brief flash at entry
-      if (_trainTransition > 0.7) {
-        c.fillStyle = `rgba(255,255,255,${(_trainTransition - 0.7) * 2.0})`;
-        c.fillRect(0, 0, W, H);
-      }
+    // ── Tunnel ────────────────────────────────────────────────
+    if (ba.tunnel || (bb.tunnel && bl > 0.5)) {
+      _drawTunnel(c, W, H, t);
+      // Dim glass rain during tunnel
       return;
     }
 
-    // ── Sun / moon ────────────────────────────────────────────
+    // ── Sun / moon / stars ────────────────────────────────────
     const hr = new Date().getHours();
     const isNight = hr < 6 || hr >= 20;
-    if (isNight) {
-      // Stars
-      const starR = _rngState(42);
-      for (let i = 0; i < 60; i++) {
-        const sx = starR() * W, sy = starR() * H * 0.5;
-        const br = 0.4 + 0.6 * Math.sin(t * 0.04 + i);
-        c.fillStyle = `rgba(255,255,255,${br * 0.7})`;
-        c.fillRect(sx, sy, 1.5, 1.5);
-      }
-      // Moon
-      c.fillStyle = 'rgba(240,245,255,0.88)';
-      c.beginPath(); c.arc(W*0.78, H*0.12, H*0.045, 0, Math.PI*2); c.fill();
-    } else {
-      // Sun
-      const sunX = W * 0.75, sunY = H * 0.14;
-      const sunG = c.createRadialGradient(sunX, sunY, 0, sunX, sunY, H*0.12);
-      sunG.addColorStop(0,   'rgba(255,255,180,0.95)');
-      sunG.addColorStop(0.3, 'rgba(255,220,80,0.55)');
-      sunG.addColorStop(1,   'rgba(255,180,0,0)');
-      c.fillStyle = sunG;
-      c.fillRect(0, 0, W, H);
-    }
+    _drawSkyObjects(c, W, H, t, isNight);
 
-    // ── Parallax hill layers ──────────────────────────────────
-    (cur.hills || []).forEach(hill => {
-      const baseY = H * (1 - cur.groundH - 0.02);
-      c.fillStyle = hill.col;
-      c.beginPath();
-      c.moveTo(0, H);
-      for (let x = 0; x <= W + 4; x += 3) {
-        const wx  = x + _trainX * hill.spd;
-        const y   = baseY - Math.sin(wx * hill.freq + hill.phase) * H * hill.amp
-                          - Math.sin(wx * hill.freq * 1.7 + hill.phase * 1.3) * H * hill.amp * 0.4;
-        x === 0 ? c.moveTo(x, y) : c.lineTo(x, y);
-      }
-      c.lineTo(W, H); c.closePath(); c.fill();
-    });
+    // ── Blended hill layers ───────────────────────────────────
+    _drawBlendedHills(c, W, H, ba, bb, bl);
 
     // ── Trees ─────────────────────────────────────────────────
-    if (cur.trees) {
-      _drawTrainTrees(c, W, H, cur, t);
+    if (ba.trees || bb.trees) {
+      const tA = bl < 0.5 ? ba.trees : null;
+      const tB = bl >= 0.5 ? bb.trees : null;
+      const tree = tA || tB;
+      if (tree) {
+        const gY = H * (1 - _lerp(ba.hills.length?0.28:0.35, bb.hills.length?0.28:0.35, bl));
+        _drawTrees(c, W, H, gY, tree, t, bl < 0.5 ? 1-bl*2 : 0, bl >= 0.5 ? (bl-0.5)*2 : 0);
+      }
     }
 
     // ── Sea waves ─────────────────────────────────────────────
-    if (cur.waves) {
-      const wBaseY = H * (1 - cur.groundH);
-      for (let wi = 0; wi < 5; wi++) {
-        const wy = wBaseY + wi * H * 0.022;
-        c.strokeStyle = `rgba(255,255,255,${0.25 - wi*0.04})`;
-        c.lineWidth = 1.5 - wi*0.25;
-        c.beginPath();
-        for (let x = 0; x <= W; x += 6) {
-          const y = wy + Math.sin((x + _trainX * (1.2 + wi*0.3)) * 0.018) * H * 0.012;
-          x === 0 ? c.moveTo(x, y) : c.lineTo(x, y);
-        }
-        c.stroke();
-      }
+    if (ba.name==='sea' || bb.name==='sea') {
+      const wAlpha = ba.name==='sea' ? 1-bl*0.8 : bl*0.8;
+      _drawWaves(c, W, H, wAlpha);
     }
+
+    // ── Detail elements ───────────────────────────────────────
+    const activeDetails = bl < 0.5 ? ba.details : bb.details;
+    _drawDetails(c, W, H, activeDetails, t, grndC, fogC);
 
     // ── Ground strip ──────────────────────────────────────────
-    const groundY = H * (1 - cur.groundH);
-    c.fillStyle = cur.groundCol;
+    const groundY = H * 0.68;
+    const groundG = c.createLinearGradient(0, groundY, 0, H);
+    groundG.addColorStop(0, _rgb(grndC));
+    groundG.addColorStop(1, _rgb(grndC.map(v=>v*0.7)));
+    c.fillStyle = groundG;
     c.fillRect(0, groundY, W, H - groundY);
 
-    // Ground detail: rushing fence posts
-    if (cur.name !== 'sea') {
-      c.strokeStyle = 'rgba(0,0,0,0.22)';
-      c.lineWidth = 2;
-      const postSpacing = 60;
-      const postOff = _trainX % postSpacing;
-      for (let px = -postSpacing + postOff; px < W + postSpacing; px += postSpacing) {
-        c.beginPath();
-        c.moveTo(px, groundY + H*0.005);
-        c.lineTo(px, groundY + H*0.06);
-        c.stroke();
-      }
-      // Horizontal rail wire connecting posts
-      c.beginPath();
-      c.moveTo(0, groundY + H*0.03);
-      c.lineTo(W, groundY + H*0.03);
-      c.stroke();
+    // Grass texture strip at ground horizon
+    c.strokeStyle = _rgb(grndC.map(v=>Math.min(255,v*1.4)), 0.5);
+    c.lineWidth   = 1;
+    for (let gx = (_tX*2.8)%12; gx < W; gx += 12) {
+      const gy = groundY + Math.sin(gx * 0.08 + _tX*0.04) * H * 0.008;
+      c.beginPath(); c.moveTo(gx, gy); c.lineTo(gx+4, gy - H*0.018); c.stroke();
     }
 
-    // ── Snowfall ──────────────────────────────────────────────
-    if (cur.snowfall) {
-      if (!_trainSnowParts) {
-        _trainSnowParts = Array.from({ length: 80 }, () => ({
-          x: Math.random() * W, y: Math.random() * H,
-          r: 0.8 + Math.random() * 2.2,
-          vx: -spd * 0.6 - Math.random() * 1.2,
-          vy: 0.4 + Math.random() * 0.8,
-        }));
-      }
-      c.fillStyle = 'rgba(255,255,255,0.82)';
-      _trainSnowParts.forEach(p => {
-        p.x += p.vx; p.y += p.vy;
-        if (p.x < 0) p.x = W;
-        if (p.y > H) { p.y = 0; p.x = Math.random() * W; }
-        c.beginPath(); c.arc(p.x, p.y, p.r, 0, Math.PI*2); c.fill();
+    // ── Snowfall (scene snow, not on glass) ───────────────────
+    if (ba.name==='snow' || (bb.name==='snow' && bl>0.3)) {
+      if (!_tSnow) _tSnow = Array.from({length:90},()=>({
+        x:Math.random()*W, y:Math.random()*H,
+        r:0.8+Math.random()*2.4, vx:-SPD*0.5-Math.random()*0.8, vy:0.3+Math.random()*0.7,
+      }));
+      c.fillStyle = 'rgba(255,255,255,0.8)';
+      _tSnow.forEach(p => {
+        p.x+=p.vx; p.y+=p.vy;
+        if(p.x<0) p.x=W; if(p.y>H){p.y=0;p.x=Math.random()*W;}
+        c.beginPath(); c.arc(p.x,p.y,p.r,0,Math.PI*2); c.fill();
       });
     }
 
-    // ── Motion blur / speed lines on glass ───────────────────
-    const blur = c.createLinearGradient(0, 0, W, 0);
-    blur.addColorStop(0,   'rgba(0,0,0,0.08)');
-    blur.addColorStop(0.08,'rgba(0,0,0,0)');
-    blur.addColorStop(0.92,'rgba(0,0,0,0)');
-    blur.addColorStop(1,   'rgba(0,0,0,0.08)');
-    c.fillStyle = blur;
+    // ── Heavy rain (highland/forest biomes, outside the glass) ─
+    if ((ba.name==='highland'||ba.name==='forest') && bl > 0.6) {
+      c.strokeStyle = 'rgba(180,200,220,0.25)';
+      c.lineWidth   = 1;
+      const rSpacing = 18;
+      for (let rx = ((-_tX*4.5)%rSpacing+rSpacing)%rSpacing - rSpacing; rx < W+rSpacing; rx+=rSpacing) {
+        c.beginPath();
+        c.moveTo(rx, 0);
+        c.lineTo(rx - H*0.12, H);  // angled by train speed
+        c.stroke();
+      }
+    }
+
+    // ── Atmospheric fog / mist layer ──────────────────────────
+    const fogG = c.createLinearGradient(0, H*0.30, 0, H*0.72);
+    fogG.addColorStop(0,   _rgb(fogC, 0));
+    fogG.addColorStop(0.3, _rgb(fogC, fogA * 0.55));
+    fogG.addColorStop(0.6, _rgb(fogC, fogA * 0.35));
+    fogG.addColorStop(1,   _rgb(fogC, 0));
+    c.fillStyle = fogG;
     c.fillRect(0, 0, W, H);
 
-    // ── Biome crossfade ───────────────────────────────────────
-    if (_trainTransition > 0) {
-      c.fillStyle = `rgba(255,255,255,${_trainTransition * 0.85})`;
-      c.fillRect(0, 0, W, H);
+    // Drifting mist ribbons (highland / forest heavy)
+    if (fogA > 0.28) {
+      for (let mi = 0; mi < 3; mi++) {
+        const my = H*(0.52 + mi*0.06) + Math.sin(_tX*0.002+mi)*H*0.03;
+        const mx = c.createLinearGradient(0, my-12, 0, my+12);
+        mx.addColorStop(0,   _rgb(fogC,0));
+        mx.addColorStop(0.5, _rgb(fogC, fogA*(0.55+mi*0.08)));
+        mx.addColorStop(1,   _rgb(fogC,0));
+        c.fillStyle = mx;
+        c.fillRect(0, my-12, W, 24);
+      }
+    }
+
+    // ── Rain on glass (always slightly, heavy in some biomes) ──
+    if (!_tGlassDrops.length) _initGlass(W, H);
+    _drawGlassRain(c, W, H, t, ba, bl);
+
+    // ── Subtle glass reflection (interior hint) ───────────────
+    const reflG = c.createLinearGradient(0, 0, W, H);
+    reflG.addColorStop(0,    'rgba(255,255,255,0.032)');
+    reflG.addColorStop(0.35, 'rgba(255,255,255,0)');
+    reflG.addColorStop(0.65, 'rgba(255,255,255,0)');
+    reflG.addColorStop(1,    'rgba(255,255,255,0.018)');
+    c.fillStyle = reflG;
+    c.fillRect(0, 0, W, H);
+  }
+
+  // ── Tunnel renderer ───────────────────────────────────────
+  function _drawTunnel(c, W, H, t) {
+    c.fillStyle = '#060606'; c.fillRect(0,0,W,H);
+
+    // Perspective tunnel walls — vanishing point at centre
+    const vpX = W*0.5, vpY = H*0.44;
+    // Wall ribs rushing toward us
+    c.strokeStyle = 'rgba(40,35,30,0.8)';
+    const ribSpacing = 80;
+    for (let i = 0; i < 8; i++) {
+      const d = ((_tX * 1.8 + i * ribSpacing) % (ribSpacing * 8)) / (ribSpacing * 8);
+      const scale = 0.15 + d * 0.85;
+      const x0 = vpX + (0 - vpX) * scale, y0 = vpY + (0 - vpY) * scale;
+      const x1 = vpX + (W - vpX) * scale, y1 = vpY + (H - vpY) * scale;
+      c.lineWidth = 1.5 + d * 3;
+      c.beginPath();
+      c.moveTo(x0,y0); c.lineTo(x0,y1);   // left wall
+      c.moveTo(x1,y0); c.lineTo(x1,y1);   // right wall
+      c.moveTo(x0,y0); c.lineTo(x1,y0);   // ceiling
+      c.moveTo(x0,y1); c.lineTo(x1,y1);   // floor
+      c.stroke();
+    }
+    // Wall mount lights (small glowing spots on left wall)
+    for (let li = 0; li < 5; li++) {
+      const d = ((_tX * 1.8 + li * ribSpacing * 1.6) % (ribSpacing*8))/(ribSpacing*8);
+      const scale = 0.1 + d * 0.9;
+      const lx = vpX + (W*0.08 - vpX) * scale;
+      const ly = vpY + (H*0.30 - vpY) * scale;
+      const g = c.createRadialGradient(lx,ly,0,lx,ly,18*scale);
+      g.addColorStop(0,'rgba(255,240,180,0.7)');
+      g.addColorStop(1,'rgba(255,200,60,0)');
+      c.fillStyle = g; c.fillRect(lx-18*scale,ly-18*scale,36*scale,36*scale);
+    }
+    // Light at end of tunnel
+    const eg = c.createRadialGradient(vpX,vpY,H*0.02,vpX,vpY,H*0.28);
+    eg.addColorStop(0,'rgba(220,240,255,0.5)');
+    eg.addColorStop(0.4,'rgba(180,220,255,0.08)');
+    eg.addColorStop(1,'rgba(0,0,0,0)');
+    c.fillStyle=eg; c.fillRect(0,0,W,H);
+    // Track lines (perspective)
+    c.strokeStyle='rgba(80,75,65,0.9)'; c.lineWidth=2;
+    c.beginPath();
+    c.moveTo(vpX-12, H); c.lineTo(vpX-4, vpY+H*0.04);
+    c.moveTo(vpX+12, H); c.lineTo(vpX+4, vpY+H*0.04);
+    c.stroke();
+    // Sleepers
+    for (let si = 0; si < 14; si++) {
+      const d = ((_tX*1.5+si*42)%(42*14))/(42*14);
+      const ty = vpY + (H*1.05-vpY)*d;
+      const tw = 24*d;
+      c.strokeStyle=`rgba(60,52,40,${0.3+d*0.5})`; c.lineWidth=2+d*3;
+      c.beginPath(); c.moveTo(vpX-tw,ty); c.lineTo(vpX+tw,ty); c.stroke();
     }
   }
 
-  // Draw trees along the ground — varies by biome style
-  function _drawTrainTrees(c, W, H, biome, t) {
-    const groundY = H * (1 - biome.groundH);
-    const r = _rngState(77);
-    const isSnow = biome.name === 'snow';
+  // ── Sky objects ───────────────────────────────────────────
+  function _drawSkyObjects(c, W, H, t, isNight) {
+    if (isNight) {
+      const sr = _srng(42);
+      for (let i=0;i<70;i++) {
+        const sx=sr()*W, sy=sr()*H*0.48;
+        const br=0.3+0.7*Math.sin(t*0.03+i*0.9);
+        c.fillStyle=`rgba(255,255,255,${br*0.75})`;
+        c.fillRect(sx,sy,1.5,1.5);
+      }
+      c.fillStyle='rgba(245,248,255,0.9)';
+      c.beginPath(); c.arc(W*0.75,H*0.11,H*0.042,0,Math.PI*2); c.fill();
+    } else {
+      const hr = new Date().getHours();
+      const isDusk = hr < 7.5 || hr >= 17.5;
+      const sunCol = isDusk ? 'rgba(255,160,40,' : 'rgba(255,248,180,';
+      const sunX = W*0.72, sunY = H*(isDusk ? 0.22 : 0.10);
+      const sg = c.createRadialGradient(sunX,sunY,0,sunX,sunY,H*0.14);
+      sg.addColorStop(0,   sunCol+'0.95)');
+      sg.addColorStop(0.25,sunCol+'0.50)');
+      sg.addColorStop(1,   sunCol+'0)');
+      c.fillStyle=sg; c.fillRect(0,0,W,H);
+      // Clouds
+      for (let ci=0;ci<4;ci++) {
+        const cx = ((ci*W*0.28 + _tX*0.04 + ci*120)%(W*1.3))-W*0.1;
+        const cy = H*(0.08 + ci*0.05);
+        const cw = W*(0.12+ci*0.04);
+        c.fillStyle='rgba(255,255,255,0.55)';
+        c.beginPath(); c.ellipse(cx,cy,cw,cw*0.35,0,0,Math.PI*2); c.fill();
+        c.beginPath(); c.ellipse(cx-cw*0.3,cy+cw*0.08,cw*0.65,cw*0.28,0,0,Math.PI*2); c.fill();
+        c.beginPath(); c.ellipse(cx+cw*0.32,cy+cw*0.06,cw*0.60,cw*0.26,0,0,Math.PI*2); c.fill();
+      }
+    }
+  }
 
-    // 3 depth layers
-    [
-      { count: 6, scale: 0.38, yFrac: 0.98, spd: 0.30, alpha: 0.55 },
-      { count: 9, scale: 0.60, yFrac: 0.99, spd: 0.55, alpha: 0.75 },
-      { count: 7, scale: 0.88, yFrac: 1.00, spd: 1.00, alpha: 0.95 },
-    ].forEach(layer => {
-      for (let i = 0; i < layer.count; i++) {
-        const seed  = i * 137 + Math.floor((_trainX * layer.spd) / (W / layer.count)) * layer.count;
-        const rr    = _rngState(seed + 1000);
-        const baseX = ((rr() * W * 1.4 + _trainX * layer.spd) % (W * 1.6)) - W * 0.1;
-        const h     = H * (0.08 + rr() * 0.13) * layer.scale;
-        const baseY = groundY * layer.yFrac;
+  // ── Blended parallax hills ────────────────────────────────
+  function _drawBlendedHills(c, W, H, ba, bb, bl) {
+    const maxLayers = Math.max(ba.hills.length, bb.hills.length);
+    for (let li=0; li<maxLayers; li++) {
+      const ha = ba.hills[li] || ba.hills[ba.hills.length-1] || null;
+      const hb = bb.hills[li] || bb.hills[bb.hills.length-1] || null;
+      if (!ha && !hb) continue;
+      const h = ha||hb, hl = hb||ha;
+      const col  = _lerpRGB(h.c,  hl.c,  bl);
+      const amp  = _lerp(h.amp,   hl.amp,  bl);
+      const freq = _lerp(h.freq,  hl.freq, bl);
+      const spd  = _lerp(h.spd,   hl.spd,  bl);
+      const ph   = _lerp(h.ph,    hl.ph,   bl);
+      const baseY = H * (0.62 - li*0.025);
+      c.fillStyle = _rgb(col);
+      c.beginPath(); c.moveTo(0,H);
+      for (let x=0;x<=W+4;x+=3) {
+        const wx = x + _tX * spd;
+        const y  = baseY
+          - Math.sin(wx*freq+ph)         * H * amp
+          - Math.sin(wx*freq*1.73+ph*1.4)* H * amp * 0.38
+          - Math.sin(wx*freq*0.53+ph*0.7)* H * amp * 0.22;
+        x===0 ? c.moveTo(x,y) : c.lineTo(x,y);
+      }
+      c.lineTo(W,H); c.closePath(); c.fill();
+    }
+  }
 
-        c.globalAlpha = layer.alpha;
-        if (isSnow) {
-          // Conifer with snow cap
-          c.fillStyle = biome.treeCol;
-          c.beginPath();
-          c.moveTo(baseX, baseY);
-          c.lineTo(baseX - h*0.38, baseY);
-          c.lineTo(baseX, baseY - h);
-          c.closePath(); c.fill();
-          // Snow cap
-          c.fillStyle = '#e8f4f8';
-          c.beginPath();
-          c.moveTo(baseX - h*0.12, baseY - h*0.65);
-          c.lineTo(baseX + h*0.12, baseY - h*0.65);
-          c.lineTo(baseX, baseY - h);
-          c.closePath(); c.fill();
+  // ── Tree rendering ────────────────────────────────────────
+  function _drawTrees(c, W, H, groundY, tree, t, fadeOut, fadeIn) {
+    const alpha = fadeIn > 0 ? fadeIn : (1 - fadeOut);
+    if (alpha < 0.02) return;
+
+    // 4 depth layers
+    const layers = [
+      {spd:0.08, scale:0.30, spacing:140, yOff:0.0},
+      {spd:0.20, scale:0.48, spacing:100, yOff:0.01},
+      {spd:0.42, scale:0.70, spacing:75,  yOff:0.02},
+      {spd:0.80, scale:1.00, spacing:55,  yOff:0.03},
+    ];
+
+    layers.forEach((lay, li) => {
+      c.globalAlpha = alpha * (0.5 + li*0.16);
+      const viewX  = _tX * lay.spd;
+      const startI = Math.floor(viewX / lay.spacing);
+
+      for (let ii = startI - 1; ii < startI + Math.ceil(W/lay.spacing) + 2; ii++) {
+        const r2 = _srng(ii * 3779 + li * 9973);
+        const wx = ii * lay.spacing + r2() * lay.spacing * 0.7 - viewX;
+        if (wx < -lay.scale*H*0.2 || wx > W + lay.scale*H*0.2) continue;
+        const h = H * (0.07 + r2()*0.09) * lay.scale;
+        const bY = groundY + H * lay.yOff;
+
+        if (tree.type === 'conifer') {
+          _drawConifer(c, wx, bY, h, tree.dark, tree.light);
         } else {
-          // Deciduous trunk + round canopy
-          const trunkW = h * 0.08, trunkH = h * 0.38;
-          c.fillStyle = biome.treeCol;
-          c.fillRect(baseX - trunkW/2, baseY - trunkH, trunkW, trunkH);
-          // Canopy
-          c.fillStyle = biome.treeCol;
-          c.beginPath();
-          c.arc(baseX, baseY - trunkH - h*0.30, h*0.38, 0, Math.PI*2);
-          c.fill();
-          // Highlight blob
-          c.fillStyle = biome.treeLightCol;
-          c.beginPath();
-          c.arc(baseX - h*0.08, baseY - trunkH - h*0.38, h*0.20, 0, Math.PI*2);
-          c.fill();
+          _drawDeciduous(c, wx, bY, h, tree.dark, tree.light, r2);
         }
       }
     });
     c.globalAlpha = 1;
   }
 
-  // Cheap seedable-ish rng for stable tree positions
-  function _rngState(seed) {
-    let s = Math.abs(seed * 1664525 + 1013904223) | 0;
-    return () => { s = Math.abs((s * 1664525 + 1013904223) | 0); return (s >>> 0) / 4294967296; };
+  function _drawConifer(c, x, bY, h, dark, light) {
+    // Trunk
+    c.fillStyle = _rgb(dark.map(v=>v*0.6));
+    c.fillRect(x-h*0.04, bY-h*0.25, h*0.08, h*0.25);
+    // 3 stacked triangles
+    [[1.0,0.0],[0.80,0.28],[0.58,0.50]].forEach(([s,yOff])=>{
+      c.fillStyle = _rgb(dark);
+      c.beginPath();
+      c.moveTo(x, bY-h*s);
+      c.lineTo(x-h*0.36*s, bY-h*yOff);
+      c.lineTo(x+h*0.36*s, bY-h*yOff);
+      c.closePath(); c.fill();
+      // Snow highlight
+      c.fillStyle = _rgb(light, 0.55);
+      c.beginPath();
+      c.moveTo(x, bY-h*s);
+      c.lineTo(x-h*0.14*s, bY-h*(s*0.55+yOff*0.45));
+      c.lineTo(x+h*0.14*s, bY-h*(s*0.55+yOff*0.45));
+      c.closePath(); c.fill();
+    });
+  }
+
+  function _drawDeciduous(c, x, bY, h, dark, light, r2) {
+    // Trunk
+    const tW = h*0.09, tH = h*0.38;
+    c.fillStyle = _rgb([80,55,30]);
+    c.fillRect(x-tW/2, bY-tH, tW, tH);
+    // Main canopy
+    c.fillStyle = _rgb(dark);
+    c.beginPath(); c.arc(x, bY-tH-h*0.28, h*0.40, 0, Math.PI*2); c.fill();
+    // Sub-blobs for organic shape
+    c.fillStyle = _rgb(dark);
+    c.beginPath(); c.arc(x-h*0.22, bY-tH-h*0.18, h*0.28, 0, Math.PI*2); c.fill();
+    c.beginPath(); c.arc(x+h*0.20, bY-tH-h*0.16, h*0.26, 0, Math.PI*2); c.fill();
+    // Light highlight
+    c.fillStyle = _rgb(light, 0.65);
+    c.beginPath(); c.arc(x-h*0.10, bY-tH-h*0.40, h*0.22, 0, Math.PI*2); c.fill();
+  }
+
+  // ── Sea waves ─────────────────────────────────────────────
+  function _drawWaves(c, W, H, alpha) {
+    if (alpha < 0.05) return;
+    for (let wi=0;wi<6;wi++) {
+      const wy = H*(0.72+wi*0.028);
+      c.strokeStyle=`rgba(255,255,255,${(0.32-wi*0.04)*alpha})`;
+      c.lineWidth=1.8-wi*0.22;
+      c.beginPath();
+      for (let x=0;x<=W;x+=5) {
+        const y=wy+Math.sin((x+_tX*(1.0+wi*0.25))*0.016+wi)*H*0.010;
+        x===0?c.moveTo(x,y):c.lineTo(x,y);
+      }
+      c.stroke();
+    }
+  }
+
+  // ── Detail elements ───────────────────────────────────────
+  function _drawDetails(c, W, H, details, t, grndC, fogC) {
+    if (!details || !details.length) return;
+
+    // Telegraph / power poles (every 95px, medium parallax)
+    if (details.includes('poles')) {
+      const poleSpd = 0.55, poleSpacing = 95;
+      const poleViewX = _tX * poleSpd;
+      const startP = Math.floor(poleViewX / poleSpacing);
+      c.strokeStyle = 'rgba(50,40,30,0.85)';
+      for (let pi=startP-1; pi <= startP + Math.ceil(W/poleSpacing)+1; pi++) {
+        const px = pi * poleSpacing - poleViewX;
+        const pTop = H*0.38, pBot = H*0.70;
+        const pnx = (pi+1)*poleSpacing - poleViewX;  // next pole x
+        c.lineWidth = 2.5;
+        c.beginPath(); c.moveTo(px, pTop); c.lineTo(px, pBot); c.stroke();
+        c.lineWidth = 1;
+        // Crossbar
+        c.beginPath(); c.moveTo(px-16,pTop+H*0.03); c.lineTo(px+16,pTop+H*0.03); c.stroke();
+        // Wires to next pole (2 wires)
+        c.strokeStyle='rgba(40,35,28,0.50)';
+        c.beginPath(); c.moveTo(px+0,pTop+H*0.025); c.lineTo(pnx+0,pTop+H*0.025); c.stroke();
+        c.beginPath(); c.moveTo(px-12,pTop+H*0.03); c.lineTo(pnx-12,pTop+H*0.03); c.stroke();
+        c.strokeStyle='rgba(50,40,30,0.85)';
+      }
+    }
+
+    // Stone walls (low horizontal lines, very near, fast)
+    if (details.includes('walls')) {
+      const wallSpd=1.8, wallW=40+35, gap=30;
+      const wallViewX = _tX * wallSpd;
+      const startW = Math.floor(wallViewX / (wallW+gap));
+      for (let wi=startW-1; wi <= startW+Math.ceil(W/(wallW+gap))+1; wi++) {
+        const r2 = _srng(wi*3779);
+        const wx = wi*(wallW+gap) - wallViewX + r2()*20;
+        const wy = H*0.720 + r2()*H*0.018;
+        const ww = wallW + r2()*20;
+        c.fillStyle=`rgba(100,88,72,0.65)`;
+        c.fillRect(wx, wy, ww, H*0.018);
+        c.fillStyle=`rgba(130,115,95,0.4)`;
+        c.fillRect(wx, wy, ww, H*0.006);
+      }
+    }
+
+    // Sheep dots on far hills
+    if (details.includes('sheep')) {
+      const sheepSpd=0.12;
+      const sr = _srng(9001);
+      for (let si=0; si<8; si++) {
+        const sheepX = ((sr()*W*3 + _tX*sheepSpd) % (W*3.2)) - W*0.1;
+        const sheepY = H*(0.56+sr()*0.06);
+        c.fillStyle='rgba(240,238,232,0.80)';
+        c.beginPath(); c.ellipse(sheepX,sheepY,H*0.014,H*0.010,0,0,Math.PI*2); c.fill();
+      }
+    }
+
+    // Town buildings
+    if (details.includes('buildings')) {
+      const bSpd=0.50, bSpacing=80;
+      const bViewX = _tX * bSpd;
+      const startB = Math.floor(bViewX / bSpacing);
+      for (let bi=startB-1; bi <= startB+Math.ceil(W/bSpacing)+3; bi++) {
+        const r2 = _srng(bi*5381+200);
+        const bx = bi*bSpacing - bViewX + r2()*30;
+        const bh = H*(0.09 + r2()*0.14);
+        const bw = H*(0.04 + r2()*0.06);
+        const by = H*0.68 - bh;
+        c.fillStyle=`rgba(${100+r2()*40|0},${95+r2()*35|0},${90+r2()*30|0},0.88)`;
+        c.fillRect(bx, by, bw, bh);
+        // Roof
+        c.fillStyle=`rgba(80,68,58,0.90)`;
+        c.beginPath();
+        c.moveTo(bx-2,by); c.lineTo(bx+bw/2,by-bh*0.25); c.lineTo(bx+bw+2,by);
+        c.closePath(); c.fill();
+        // Windows
+        c.fillStyle='rgba(255,240,180,0.55)';
+        for (let wr=0;wr<2;wr++) for(let wc=0;wc<2;wc++) {
+          c.fillRect(bx+bw*0.15+wc*bw*0.40, by+bh*0.20+wr*bh*0.38, bw*0.22, bh*0.18);
+        }
+      }
+      // Church steeple (once per visible range)
+      const spireX = ((_tX*bSpd*0.8)%(W*4)) - W*0.2;
+      if (spireX > -50 && spireX < W+50) {
+        const sH = H*0.32;
+        c.fillStyle='rgba(88,82,72,0.92)';
+        c.fillRect(spireX-H*0.025, H*0.68-sH*0.6, H*0.05, sH*0.6);
+        c.beginPath();
+        c.moveTo(spireX-H*0.025, H*0.68-sH*0.6);
+        c.lineTo(spireX, H*0.68-sH);
+        c.lineTo(spireX+H*0.025, H*0.68-sH*0.6);
+        c.closePath(); c.fill();
+      }
+      // Station sign flashing by
+      const signX = ((_tX*bSpd*0.85+W*1.5)%(W*6)) - W*0.1;
+      if (signX > 0 && signX < W*0.5) {
+        c.fillStyle='rgba(20,60,140,0.92)';
+        c.fillRect(signX, H*0.60, H*0.16, H*0.045);
+        c.fillStyle='rgba(255,255,255,0.95)';
+        c.font = `${H*0.022|0}px monospace`;
+        c.textAlign='center';
+        c.fillText('SERENITY', signX+H*0.08, H*0.628);
+        c.textAlign='left';
+      }
+    }
+
+    // Lighthouse (sea biome)
+    if (details.includes('lighthouse')) {
+      const lhX = ((_tX*0.12)%(W*5)) - W*0.05;
+      if (lhX > -40 && lhX < W+40) {
+        const lhH = H*0.20;
+        c.fillStyle='rgba(235,225,210,0.88)';
+        c.fillRect(lhX-H*0.018, H*0.60-lhH, H*0.036, lhH);
+        c.fillStyle='rgba(200,60,60,0.85)';
+        c.fillRect(lhX-H*0.020, H*0.60-lhH+lhH*0.25, H*0.040, lhH*0.18);
+        c.fillRect(lhX-H*0.020, H*0.60-lhH+lhH*0.60, H*0.040, lhH*0.18);
+        // Rotating beacon
+        const bAngle = t * 0.06;
+        const lg = c.createConicalGradient ? null : null;
+        c.strokeStyle=`rgba(255,240,120,${0.3+0.4*Math.abs(Math.sin(bAngle))})`;
+        c.lineWidth=3;
+        c.beginPath();
+        c.moveTo(lhX, H*0.60-lhH);
+        c.lineTo(lhX + Math.cos(bAngle)*H*0.28, H*0.60-lhH + Math.sin(bAngle)*H*0.10);
+        c.stroke();
+      }
+    }
+
+    // Drifting mist patches (highland)
+    if (details.includes('mist')) {
+      for (let mi=0; mi<5; mi++) {
+        const mx = ((_tX*0.22+mi*W*0.4)%(W*2.2))-W*0.1;
+        const my = H*(0.52+mi*0.028);
+        const mg = c.createRadialGradient(mx, my, 0, mx, my, H*0.12);
+        mg.addColorStop(0,'rgba(200,205,195,0.38)');
+        mg.addColorStop(1,'rgba(200,205,195,0)');
+        c.fillStyle=mg;
+        c.fillRect(mx-H*0.12,my-H*0.12,H*0.24,H*0.24);
+      }
+    }
+  }
+
+  // ── Rain on glass ─────────────────────────────────────────
+  function _drawGlassRain(c, W, H, t, biome, bl) {
+    const intensity = biome.name==='highland'||biome.name==='forest' ? 0.85 : 0.20;
+    if (!_tGlassDrops.length) _initGlass(W, H);
+
+    _tGlassDrops.forEach(d => {
+      d.life += 0.008;
+      if (d.life > 1) {
+        d.x = Math.random()*W; d.y = 0;
+        d.r = 1.2+Math.random()*2.5;
+        d.vy = 0.5+Math.random()*1.5;
+        d.streak = 0; d.streakLen = 20+Math.random()*50;
+        d.life = 0;
+      }
+      // Drop falls, then streaks
+      d.y += d.vy * intensity * 0.6;
+      d.streak = Math.min(d.streakLen, d.streak + d.vy*0.5);
+
+      if (d.streak < 5) {
+        // Bead sitting on glass
+        c.fillStyle=`rgba(200,220,240,${intensity*0.55})`;
+        c.beginPath(); c.arc(d.x, d.y, d.r, 0, Math.PI*2); c.fill();
+      } else {
+        // Streak running down
+        const sg = c.createLinearGradient(d.x, d.y-d.streak, d.x, d.y);
+        sg.addColorStop(0,'rgba(200,220,240,0)');
+        sg.addColorStop(1,`rgba(210,228,245,${intensity*0.45})`);
+        c.strokeStyle=sg; c.lineWidth=d.r*0.8;
+        c.beginPath(); c.moveTo(d.x, d.y-d.streak); c.lineTo(d.x, d.y); c.stroke();
+        // Bead at bottom of streak
+        c.fillStyle=`rgba(210,228,245,${intensity*0.50})`;
+        c.beginPath(); c.arc(d.x, d.y, d.r*0.7, 0, Math.PI*2); c.fill();
+      }
+    });
   }
 
   // ── Public API ─────────────────────────────────────────────
@@ -2338,8 +2687,8 @@ const CanvasScenes = (() => {
     // ── Train: reset state and use 2D canvas ──────────────────
     if (_activeSceneType === 'train') {
       if (typeof Forest3D !== 'undefined') Forest3D.stop();
-      _trainX = 0; _trainBiome = 0; _trainFrame_count = 0;
-      _trainTransition = 0; _trainSnowParts = null;
+      _tX = 0; _tBI = 0; _tFC = 0; _tBlend = 0;
+      _tSnow = null; _tRain = null; _tGlassDrops = [];
     }
 
     if (_activeSceneType === 'forest') {
