@@ -35,10 +35,9 @@ const Train3D = (() => {
   let _lastNow = 0;
   let _carriageGroup = null;
 
-  // ── Outdoor scenery bg (canvas texture plane)
+  // ── Outdoor scenery bg (CanvasTexture set as scene.background)
   let _canvas2d = null;
   let _bgTex    = null;
-  let _bgMesh   = null;
 
   // ─────────────────────────────────────────────────────────────────
   //  PUBLIC API
@@ -83,8 +82,8 @@ const Train3D = (() => {
       });
       _scene = null;
     }
+    if (_scene) _scene.background = null;
     if (_bgTex)  { _bgTex.dispose(); _bgTex = null; }
-    _bgMesh   = null;
     _canvas2d = null;
     if (_R) { _R.dispose(); _R = null; }
     _cam = null;
@@ -122,31 +121,19 @@ const Train3D = (() => {
     _buildLights();
     _buildCarriage();
 
-    // ── Outdoor scenery background plane ──────────────────────────
-    // The 2D canvas (bg-canvas) is captured each frame as a texture and
-    // rendered on this large plane behind the window wall.
-    // This is far more reliable than CSS alpha compositing.
+    // ── Outdoor scenery background ────────────────────────────────
+    // Set the 2D bg-canvas as scene.background.  Three.js renders this as a
+    // fullscreen quad BEFORE any geometry, so it is always visible through
+    // the window opening regardless of depth-buffer state.
     if (_canvas2d) {
       _bgTex = new THREE.CanvasTexture(_canvas2d);
-      // CRITICAL: disable mipmaps — bg-canvas is non-power-of-2 (e.g. 1920×1080).
-      // WebGL1 silently blacks-out non-POT textures with mipmaps enabled.
-      // WebGL2 handles it, but the explicit setting guarantees correct behaviour.
+      // Disable mipmaps — bg-canvas is non-POT (e.g. 1920×1080).
       _bgTex.generateMipmaps = false;
       _bgTex.minFilter        = THREE.LinearFilter;
       _bgTex.magFilter        = THREE.LinearFilter;
       _bgTex.wrapS            = THREE.ClampToEdgeWrapping;
       _bgTex.wrapT            = THREE.ClampToEdgeWrapping;
-
-      // Large plane behind window wall — sized to overfill camera FOV at Z=-18
-      // Camera at Z=4.5, plane at Z=-18 → distance ≈ 22.5 units
-      // Visible h = 2*tan(28°)*22.5 ≈ 24. Use 90×54 for generous coverage.
-      const bgG = new THREE.PlaneGeometry(90, 54);
-      const bgM = new THREE.MeshBasicMaterial({ map: _bgTex });
-      _bgMesh = new THREE.Mesh(bgG, bgM);
-      // Centre on what the camera sees at Z=-18
-      // Camera lookAt ≈ (0, 1.02, -4.94); at Z=-18 the ray hits Y ≈ 0.82
-      _bgMesh.position.set(0, 0.82, -18);
-      _scene.add(_bgMesh);
+      _scene.background = _bgTex;
     }
 
     _checkResize();
@@ -410,6 +397,7 @@ const Train3D = (() => {
     const glassMat = new THREE.MeshPhysicalMaterial({
       color: 0xa8c8e0, transparent: true, opacity: 0.025,
       roughness: 0.02, metalness: 0.0, side: THREE.DoubleSide,
+      depthWrite: false,
     });
     [[WIN_BOT + (WIN_DIV - WIN_BOT) / 2, WIN_DIV - WIN_BOT - 0.04],
      [WIN_DIV + (WIN_TOP - WIN_DIV) / 2, WIN_TOP - WIN_DIV  - 0.04]

@@ -51,6 +51,7 @@ const Aquarium3D = (() => {
   const SPECIES = [
     {
       name: 'SmallFishA',   // clownfish — bright orange, 3 white rings
+      modelName: 'SmallFishA',
       count: 22,  speed: 1.0, speedRange: 1.5,
       radius: 8,  radiusRange: 6,
       xCk: 1.0, yCk: 0.45, zCk: 0.95,
@@ -83,6 +84,7 @@ const Aquarium3D = (() => {
     },
     {
       name: 'SmallFishB',   // blue chromis — vivid blue, iridescent stripe
+      modelName: null,          // no WebGL Samples model — keeps procedural geo
       count: 20,  speed: 1.5, speedRange: 2.0,
       radius: 6,  radiusRange: 5,
       xCk: 0.75, yCk: 0.55, zCk: 1.05,
@@ -113,6 +115,7 @@ const Aquarium3D = (() => {
     },
     {
       name: 'MediumFishA',  // goldfish — metallic gold scales
+      modelName: 'MediumFishA',
       count: 10,  speed: 0.8, speedRange: 0.8,
       radius: 10, radiusRange: 5,
       xCk: 0.9, yCk: 0.35, zCk: 0.85,
@@ -148,6 +151,7 @@ const Aquarium3D = (() => {
     },
     {
       name: 'MediumFishB',  // parrotfish — emerald green with blue fin edges
+      modelName: 'MediumFishB',
       count: 10,  speed: 0.9, speedRange: 1.0,
       radius: 8,  radiusRange: 4,
       xCk: 1.05, yCk: 0.6, zCk: 0.80,
@@ -178,6 +182,7 @@ const Aquarium3D = (() => {
     },
     {
       name: 'BigFishA',     // reef shark — sleek grey-blue, white belly, black fin tips
+      modelName: 'BigFishA',
       count: 3,   speed: 0.4, speedRange: 0.3,
       radius: 11, radiusRange: 3,
       xCk: 0.85, yCk: 0.25, zCk: 1.0,
@@ -207,6 +212,7 @@ const Aquarium3D = (() => {
     },
     {
       name: 'BigFishB',     // giant tropical — bronze-copper, wide colour bands
+      modelName: 'BigFishB',
       count: 2,   speed: 0.35, speedRange: 0.2,
       radius: 12, radiusRange: 2,
       xCk: 0.95, yCk: 0.20, zCk: 0.90,
@@ -569,6 +575,86 @@ const Aquarium3D = (() => {
   }
 
   // ════════════════════════════════════════════════════════════════════
+  //  REAL FISH ASSET LOADER  (WebGL Samples geometry + diffuse maps)
+  // ════════════════════════════════════════════════════════════════════
+  //  Fetches BigFishA.js / MediumFishA.js / SmallFishA.js etc. from
+  //  the WebGL Samples GitHub repo.  Each .js file is actually JSON with
+  //  fields: { position, normal, texCoord, indices } as typed-array data.
+  //  Runs AFTER procedural fish are already visible → seamless swap.
+  // ════════════════════════════════════════════════════════════════════
+  function _loadRealFishAsync() {
+    const BASE = 'https://raw.githubusercontent.com/WebGLSamples/WebGLSamples.github.io/master/aquarium/assets/';
+
+    (async () => {
+      for (const spec of SPECIES) {
+        if (!spec.modelName || !_running) continue;
+        try {
+          // Fetch model JSON + diffuse texture in parallel
+          const [mdl, tex] = await Promise.all([
+            fetch(BASE + spec.modelName + '.js')
+              .then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); }),
+            new Promise((res, rej) =>
+              new THREE.TextureLoader().load(BASE + spec.modelName + '_DM.jpg', res, null, rej)
+            ),
+          ]);
+
+          if (!_running) return;
+
+          const fields = mdl.models[0].fields;
+          const pos = new Float32Array(fields.position.data);
+          const nrm = new Float32Array(fields.normal.data);
+          const uv  = new Float32Array(fields.texCoord.data);
+          const idx = new Uint16Array(fields.indices.data);
+
+          // ── Center geometry on Z axis and normalise to spec.fishLength ──
+          // WebGL Samples models: longest axis = Z, head at +Z, tail at -Z
+          let zMin = Infinity, zMax = -Infinity;
+          for (let i = 2; i < pos.length; i += 3) {
+            if (pos[i] < zMin) zMin = pos[i];
+            if (pos[i] > zMax) zMax = pos[i];
+          }
+          const zCenter   = (zMin + zMax) * 0.5;
+          // normScale maps model half-extent to spec.fishLength/2
+          // so the shader's uFishLength = spec.fishLength works unchanged
+          const normScale = (spec.fishLength * 0.5) / ((zMax - zMin) * 0.5);
+          for (let i = 0; i < pos.length; i += 3) {
+            pos[i]   *= normScale;                          // X
+            pos[i+1] *= normScale;                          // Y
+            pos[i+2]  = (pos[i+2] - zCenter) * normScale;  // Z centred + scaled
+          }
+
+          const geo = new THREE.BufferGeometry();
+          geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+          geo.setAttribute('normal',   new THREE.BufferAttribute(nrm, 3));
+          geo.setAttribute('uv',       new THREE.BufferAttribute(uv, 2));
+          geo.setIndex(new THREE.BufferAttribute(idx, 1));
+
+          // THREE.js textures default to flipY=true (top-down), but WebGL Samples
+          // UVs use OpenGL convention (V=0 at bottom).  Keep flipY=false to match.
+          tex.flipY = false;
+          tex.needsUpdate = true;
+
+          // ── Swap procedural geo → real geo on all fish in this species ──
+          const specFish = _fish.filter(f => f.spec.name === spec.name);
+          if (specFish.length > 0) {
+            const oldGeo = specFish[0].mesh.geometry;
+            specFish.forEach(f => {
+              f.mesh.geometry = geo;
+              f.mat.uniforms.uMap.value = tex;
+            });
+            oldGeo.dispose();
+          }
+          _disposables.push(geo, tex);
+          console.log('[Aquarium3D] Loaded real model:', spec.modelName, '(' + specFish.length + ' fish)');
+
+        } catch (e) {
+          console.warn('[Aquarium3D] Real fish model failed for', spec.modelName, '—', e.message, '(keeping procedural)');
+        }
+      }
+    })();
+  }
+
+  // ════════════════════════════════════════════════════════════════════
   //  FISH MOVEMENT  (WebGL Samples Lissajous orbits)
   // ════════════════════════════════════════════════════════════════════
   function _updateFish(clock) {
@@ -718,6 +804,11 @@ const Aquarium3D = (() => {
     });
     // Initialise fish visibility mask
     _fishMask = _fish.map(() => true);
+
+    // Start background load of real WebGL Samples fish models.
+    // Procedural fish are already visible; _loadRealFishAsync swaps them
+    // species by species as each model+texture finishes downloading.
+    _loadRealFishAsync();
   }
 
   // ════════════════════════════════════════════════════════════════════
