@@ -1,12 +1,15 @@
 'use strict';
 /* ═══════════════════════════════════════════════════════════════════
    TRAIN3D  —  Vintage railway carriage interior
-   Three.js r149  ·  transparent WebGL renderer
+   Three.js r149  ·  opaque WebGL renderer + scene.background texture
    ───────────────────────────────────────────────────────────────────
-   Approach: renderer uses alpha:true + setClearColor(0,0,0,0).
-   Pixels not covered by 3D geometry are fully transparent → the
-   2D bg-canvas (drawn by canvas_scenes.js _trainFrame) shows through
-   via normal CSS z-index compositing.  No CanvasTexture needed.
+   Approach: bg-canvas (animated outdoor scenery drawn by _trainFrame
+   in canvas_scenes.js) is sampled each frame into a THREE.CanvasTexture
+   set as scene.background.  This renders as a GPU fullscreen quad
+   BEFORE any geometry — completely immune to CSS z-index issues.
+   The window wall panels are opaque geometry; the glass pane (0.025
+   opacity, depthWrite:false) lets the background show through the
+   window opening.
    ═══════════════════════════════════════════════════════════════════ */
 const Train3D = (() => {
 
@@ -34,15 +37,16 @@ const Train3D = (() => {
   let _swayT = 0;
   let _lastNow = 0;
   let _carriageGroup = null;
-
-  // (no bg-canvas capture needed — transparent renderer shows bg-canvas via CSS)
+  let _canvas2d = null;   // bg-canvas reference (outdoor scenery drawn by canvas_scenes.js)
+  let _bgTex    = null;   // THREE.CanvasTexture wrapping _canvas2d → used as scene.background
 
   // ─────────────────────────────────────────────────────────────────
   //  PUBLIC API
   // ─────────────────────────────────────────────────────────────────
-  function start(canvas2d) {   // canvas2d param kept for API compat; not used
+  function start(canvas2d) {
     if (_running) return;
     _running  = true;
+    _canvas2d = canvas2d || null;   // bg-canvas; will become scene.background texture
 
     _el = document.createElement('canvas');
     _el.id = 'train3d-canvas';
@@ -79,9 +83,11 @@ const Train3D = (() => {
       });
       _scene = null;
     }
-    if (_R) { _R.dispose(); _R = null; }
+    if (_bgTex)  { _bgTex.dispose();  _bgTex  = null; }
+    if (_R)      { _R.dispose();      _R      = null; }
     _cam = null;
     _carriageGroup = null;
+    _canvas2d = null;
     const c = document.getElementById('train3d-canvas');
     if (c) c.remove();
     _el = null;
@@ -93,20 +99,27 @@ const Train3D = (() => {
   function _launch() {
     if (!_running || !_el) return;
 
-    // ── Renderer — transparent so window opening shows bg-canvas underneath
+    // ── Renderer — opaque; bg scenery is rendered via scene.background texture
     _R = new THREE.WebGLRenderer({
-      canvas:              _el,
-      alpha:               true,
-      premultipliedAlpha:  false,
-      antialias:           true,
-      powerPreference:     'high-performance',
+      canvas:          _el,
+      antialias:       true,
+      powerPreference: 'high-performance',
     });
-    _R.setClearColor(0x000000, 0);  // fully transparent clear — bg-canvas shows through
+    _R.setClearColor(0x0b1a0f);  // dark fallback (covered by bg texture when available)
     _R.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
     _R.shadowMap.enabled = false;
 
     // ── Scene ─────────────────────────────────────────────────────
     _scene = new THREE.Scene();
+
+    // ── Background: sample the bg-canvas (outdoor animated scenery) each frame
+    if (_canvas2d) {
+      _bgTex = new THREE.CanvasTexture(_canvas2d);
+      _bgTex.generateMipmaps = false;                  // canvas is non-POT → must disable
+      _bgTex.minFilter       = THREE.LinearFilter;
+      _bgTex.wrapS = _bgTex.wrapT = THREE.ClampToEdgeWrapping;
+      _scene.background = _bgTex;
+    }
 
     // ── Camera ────────────────────────────────────────────────────
     // Eye-level from passenger seat, looking toward the window wall
@@ -164,13 +177,9 @@ const Train3D = (() => {
 
     _buildFloor();
     _buildWalls();
-    // Window wall, 3D frame bars and glass pane removed — replaced by
-    // the 2D #train-frame-canvas overlay (z:5) which paints the steel
-    // wall + oval aluminium frame and punches a transparent hole so the
-    // bg-canvas outdoor scenery shows through directly.
-    // _buildWindowWall();
-    // _buildWindowFrame();
-    // _buildGlassPane();
+    _buildWindowWall();    // opaque panels around opening — covers bg texture in wall areas
+    _buildWindowFrame();   // decorative brass+green frame bars
+    _buildGlassPane();     // 0.025 opacity glass — lets scene.background show through opening
     _buildCeiling();
     _buildSeats();
     _buildLuggageRacks();
@@ -646,6 +655,8 @@ const Train3D = (() => {
     const lookY = 1.02 + Math.sin(_swayT * 0.7) * 0.008;
     _cam.lookAt(_cam.position.x * 0.08, lookY, WIN_Z);
 
+    // Sync bg texture from whatever _trainFrame drew on bg-canvas this frame
+    if (_bgTex) _bgTex.needsUpdate = true;
     _R.render(_scene, _cam);
   }
 

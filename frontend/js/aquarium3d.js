@@ -663,14 +663,19 @@ const Aquarium3D = (() => {
     _fish.forEach(f => {
       const fc  = clock * f.speed * spd + f.clockOffset;
       const r   = f.radius;
-      const rY  = f.spec.heightRange;
-      const hOff = f.spec.heightOffset;
+      const rY  = f.spec.heightRange  * _tuningFishHtRange;
+      const hOff = f.spec.heightOffset * _tuningFishHt;
 
-      const xC = fc * f.xCk,  yC = fc * f.yCk,  zC = fc * f.zCk;
+      // Apply per-axis Lissajous clock multipliers
+      const xCk = f.xCk * _tuningFishXCk;
+      const yCk = f.yCk * _tuningFishYCk;
+      const zCk = f.zCk * _tuningFishZCk;
+
+      const xC = fc * xCk,  yC = fc * yCk,  zC = fc * zCk;
       // nextPos = slightly in the past → worldPos - nextPos ≈ velocity = forward dir
-      const xCN = (fc - 0.04) * f.xCk;
-      const yCN = (fc - 0.01) * f.yCk;
-      const zCN = (fc - 0.01) * f.zCk;
+      const xCN = (fc - 0.04) * xCk;
+      const yCN = (fc - 0.01) * yCk;
+      const zCN = (fc - 0.01) * zCk;
 
       f.mat.uniforms.uWorldPos.value.set(
         Math.sin(xC) * r,
@@ -726,10 +731,16 @@ const Aquarium3D = (() => {
   // ════════════════════════════════════════════════════════════════════
   function _buildScene() {
     _scene.background = new THREE.Color(0x002a40);
-    _scene.fog = new THREE.Fog(0x002a40, 20, 46);
+    _scene.fog = new THREE.Fog(
+      new THREE.Color(_tuningFogR, _tuningFogG, _tuningFogB),
+      _tuningFogNear, _tuningFogFar
+    );
 
     // Ambient + directional (simulates sunlight from above)
-    _scene.add(new THREE.AmbientLight(0x003355, 0.9));
+    _ambientLight = new THREE.AmbientLight(
+      new THREE.Color(_tuningAmbR, _tuningAmbG, _tuningAmbB), 0.9
+    );
+    _scene.add(_ambientLight);
     const sun = new THREE.DirectionalLight(0x88ccff, 1.6);
     sun.position.set(3, 12, 5);
     _scene.add(sun);
@@ -984,11 +995,15 @@ const Aquarium3D = (() => {
     _updateBubbles();
     _updateFish(_clock);
 
-    // Slow camera sway (speed controlled by _tuningCamSpd slider)
+    // Camera orbit (params driven by live controls)
     const cs = _clock * 0.10 * _tuningCamSpd;
-    _cam.position.x = Math.sin(cs) * 2.2;
-    _cam.position.y = 1.5 + Math.sin(cs * 0.7) * 0.9;
+    _cam.position.x = Math.sin(cs) * _tuningEyeRadius;
+    _cam.position.y = _tuningEyeHeight + Math.sin(cs * 0.7) * (_tuningEyeRadius * 0.41);
     _cam.lookAt(0, 0, 0);
+    if (_cam.fov !== _tuningFOV) {
+      _cam.fov = _tuningFOV;
+      _cam.updateProjectionMatrix();
+    }
 
     _R.render(_scene, _cam);
   }
@@ -1000,11 +1015,38 @@ const Aquarium3D = (() => {
   //  LIVE CONTROLS  — comprehensive tuning panel (like WebGL Samples demo)
   // ════════════════════════════════════════════════════════════════════
   let _controlPanel = null;
-  // Extended tuning state
-  let _tuningFog    = true;   // toggle fog
-  let _tuningLight  = 1.0;    // ambient light multiplier
-  let _tuningCamSpd = 1.0;    // camera orbit speed multiplier
-  let _specCountMult = 1.0;   // fraction of each species to render (0–1)
+
+  // ── Extended tuning state (mirrors WebGL Samples aquarium demo params) ──
+  let _tuningFog       = true;    // toggle fog on/off
+  let _tuningLight     = 1.0;     // overall light intensity multiplier
+
+  // Camera orbit
+  let _tuningCamSpd    = 1.0;     // orbit speed (eyeSpeed)
+  let _tuningEyeRadius = 2.2;     // orbit radius (eyeRadius)
+  let _tuningEyeHeight = 1.5;     // base eye height (eyeHeight)
+  let _tuningFOV       = 60;      // field of view (fieldOfView)
+
+  // Fog
+  let _tuningFogNear   = 20;      // fog near plane
+  let _tuningFogFar    = 46;      // fog far plane
+  let _tuningFogR      = 0.00;    // fog color red   (0–1)
+  let _tuningFogG      = 0.165;   // fog color green (0–1)  → 0x002a40
+  let _tuningFogB      = 0.251;   // fog color blue  (0–1)
+
+  // Ambient lighting color
+  let _tuningAmbR      = 0.00;    // ambient red   (0–1)
+  let _tuningAmbG      = 0.20;    // ambient green (0–1)  → 0x003355
+  let _tuningAmbB      = 0.33;    // ambient blue  (0–1)
+  let _ambientLight    = null;    // stored ref for live color change
+
+  // Fish orbit (global multipliers applied on top of per-species values)
+  let _tuningFishHt      = 1.0;   // heightOffset multiplier (fishHeight)
+  let _tuningFishHtRange = 1.0;   // heightRange multiplier (fishHeightRange)
+  let _tuningFishXCk     = 1.0;   // X Lissajous clock multiplier (fishXClock)
+  let _tuningFishYCk     = 1.0;   // Y Lissajous clock multiplier (fishYClock)
+  let _tuningFishZCk     = 1.0;   // Z Lissajous clock multiplier (fishZClock)
+
+  let _specCountMult   = 1.0;     // fraction of each species visible (0–1)
   // Per-fish rendering mask (true = render this fish)
   let _fishMask = [];
 
@@ -1026,85 +1068,143 @@ const Aquarium3D = (() => {
     _applyFishMask();
   }
 
+  function _fogColor() {
+    return new THREE.Color(_tuningFogR, _tuningFogG, _tuningFogB);
+  }
+  function _applyFog() {
+    if (!_scene) return;
+    if (_tuningFog) {
+      _scene.fog = new THREE.Fog(_fogColor(), _tuningFogNear, _tuningFogFar);
+    } else {
+      _scene.fog = null;
+    }
+  }
+
   function _buildControls() {
     if (_controlPanel) return;
     const panel = document.createElement('div');
     panel.id = 'aq-controls';
     panel.style.cssText = [
       'position:fixed;bottom:14px;right:14px;z-index:20',
-      'background:rgba(0,8,18,0.85);color:#aaddff',
-      'padding:12px 16px;border-radius:10px;font:11px/1.8 monospace',
-      'pointer-events:auto;user-select:none;min-width:210px;max-height:90vh;overflow-y:auto',
+      'background:rgba(0,8,18,0.88);color:#aaddff',
+      'padding:12px 16px;border-radius:10px;font:11px/1.7 monospace',
+      'pointer-events:auto;user-select:none;min-width:220px;max-height:92vh;overflow-y:auto',
       'border:1px solid rgba(80,160,255,0.30)',
-      'box-shadow:0 4px 20px rgba(0,80,180,0.25)',
+      'box-shadow:0 4px 20px rgba(0,80,180,0.30)',
     ].join(';');
 
+    // Full WebGL Samples-style parameter set mapped to our Three.js impl
     const sliders = [
-      // Animation
-      { id:'aq-spd',  label:'Fish Speed',   key:'speed', min:0.05,max:5.0, step:0.05, def:1.0, grp:'Animation' },
-      { id:'aq-bend', label:'Tail Bend',     key:'bend',  min:0.1, max:5.0, step:0.05, def:1.0, grp:null },
-      { id:'aq-wave', label:'Wave Freq',     key:'wave',  min:0.1, max:5.0, step:0.05, def:1.0, grp:null },
-      { id:'aq-tail', label:'Tail Speed',    key:'tail',  min:0.1, max:5.0, step:0.05, def:1.0, grp:null },
-      // Population
-      { id:'aq-cnt',  label:'Fish Count %',  key:'count', min:0.0, max:1.0, step:0.05, def:1.0, grp:'Population' },
-      // Environment
-      { id:'aq-lgt',  label:'Light Intensity',key:'light',min:0.2, max:3.0, step:0.05, def:1.0, grp:'Environment' },
-      { id:'aq-cam',  label:'Camera Speed',  key:'cam',   min:0.0, max:4.0, step:0.05, def:1.0, grp:null },
+      // ── Fish Animation ──────────────────────────────────────────────
+      { id:'aq-spd',   label:'fishSpeed',     key:'speed',   min:0.05, max:5.0,  step:0.05, def:1.0,   grp:'Fish Animation' },
+      { id:'aq-tail',  label:'fishTailSpeed', key:'tail',    min:0.1,  max:5.0,  step:0.05, def:1.0,   grp:null },
+      { id:'aq-bend',  label:'Tail Bend',     key:'bend',    min:0.1,  max:5.0,  step:0.05, def:1.0,   grp:null },
+      { id:'aq-wave',  label:'Wave Freq',     key:'wave',    min:0.1,  max:5.0,  step:0.05, def:1.0,   grp:null },
+      // ── Fish Orbits ─────────────────────────────────────────────────
+      { id:'aq-fht',   label:'fishHeight',    key:'fHt',     min:0.2,  max:3.0,  step:0.05, def:1.0,   grp:'Fish Orbits' },
+      { id:'aq-fhr',   label:'fishHtRange',   key:'fHtR',    min:0.2,  max:3.0,  step:0.05, def:1.0,   grp:null },
+      { id:'aq-fxck',  label:'fishXClock',    key:'fXCk',    min:0.2,  max:3.0,  step:0.05, def:1.0,   grp:null },
+      { id:'aq-fyck',  label:'fishYClock',    key:'fYCk',    min:0.1,  max:2.0,  step:0.05, def:1.0,   grp:null },
+      { id:'aq-fzck',  label:'fishZClock',    key:'fZCk',    min:0.2,  max:3.0,  step:0.05, def:1.0,   grp:null },
+      // ── Camera ─────────────────────────────────────────────────────
+      { id:'aq-fov',   label:'fieldOfView',   key:'fov',     min:30,   max:110,  step:1,    def:60,    grp:'Camera' },
+      { id:'aq-er',    label:'eyeRadius',     key:'eyeR',    min:0.5,  max:8.0,  step:0.1,  def:2.2,   grp:null },
+      { id:'aq-eh',    label:'eyeHeight',     key:'eyeH',    min:-2.0, max:6.0,  step:0.1,  def:1.5,   grp:null },
+      { id:'aq-cam',   label:'eyeSpeed',      key:'cam',     min:0.0,  max:4.0,  step:0.05, def:1.0,   grp:null },
+      // ── Lighting ───────────────────────────────────────────────────
+      { id:'aq-lgt',   label:'Light Intens.', key:'light',   min:0.1,  max:3.0,  step:0.05, def:1.0,   grp:'Lighting' },
+      { id:'aq-ambr',  label:'ambientRed',    key:'ambR',    min:0.0,  max:1.0,  step:0.01, def:0.00,  grp:null },
+      { id:'aq-ambg',  label:'ambientGreen',  key:'ambG',    min:0.0,  max:1.0,  step:0.01, def:0.20,  grp:null },
+      { id:'aq-ambb',  label:'ambientBlue',   key:'ambB',    min:0.0,  max:1.0,  step:0.01, def:0.33,  grp:null },
+      // ── Fog ────────────────────────────────────────────────────────
+      { id:'aq-fn',    label:'fogPower(near)', key:'fogN',   min:1,    max:40,   step:0.5,  def:20,    grp:'Fog' },
+      { id:'aq-ff',    label:'fogMult(far)',   key:'fogF',   min:10,   max:100,  step:1,    def:46,    grp:null },
+      { id:'aq-fogr',  label:'fogRed',         key:'fogR',   min:0.0,  max:1.0,  step:0.01, def:0.00,  grp:null },
+      { id:'aq-fogg',  label:'fogGreen',       key:'fogG',   min:0.0,  max:1.0,  step:0.01, def:0.165, grp:null },
+      { id:'aq-fogb',  label:'fogBlue',        key:'fogB',   min:0.0,  max:1.0,  step:0.01, def:0.251, grp:null },
+      // ── Population ─────────────────────────────────────────────────
+      { id:'aq-cnt',   label:'Fish Count %',  key:'count',   min:0.0,  max:1.0,  step:0.05, def:1.0,   grp:'Population' },
     ];
 
-    let html = '<div style="margin-bottom:8px;font-size:13px;font-weight:bold;color:#44aaff;letter-spacing:1px">🐟 AQUARIUM SETTINGS</div>';
+    let html = '<div style="margin-bottom:6px;font-size:12px;font-weight:bold;color:#44aaff;letter-spacing:1px">🐟 AQUARIUM</div>';
 
     let lastGrp = null;
     sliders.forEach(s => {
       if (s.grp && s.grp !== lastGrp) {
-        html += `<div style="margin:6px 0 2px;color:#558899;font-size:10px;text-transform:uppercase;letter-spacing:1px">${s.grp}</div>`;
+        html += `<div style="margin:5px 0 1px;color:#3d7a88;font-size:9px;text-transform:uppercase;letter-spacing:1px">${s.grp}</div>`;
         lastGrp = s.grp;
       }
-      html += `<label style="display:flex;align-items:center;gap:6px;margin:2px 0">
-        <span style="width:88px;color:#88bbcc">${s.label}</span>
+      const dStr = Number.isInteger(s.def) ? s.def.toString() : s.def.toFixed(s.step < 0.1 ? 2 : 2);
+      html += `<label style="display:flex;align-items:center;gap:5px;margin:1px 0">
+        <span style="width:96px;color:#7aaabb;font-size:10px">${s.label}</span>
         <input id="${s.id}" type="range" min="${s.min}" max="${s.max}" step="${s.step}" value="${s.def}"
-          style="flex:1;accent-color:#22aaff;cursor:pointer">
-        <span id="${s.id}-v" style="width:34px;text-align:right;color:#fff">${s.def.toFixed(2)}</span>
+          style="flex:1;accent-color:#22aaff;cursor:pointer;height:12px">
+        <span id="${s.id}-v" style="width:36px;text-align:right;color:#fff;font-size:10px">${dStr}</span>
       </label>`;
     });
 
-    // Toggles
-    html += '<div style="margin:6px 0 2px;color:#558899;font-size:10px;text-transform:uppercase;letter-spacing:1px">Toggles</div>';
+    // Fog toggle
+    html += '<div style="margin:5px 0 1px;color:#3d7a88;font-size:9px;text-transform:uppercase;letter-spacing:1px">Toggles</div>';
     html += `<label style="display:flex;align-items:center;gap:8px;margin:2px 0;cursor:pointer">
       <input id="aq-fog" type="checkbox" checked style="accent-color:#22aaff">
-      <span style="color:#88bbcc">Underwater Fog</span>
+      <span style="color:#7aaabb;font-size:10px">Underwater Fog</span>
     </label>`;
-
-    html += '<div style="margin-top:8px;color:#335566;font-size:10px">Drag sliders to tune in real-time</div>';
+    html += '<div style="margin-top:6px;color:#2a4455;font-size:9px">Drag to tune · matches WebGL Samples params</div>';
 
     panel.innerHTML = html;
     document.body.appendChild(panel);
     _controlPanel = panel;
 
-    // Wire up sliders
+    // ── Wire up sliders ─────────────────────────────────────────────
     sliders.forEach(s => {
       const el = document.getElementById(s.id);
       const vl = document.getElementById(s.id + '-v');
       el.addEventListener('input', () => {
         const v = parseFloat(el.value);
-        vl.textContent = v.toFixed(2);
+        vl.textContent = Number.isInteger(s.def) ? Math.round(v).toString() : v.toFixed(s.step < 0.1 ? 2 : 2);
         switch (s.key) {
+          // Fish animation
           case 'speed': _tuning.speed = v; break;
+          case 'tail':  _tuning.tail  = v; break;
           case 'bend':  _tuning.bend  = v; break;
           case 'wave':  _tuning.wave  = v; break;
-          case 'tail':  _tuning.tail  = v; break;
-          case 'count': _specCountMult = v; _rebuildFishMask(); break;
-          case 'light': _tuningLight = v;
+          // Fish orbits
+          case 'fHt':   _tuningFishHt      = v; break;
+          case 'fHtR':  _tuningFishHtRange = v; break;
+          case 'fXCk':  _tuningFishXCk     = v; break;
+          case 'fYCk':  _tuningFishYCk     = v; break;
+          case 'fZCk':  _tuningFishZCk     = v; break;
+          // Camera
+          case 'fov':   _tuningFOV       = v; break;
+          case 'eyeR':  _tuningEyeRadius = v; break;
+          case 'eyeH':  _tuningEyeHeight = v; break;
+          case 'cam':   _tuningCamSpd    = v; break;
+          // Lighting
+          case 'light':
+            _tuningLight = v;
             if (_scene) {
               _scene.traverseVisible(o => {
-                if (o.isLight) { o.intensity = (o.userData.baseIntensity||o.intensity) * v; }
+                if (o.isLight) o.intensity = (o.userData.baseIntensity || o.intensity) * v;
               });
             }
             break;
-          case 'cam':   _tuningCamSpd = v; break;
+          case 'ambR': _tuningAmbR = v;
+            if (_ambientLight) _ambientLight.color.setRGB(_tuningAmbR, _tuningAmbG, _tuningAmbB); break;
+          case 'ambG': _tuningAmbG = v;
+            if (_ambientLight) _ambientLight.color.setRGB(_tuningAmbR, _tuningAmbG, _tuningAmbB); break;
+          case 'ambB': _tuningAmbB = v;
+            if (_ambientLight) _ambientLight.color.setRGB(_tuningAmbR, _tuningAmbG, _tuningAmbB); break;
+          // Fog
+          case 'fogN': _tuningFogNear = v; _applyFog(); break;
+          case 'fogF': _tuningFogFar  = v; _applyFog(); break;
+          case 'fogR': _tuningFogR = v; _applyFog(); break;
+          case 'fogG': _tuningFogG = v; _applyFog(); break;
+          case 'fogB': _tuningFogB = v; _applyFog(); break;
+          // Population
+          case 'count': _specCountMult = v; _rebuildFishMask(); break;
         }
       });
-      // Store base intensity for lights
+      // Store base intensity for the light multiplier
       if (s.key === 'light' && _scene) {
         _scene.traverseVisible(o => { if (o.isLight) o.userData.baseIntensity = o.intensity; });
       }
@@ -1113,7 +1213,7 @@ const Aquarium3D = (() => {
     // Fog toggle
     document.getElementById('aq-fog').addEventListener('change', e => {
       _tuningFog = e.target.checked;
-      if (_scene) _scene.fog = _tuningFog ? new THREE.Fog(0x002a40, 20, 46) : null;
+      _applyFog();
     });
   }
 
@@ -1128,6 +1228,13 @@ const Aquarium3D = (() => {
     if (_canvas2d) _canvas2d.style.display = 'none';
     _tuning = { speed: 1.0, bend: 1.0, wave: 1.0, tail: 1.0 };
     _tuningLight = 1.0; _tuningCamSpd = 1.0; _specCountMult = 1.0;
+    _tuningEyeRadius = 2.2; _tuningEyeHeight = 1.5; _tuningFOV = 60;
+    _tuningFogNear = 20; _tuningFogFar = 46;
+    _tuningFogR = 0.00; _tuningFogG = 0.165; _tuningFogB = 0.251;
+    _tuningAmbR = 0.00; _tuningAmbG = 0.20;  _tuningAmbB = 0.33;
+    _tuningFishHt = 1.0; _tuningFishHtRange = 1.0;
+    _tuningFishXCk = 1.0; _tuningFishYCk = 1.0; _tuningFishZCk = 1.0;
+    _ambientLight = null;
     _buildControls();
 
     function _launch() {

@@ -28,8 +28,8 @@
   /* train3d-canvas sits at z:1 (above bg-canvas:0, below page:2) */
   #train3d-canvas { display:none; position:fixed; inset:0; z-index:1; width:100%; height:100%; pointer-events:none; }
   body.scene-train #train3d-canvas { display:block; }
-  /* train-frame-canvas replaced by 3D interior — hide it */
-  body.scene-train #train-frame-canvas { display: block; }
+  /* train-frame-canvas replaced by 3D interior — keep hidden */
+  body.scene-train #train-frame-canvas { display: none !important; }
 
   .page{position:relative;z-index:2;max-width:900px;margin:0 auto;padding:0 1rem 4rem;}
 
