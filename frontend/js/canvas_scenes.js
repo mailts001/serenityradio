@@ -97,8 +97,8 @@ const CanvasScenes = (() => {
   // ── Sky ────────────────────────────────────────────────────
   function _drawSky(hr, mode) {
     const w = _canvas.width, h = _canvas.height;
-    // Tilt-aware horizon — same formula as _drawWater so they always match
-    const hyBase = h * (mode === 'sleep' ? 0.60 : 0.65);
+    // Tilt-aware horizon — matched to _drawWater (sea at 42%, sleep at 45%)
+    const hyBase = h * (mode === 'sleep' ? 0.45 : 0.42);
     const hy = Math.min(h * 0.92, Math.max(h * 0.20,
       hyBase + _panAlt * (hyBase / 90)));
     const hyF = hy / h;   // horizon as fraction of canvas height
@@ -3166,9 +3166,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Restore last chosen SCENE (not channel — they are decoupled)
   const savedScene = localStorage.getItem('sr_scene') || 'sea';
-  // Don't auto-restore train (shows sky exterior on load — confusing).
-  // All other scenes (sea, space, forest, snow, aquarium) restore as-is.
-  const restoreScene = (savedScene === 'train') ? 'sea' : savedScene;
+  // Don't auto-restore train or aquarium — both require 3D init that can
+  // fail on cold load and leave a blank/wrong canvas. Restore to sea instead.
+  const _3d_scenes = new Set(['train', 'aquarium']);
+  const restoreScene = _3d_scenes.has(savedScene) ? 'sea' : savedScene;
   CanvasScenes.setScene(restoreScene);
 
   // Highlight the correct scene button on load

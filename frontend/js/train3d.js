@@ -14,10 +14,8 @@
    ═══════════════════════════════════════════════════════════════════ */
 const Train3D = (() => {
 
-  const CDN         = 'https://cdn.jsdelivr.net/npm/three@0.149.0/build/three.min.js';
-  const ORBIT_CDN   = 'https://cdn.jsdelivr.net/npm/three@0.149.0/examples/js/controls/OrbitControls.js';
-  // DEBUG: press O to toggle orbit controls (lets you rotate camera to inspect geometry)
-  let _orbit = null;
+  const CDN = 'https://cdn.jsdelivr.net/npm/three@0.149.0/build/three.min.js';
+  // Press W to toggle wireframe on all meshes (debug aid)
 
   // ── Carriage dimensions (half-units)
   const RW = 2.2;   // room half-width  (X: -RW … +RW)
@@ -41,8 +39,8 @@ const Train3D = (() => {
   let _swayT   = 0;
   let _lastNow = 0;
   let _carriageGroup = null;
-  let _bgCanvas = null;  // reference to bg-canvas element (exterior animation)
-  let _bgTex    = null;  // THREE.CanvasTexture wrapping _bgCanvas
+  let _bgCanvas  = null;  // reference to bg-canvas element (exterior animation)
+  let _bgTex     = null;  // THREE.CanvasTexture wrapping _bgCanvas
 
   // ─────────────────────────────────────────────────────────────────
   //  PUBLIC API
@@ -80,7 +78,6 @@ const Train3D = (() => {
     _running = false;
     cancelAnimationFrame(_raf);
     _raf = null;
-    if (_orbit) { _orbit.dispose(); _orbit = null; }
     if (_scene) {
       _scene.traverse(o => {
         if (o.geometry) o.geometry.dispose();
@@ -139,30 +136,8 @@ const Train3D = (() => {
     _buildLights();
     _buildCarriage();
 
-    // ── Debug orbit controls (press O to toggle) ──────────────────
-    // Loads OrbitControls and allows free camera rotation to inspect geometry.
-    // Remove or disable for production.
-    const _loadOrbit = () => {
-      if (typeof THREE.OrbitControls !== 'undefined') {
-        _orbit = new THREE.OrbitControls(_cam, _el);
-        _orbit.target.set(0, 1.0, WIN_Z);
-        _orbit.update();
-        console.log('[Train3D] OrbitControls active — drag to rotate, scroll to zoom');
-      }
-    };
-    const _orbitScript = document.createElement('script');
-    _orbitScript.src    = ORBIT_CDN;
-    _orbitScript.onload = _loadOrbit;
-    document.head.appendChild(_orbitScript);
-
+    // ── W key: toggle wireframe on all meshes (debug aid) ────────
     window.addEventListener('keydown', e => {
-      if (e.key === 'o' || e.key === 'O') {
-        if (_orbit) {
-          _orbit.enabled = !_orbit.enabled;
-          console.log('[Train3D] OrbitControls', _orbit.enabled ? 'ON' : 'OFF');
-        }
-      }
-      // W = toggle wireframe on all geometry to see hidden surfaces
       if (e.key === 'w' || e.key === 'W') {
         _scene && _scene.traverse(obj => {
           if (obj.material) {
@@ -690,16 +665,12 @@ const Train3D = (() => {
       _carriageGroup.rotation.x = Math.sin(_swayT * 0.85) * 0.0015;
     }
 
-    // ── Camera movement — disabled when orbit controls are active ────
-    if (!_orbit || !_orbit.enabled) {
-      _cam.position.x = Math.sin(_swayT * 1.1)  * 0.04;
-      _cam.position.y = 1.15 + Math.sin(_swayT * 2.2)  * 0.018
-                             + Math.sin(_swayT * 5.5)  * 0.004;
-      const lookY = 1.02 + Math.sin(_swayT * 0.7) * 0.008;
-      _cam.lookAt(_cam.position.x * 0.08, lookY, WIN_Z);
-    } else {
-      _orbit.update();
-    }
+    // ── Camera gentle sway ────────────────────────────────────────
+    _cam.position.x = Math.sin(_swayT * 1.1)  * 0.04;
+    _cam.position.y = 1.15 + Math.sin(_swayT * 2.2)  * 0.018
+                           + Math.sin(_swayT * 5.5)  * 0.004;
+    const lookY = 1.02 + Math.sin(_swayT * 0.7) * 0.008;
+    _cam.lookAt(_cam.position.x * 0.08, lookY, WIN_Z);
 
     // ── Refresh exterior texture & render ────────────────────────
     // bg-canvas was redrawn this frame by canvas_scenes._trainFrame();
