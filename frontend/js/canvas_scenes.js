@@ -189,7 +189,7 @@ const CanvasScenes = (() => {
     const relAz  = ((sunAz - _panAz + 540) % 360) - 180;
     if (Math.abs(relAz) > 95) return null;   // sun panned off-screen
 
-    const hyBase = h * 0.65;
+    const hyBase = h * 0.42;
     const hy = Math.min(h * 0.92, Math.max(h * 0.20, hyBase + _panAlt * (hyBase / 90)));
 
     const sx = w * 0.5 + (relAz / 90) * w * 0.5;
@@ -286,7 +286,7 @@ const CanvasScenes = (() => {
         const moonAz = 90 + progress * 180;
         const relAzM = ((moonAz - _panAz + 540) % 360) - 180;
         if (Math.abs(relAzM) <= 95) {
-          const hyBase2 = h * 0.65;
+          const hyBase2 = h * 0.42;
           const hy2 = Math.min(h * 0.92, Math.max(h * 0.20, hyBase2 + _panAlt * (hyBase2 / 90)));
           const mx = w * 0.5 + (relAzM / 90) * w * 0.5;
           const my = hy2 - altitude * (hy2 * 0.88);
@@ -339,7 +339,7 @@ const CanvasScenes = (() => {
     const baseDensity = mode === 'nature' ? 0.055 : mode === 'sleep' ? 0.05 : 0.032;
 
     // Each mist layer is a sinuous blob path — not a rectangle
-    const horizonY = h * 0.65;  // hard ceiling — mist never crosses into water
+    const horizonY = h * 0.42;  // hard ceiling — mist never crosses into water
     for (let i = 0; i < layers; i++) {
       const cy    = h * (0.36 + i * 0.07);  // stays in upper sky, well above horizon
       if (cy > horizonY * 0.90) continue;   // skip any layer that would bleed over
@@ -384,7 +384,7 @@ const CanvasScenes = (() => {
   function _drawWater(t, hr, mode) {
     const w  = _canvas.width, h = _canvas.height;
     // Horizon position responds to vertical tilt: look up = horizon drops down
-    const hyBase = h * (mode === 'sleep' ? 0.60 : 0.65);
+    const hyBase = h * (mode === 'sleep' ? 0.45 : 0.42);
     const hy = Math.min(h * 0.92, Math.max(h * 0.20,
       hyBase + _panAlt * (hyBase / 90)));  // each degree shifts ~1% of sky height
     const wH = h - hy;
@@ -605,7 +605,7 @@ const CanvasScenes = (() => {
 
   function _drawIslands(hr, mode) {
     const w  = _canvas.width, h = _canvas.height;
-    const hyBase = h * (mode === 'sleep' ? 0.60 : 0.65);
+    const hyBase = h * (mode === 'sleep' ? 0.45 : 0.42);
     const hy = Math.min(h * 0.92, Math.max(h * 0.20,
       hyBase + _panAlt * (hyBase / 90)));
 
@@ -1022,7 +1022,7 @@ const CanvasScenes = (() => {
 
   function _drawWeather(t, hr, mode) {
     const w = _canvas.width, h = _canvas.height;
-    const hyBase = h * (mode === 'sleep' ? 0.60 : 0.65);
+    const hyBase = h * (mode === 'sleep' ? 0.45 : 0.42);
     const hy = Math.min(h * 0.92, Math.max(h * 0.20,
       hyBase + _panAlt * (hyBase / 90)));
     const type = _weatherType(hr);
@@ -1173,7 +1173,7 @@ const CanvasScenes = (() => {
 
     // When tilted up, horizon moves down on screen.
     // altFrac: 0 at view-centre alt, proportional above/below.
-    const hy    = h * 0.65;               // default horizon screen Y
+    const hy    = h * 0.42;               // default horizon screen Y
     // horizon offset from tilt: _panAlt degrees shifts it by altPxPerDeg
     const altPxPerDeg = hy / 90;          // 90° = full sky height
     const horizY = hy + _panAlt * altPxPerDeg;   // screen Y of horizon after tilt
@@ -1293,7 +1293,7 @@ const CanvasScenes = (() => {
   function _drawSkyLights(t, hr, mode) {
     if (mode === 'focus') return;
     const w = _canvas.width, h = _canvas.height;
-    const hy = h * 0.65;
+    const hy = h * 0.42;
 
     const isDay = hr >= 9 && hr < 16;
     const baseAlpha = isDay ? 0.020
@@ -3165,8 +3165,10 @@ document.addEventListener('DOMContentLoaded', () => {
   window._activeScene = '__cs__';
 
   // Restore last chosen SCENE (not channel — they are decoupled)
-  const savedScene   = localStorage.getItem('sr_scene') || 'sea';
-  const restoreScene = savedScene;   // restore aquarium just like any other scene
+  const savedScene = localStorage.getItem('sr_scene') || 'sea';
+  // Don't auto-restore train (shows sky exterior on load — confusing).
+  // All other scenes (sea, space, forest, snow, aquarium) restore as-is.
+  const restoreScene = (savedScene === 'train') ? 'sea' : savedScene;
   CanvasScenes.setScene(restoreScene);
 
   // Highlight the correct scene button on load
