@@ -557,6 +557,50 @@ def api_events_upcoming():
         app.logger.error('Events API error: %s', e)
         return jsonify({'events': [], 'error': 'Temporarily unavailable'})
 
+@app.route('/api/events/subscribe', methods=['POST'])
+def api_events_subscribe():
+    """Store a user's event notification subscription (contact + categories)."""
+    import sqlite3 as _sqlite3, json as _json, os as _os, re as _re
+    from datetime import datetime as _dt
+    data = request.get_json(silent=True) or {}
+    contact    = (data.get('contact') or '').strip()[:120]
+    categories = data.get('categories') or []
+    if not contact:
+        return jsonify({'ok': False, 'error': 'Contact is required'}), 400
+    if not isinstance(categories, list) or not categories:
+        return jsonify({'ok': False, 'error': 'Select at least one category'}), 400
+    # Basic validation: must look like @handle or email
+    if not (_re.match(r'^@[\w.]{2,}$', contact) or _re.match(r'^[^@\s]+@[^@\s]+\.[^@\s]+$', contact)):
+        return jsonify({'ok': False, 'error': 'Enter a Telegram @username or a valid email'}), 400
+    db_path = '/root/sg-arts-alert/sg_arts.db'
+    if not _os.path.exists(db_path):
+        return jsonify({'ok': False, 'error': 'Events service not ready yet'}), 503
+    try:
+        conn = _sqlite3.connect(db_path)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS subscriptions (
+                id        INTEGER PRIMARY KEY AUTOINCREMENT,
+                contact   TEXT NOT NULL,
+                categories TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                active    INTEGER DEFAULT 1,
+                UNIQUE(contact)
+            )""")
+        conn.execute("""
+            INSERT INTO subscriptions (contact, categories, created_at)
+            VALUES (?, ?, ?)
+            ON CONFLICT(contact) DO UPDATE SET
+                categories = excluded.categories,
+                created_at = excluded.created_at,
+                active = 1""",
+            (contact, _json.dumps(categories), _dt.utcnow().isoformat()))
+        conn.commit()
+        conn.close()
+        return jsonify({'ok': True})
+    except Exception as e:
+        app.logger.error('Events subscribe error: %s', e)
+        return jsonify({'ok': False, 'error': 'Temporarily unavailable'}), 500
+
 @app.errorhandler(404)
 def not_found(e):
     return jsonify({'error': 'Not found'}), 404

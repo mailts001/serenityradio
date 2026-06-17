@@ -52,8 +52,8 @@ const Aquarium3D = (() => {
     {
       name: 'SmallFishA',   // clownfish — bright orange, 3 white rings
       modelName: 'SmallFishA',
-      count: 22,  speed: 1.0, speedRange: 1.5,
-      radius: 6,  radiusRange: 0,   // fixed radius — no jitter within species
+      count: 14,  speed: 1.0, speedRange: 1.5,
+      radius: 6,  radiusRange: 1.5, // per-fish radius jitter → different orbit sizes → no exact overlap
       xCk: 1.0, yCk: 0.45, zCk: 0.95,
       tailSpeed: 10, heightOffset: -3.0, heightRange: 1.5,  // height band: -3.75 to -2.25
       fishLength: 1.8, fishWaveLength: 1.0, fishBendAmount: 2.0,
@@ -85,8 +85,8 @@ const Aquarium3D = (() => {
     {
       name: 'SmallFishB',   // blue chromis — vivid blue, iridescent stripe
       modelName: null,          // no WebGL Samples model — keeps procedural geo
-      count: 20,  speed: 1.5, speedRange: 2.0,
-      radius: 4,  radiusRange: 0,   // fixed radius — no jitter within species
+      count: 12,  speed: 1.5, speedRange: 2.0,
+      radius: 4,  radiusRange: 1.5, // per-fish radius jitter → different orbit sizes → no exact overlap
       xCk: 0.75, yCk: 0.55, zCk: 1.05,
       tailSpeed: 12, heightOffset: -1.0, heightRange: 1.5,  // height band: -1.75 to -0.25
       fishLength: 1.4, fishWaveLength: 1.0, fishBendAmount: 1.8,
@@ -184,7 +184,7 @@ const Aquarium3D = (() => {
       name: 'BigFishA',     // reef shark — sleek grey-blue, white belly, black fin tips
       modelName: 'BigFishA',
       count: 3,   speed: 0.4, speedRange: 0.3,
-      radius: 13, radiusRange: 0,   // fixed radius — no jitter within species
+      radius: 13, radiusRange: 1.5, // per-fish radius jitter → different orbit sizes → no exact overlap
       xCk: 0.85, yCk: 0.25, zCk: 1.0,
       tailSpeed: 4, heightOffset: 2.5, heightRange: 1.2,  // height band: 1.9 to 3.1
       fishLength: 5.5, fishWaveLength: 0.6, fishBendAmount: 1.2,
@@ -214,7 +214,7 @@ const Aquarium3D = (() => {
       name: 'BigFishB',     // giant tropical — bronze-copper, wide colour bands
       modelName: 'BigFishB',
       count: 2,   speed: 0.35, speedRange: 0.2,
-      radius: 15, radiusRange: 0,   // fixed radius — no jitter within species
+      radius: 15, radiusRange: 1.5, // per-fish radius jitter → different orbit sizes → no exact overlap
       xCk: 0.95, yCk: 0.20, zCk: 0.90,
       tailSpeed: 3.5, heightOffset: 3.5, heightRange: 1.0, // height band: 3.0 to 4.0
       fishLength: 6.5, fishWaveLength: 0.5, fishBendAmount: 1.0,
@@ -543,11 +543,14 @@ const Aquarium3D = (() => {
       const xCk = spec.xCk;
       const yCk = spec.yCk;
       const zCk = spec.zCk;
-      // Evenly distribute fish around the orbit, with a small random jitter
-      // Perfect even spacing — no random jitter to prevent same-species fish collisions
+      // Evenly distribute fish around the orbit + small random speed/radius variation
+      // so fish don't perfectly overlap at Lissajous self-intersection points.
       const clockOffset = (i / spec.count) * Math.PI * 2;
-      const speed  = spec.speed + Math.random() * spec.speedRange * 0.3;  // tighter speed range
+      const speed  = spec.speed + Math.random() * spec.speedRange * 0.5;
       const radius = spec.radius + (Math.random() - 0.5) * spec.radiusRange * 0.5;
+      // Per-fish fixed Y jitter — keeps same-species fish at slightly different heights
+      // even when their Lissajous orbits cross.
+      const yJitter = (Math.random() - 0.5) * 0.55;
 
       const mat = new THREE.ShaderMaterial({
         uniforms: {
@@ -571,7 +574,7 @@ const Aquarium3D = (() => {
       _scene.add(mesh);
       _disposables.push(mesh, mat);
 
-      _fish.push({ mesh, mat, speed, radius, xCk, yCk, zCk, clockOffset, spec });
+      _fish.push({ mesh, mat, speed, radius, xCk, yCk, zCk, clockOffset, yJitter, spec });
     }
   }
 
@@ -678,14 +681,15 @@ const Aquarium3D = (() => {
       const yCN = (fc - 0.01) * yCk;
       const zCN = (fc - 0.01) * zCk;
 
+      const yJ = f.yJitter || 0;
       f.mat.uniforms.uWorldPos.value.set(
         Math.sin(xC) * r,
-        Math.sin(yC) * rY + hOff,
+        Math.sin(yC) * rY + hOff + yJ,
         Math.cos(zC) * r,
       );
       f.mat.uniforms.uNextPos.value.set(
         Math.sin(xCN) * r,
-        Math.sin(yCN) * rY + hOff,
+        Math.sin(yCN) * rY + hOff + yJ,
         Math.cos(zCN) * r,
       );
       // Apply live-tuning to wave uniforms
@@ -752,15 +756,9 @@ const Aquarium3D = (() => {
     // Floor, coral and seaweed removed — reduces draw calls and GPU memory.
     // (Caustic system disabled — _updateCaustics no longer called from _loop)
 
-    // ── Back wall (depth)
-    const bwG = new THREE.PlaneGeometry(TW * 2.2, TH * 2.2);
-    const bwM = new THREE.MeshStandardMaterial({
-      color: 0x001a2d, transparent: true, opacity: 0.6, roughness: 0.1,
-    });
-    const bw = new THREE.Mesh(bwG, bwM);
-    bw.position.set(0, -TH * 0.1, -TD);
-    _scene.add(bw);
-    _disposables.push(bw, bwG, bwM);
+    // ── Background & depth fog (replaces hard back-wall plane which appeared as a solid rectangle)
+    _scene.background = new THREE.Color(0x000d1a);
+    _scene.fog = new THREE.FogExp2(0x001530, 0.040);  // natural underwater depth fade
 
     // Light shafts removed — user found the cone shapes distracting
 

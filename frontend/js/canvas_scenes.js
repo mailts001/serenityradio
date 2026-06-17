@@ -2587,6 +2587,13 @@ const CanvasScenes = (() => {
     const isNight = hr < 6 || hr >= 20;
     _drawSkyObjects(c, W, H, t, isNight);
 
+    // ── Shift ALL landscape elements UP so they show through the 3D train window.
+    // The camera's perspective maps the window opening to screen Y ≈ 40–56%.
+    // Default hill baseY = H*0.62 and groundY = H*0.68 sit below that (pure sky).
+    // Translating –H*0.18 moves hills to H*0.44 and ground to H*0.50 → visible.
+    c.save();
+    c.translate(0, -Math.round(H * 0.18));
+
     // ── Blended hill layers ───────────────────────────────────
     _drawBlendedHills(c, W, H, ba, bb, bl);
 
@@ -2622,6 +2629,8 @@ const CanvasScenes = (() => {
       const gy = groundY + Math.sin(gx * 0.08 + _tX*0.04) * H * 0.008;
       c.beginPath(); c.moveTo(gx, gy); c.lineTo(gx+4, gy - H*0.018); c.stroke();
     }
+
+    c.restore();  // ── end landscape-up shift ──────────────────
 
     // ── Snowfall (scene snow, not on glass) ───────────────────
     if (ba.name==='snow' || (bb.name==='snow' && bl>0.3)) {

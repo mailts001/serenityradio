@@ -2,6 +2,9 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
+<!-- Preload Three.js so train / aquarium activates without CDN lag -->
+<link rel="preload" href="https://cdn.jsdelivr.net/npm/three@0.149.0/build/three.min.js" as="script">
+<script defer src="https://cdn.jsdelivr.net/npm/three@0.149.0/build/three.min.js"></script>
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
@@ -405,6 +408,17 @@
   .events-footer { margin-top: .75rem; text-align: center; }
   .events-more { font-size: 11px; color: var(--text-muted); cursor: pointer; background: none; border: none; font-family: 'DM Sans',sans-serif; }
   .events-more:hover { color: var(--sage-light); }
+  #events-widget { transition: opacity .35s ease; }
+  .sub-tag {
+    font-size: 11px; padding: 3px 9px; border-radius: 20px; cursor: pointer;
+    background: rgba(255,255,255,.05); color: var(--text-muted);
+    border: 1px solid rgba(255,255,255,.10); font-family: 'DM Sans',sans-serif;
+    transition: background .15s, color .15s;
+  }
+  .sub-tag.active {
+    background: rgba(122,158,126,.22); color: var(--sage-light);
+    border-color: rgba(122,158,126,.35);
+  }
 </style>
 
 <link rel="stylesheet" href="/css/moat.css">
@@ -516,6 +530,7 @@
     <div style="text-align:center;margin-top:10px;margin-bottom:4px;font-size:10px;color:var(--text-muted);letter-spacing:.08em;text-transform:uppercase">Scene</div>
     <div class="mood-controls" id="scene-btns" style="flex-wrap:wrap;gap:8px;">
       <button class="mood-btn scene-btn active-scene" id="scene-sea"     onclick="switchScene('sea')"    title="Tropical ocean — free for everyone">🌊 Sea</button>
+      <button class="mood-btn scene-btn"              id="scene-outdoor" onclick="switchScene('outdoor')" title="Chill outdoors — see what's on in SG">🌳 Outdoor</button>
       <button class="mood-btn scene-btn"              id="scene-space"   onclick="switchScene('space')"  title="Deep space — Listener Pro">🌌 Space</button>
       <button class="mood-btn scene-btn"              id="scene-forest"  onclick="switchScene('forest')" title="Highland forest — Listener Pro">🌲 Forest</button>
       <button class="mood-btn scene-btn"              id="scene-snow"    onclick="switchScene('snow')"   title="Snow peaks — Listener Pro">🏔️ Snow</button>
@@ -556,10 +571,10 @@
     <button class="btn-full btn-amber" style="margin-top:1rem" onclick="openModal('modal-donate')">♡ Support This Station</button>
   </div>
 
-  <!-- ══ WHAT'S ON SG — Arts & Events Widget ══ -->
-  <div id="events-widget">
+  <!-- ══ WHAT'S ON SG — Arts & Events Widget (shown in Outdoor mode) ══ -->
+  <div id="events-widget" style="display:none">
     <div class="events-header">
-      <span class="events-title">🎭 What's On in Singapore</span>
+      <span class="events-title">🌳 What's On in Singapore</span>
       <a class="events-alert-btn" href="https://t.me/AceArtsAlertBot" target="_blank" rel="noopener">
         🔔 Get alerts
       </a>
@@ -569,6 +584,29 @@
     </div>
     <div class="events-footer">
       <button class="events-more" onclick="_eventsLoadMore()">Show more ↓</button>
+    </div>
+    <!-- Subscription mini-form -->
+    <div id="events-subscribe" style="margin-top:1rem;border-top:1px solid rgba(255,255,255,.07);padding-top:.9rem;">
+      <div class="events-title" style="margin-bottom:.55rem;">📬 Notify me about</div>
+      <div id="events-sub-tags" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:.65rem;">
+        <button class="sub-tag active" data-tag="art" onclick="_toggleSubTag(this)">🎨 Art</button>
+        <button class="sub-tag active" data-tag="music" onclick="_toggleSubTag(this)">🎵 Music</button>
+        <button class="sub-tag active" data-tag="theatre" onclick="_toggleSubTag(this)">🎭 Theatre</button>
+        <button class="sub-tag active" data-tag="dance" onclick="_toggleSubTag(this)">💃 Dance</button>
+        <button class="sub-tag" data-tag="film" onclick="_toggleSubTag(this)">🎬 Film</button>
+        <button class="sub-tag" data-tag="food" onclick="_toggleSubTag(this)">🍜 Food</button>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center;">
+        <input id="events-sub-input" type="text" placeholder="Telegram @username or email" style="
+          flex:1;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.12);
+          border-radius:8px;padding:7px 10px;color:var(--text);font-size:12px;
+          font-family:'DM Sans',sans-serif;outline:none;">
+        <button onclick="_submitEventsSub()" style="
+          background:rgba(122,158,126,.25);border:1px solid rgba(122,158,126,.35);
+          border-radius:8px;padding:7px 14px;color:var(--sage-light);font-size:12px;
+          font-family:'DM Sans',sans-serif;cursor:pointer;white-space:nowrap;">Save →</button>
+      </div>
+      <div id="events-sub-msg" style="font-size:11px;color:var(--sage-light);margin-top:.4rem;display:none;"></div>
     </div>
   </div>
 
@@ -1103,6 +1141,7 @@ const PRO_SCENES = new Set(['space', 'forest', 'snow', 'train', 'aquarium']);
 // Map scene name → canvas setScene key (CanvasScenes.setScene handles the rest)
 const SCENE_MODES = {
   sea:      'sea',
+  outdoor:  'sea',   // outdoor = sea bg + events panel visible
   space:    'space',
   forest:   'forest',
   snow:     'snow',
@@ -1128,6 +1167,17 @@ function switchScene(scene) {
   //   }, 30000);
   //   return;
   // }
+
+  // Show events widget only in outdoor mode
+  const ew = document.getElementById('events-widget');
+  if (ew) {
+    if (scene === 'outdoor') {
+      ew.style.display = '';
+      if (!ew.dataset.loaded) { _loadEvents(); ew.dataset.loaded = '1'; }
+    } else {
+      ew.style.display = 'none';
+    }
+  }
 
   _applyScene(scene);
 }
@@ -1676,11 +1726,46 @@ function toggleAmbient(btn) {
     }
   };
 
-  // Load on page ready + refresh every 15 min
-  document.addEventListener('DOMContentLoaded', () => {
-    _loadEvents();
-    setInterval(_loadEvents, 15 * 60 * 1000);
-  });
+  // No auto-load on DOMContentLoaded — events widget is hidden until Outdoor mode
+  // Refresh every 15 min if widget is visible
+  setInterval(() => {
+    const ew = document.getElementById('events-widget');
+    if (ew && ew.style.display !== 'none') _loadEvents();
+  }, 15 * 60 * 1000);
+
+  // ── Subscription tag toggle ──────────────────────────────────────
+  window._toggleSubTag = function(el) { el.classList.toggle('active'); };
+
+  // ── Submit event subscription ────────────────────────────────────
+  window._submitEventsSub = async function() {
+    const contact = document.getElementById('events-sub-input')?.value?.trim();
+    if (!contact) { _showSubMsg('Please enter a Telegram @username or email.', false); return; }
+    const tags = [...document.querySelectorAll('.sub-tag.active')].map(b => b.dataset.tag);
+    if (!tags.length) { _showSubMsg('Pick at least one category.', false); return; }
+    try {
+      const res  = await fetch('/api/events/subscribe', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ contact, categories: tags }),
+      });
+      const data = await res.json();
+      if (data.ok) {
+        _showSubMsg('✓ Saved! You\'ll be notified when matching events are added.', true);
+        document.getElementById('events-sub-input').value = '';
+      } else {
+        _showSubMsg(data.error || 'Something went wrong — try again.', false);
+      }
+    } catch(e) { _showSubMsg('Network error — try again later.', false); }
+  };
+
+  function _showSubMsg(txt, ok) {
+    const el = document.getElementById('events-sub-msg');
+    if (!el) return;
+    el.textContent = txt;
+    el.style.color = ok ? 'var(--sage-light)' : 'var(--amber)';
+    el.style.display = 'block';
+    setTimeout(() => { el.style.display = 'none'; }, 5000);
+  }
 })();
 </script>
 </body>
