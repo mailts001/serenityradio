@@ -57,7 +57,7 @@ async function switchChannel(channelId) {
     if (data.tracks && data.tracks.length > 0) {
       tracks       = data.tracks;
       currentTrack = 0;
-      loadTrack(isPlaying);
+      loadTrack(0);  // always start at first track of new channel
       if (typeof renderTrackList === 'function') renderTrackList(tracks);
     }
   } catch(e) { console.warn('Channel load failed:', e); }

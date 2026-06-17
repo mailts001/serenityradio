@@ -1715,6 +1715,7 @@ function toggleAmbient(btn) {
     const footer = document.querySelector('.events-footer');
     if (footer) footer.style.display = events.length < _PAGE ? 'none' : '';
   }
+  window._loadEvents = _loadEvents;  // expose so switchScene can call it
 
   window._eventsLoadMore = async function() {
     const more = await _fetchEvents(_eventsOffset, _PAGE);
