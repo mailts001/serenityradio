@@ -39,7 +39,8 @@ const Train3D = (() => {
   let _swayT   = 0;
   let _lastNow = 0;
   let _carriageGroup = null;
-  let _bgCanvas  = null;  // reference to bg-canvas (kept for compat but not used as texture)
+  let _bgCanvas  = null;  // reference to bg-canvas element (exterior scenery source)
+  let _bgTex     = null;  // CanvasTexture wrapping _bgCanvas → set as scene.background
 
   // ─────────────────────────────────────────────────────────────────
   //  PUBLIC API
@@ -87,6 +88,7 @@ const Train3D = (() => {
       });
       _scene = null;
     }
+    if (_bgTex)  { _bgTex.dispose();  _bgTex  = null; }
     if (_R)      { _R.dispose();      _R      = null; }
     _cam = null;
     _carriageGroup = null;
@@ -105,23 +107,27 @@ const Train3D = (() => {
     // Force resize to recalculate on every launch (prevents stretch after scene switch)
     _W = 0; _H = 0;
 
-    // ── Renderer — alpha:true so window opening (no geometry) is transparent.
-    // bg-canvas (z-index:0) shows through the transparent pixels via CSS compositing.
-    // The canvas_scenes.js exterior animation is already shifted (translate -H*0.18)
-    // so the landscape/horizon appears in the correct screen Y band.
+    // ── Renderer — opaque (alpha:false).
+    // The exterior scene is fed in via scene.background = CanvasTexture(bgCanvas).
+    // THREE.js fills ungeometrized pixels with the background texture, so the
+    // window opening (no geometry) shows the animated exterior landscape.
+    // Opaque geometry (walls / ceiling / floor) hides the background everywhere else.
     _R = new THREE.WebGLRenderer({
       canvas:          _el,
       antialias:       true,
-      alpha:           true,   // transparent canvas — window area shows bg-canvas through
+      alpha:           false,
       powerPreference: 'high-performance',
     });
-    _R.setClearColor(0x000000, 0);  // fully transparent clear
+    _R.setClearColor(0x0a0f08);   // dark interior fallback (behind bg texture)
     _R.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
     _R.shadowMap.enabled = false;
 
-    // ── Scene — no background; transparent pixels reveal bg-canvas exterior ──
+    // ── Scene — background = live exterior canvas texture ─────────
     _scene = new THREE.Scene();
-    // scene.background intentionally NOT set — leave transparent
+    if (_bgCanvas) {
+      _bgTex = new THREE.CanvasTexture(_bgCanvas);
+      _scene.background = _bgTex;
+    }
 
     // ── Camera ────────────────────────────────────────────────────
     // Narrow FOV + close to window → window fills ~70% of the vertical view.
@@ -196,7 +202,7 @@ const Train3D = (() => {
     _buildWalls();
     _buildWindowWall();    // opaque panels around opening — covers backdrop in wall areas
     _buildWindowFrame();   // decorative brass+green frame bars
-    _buildGlassPane();     // subtle glass tint over window opening
+    // No glass pane — background texture shows through the window gap naturally
     _buildCeiling();
     _buildSeats();
     _buildLuggageRacks();
@@ -630,10 +636,11 @@ const Train3D = (() => {
     const lookY = 1.5 + Math.sin(_swayT * 0.7) * 0.008;
     _cam.lookAt(_cam.position.x * 0.08, lookY, WIN_Z);
 
-    // ── Refresh exterior texture & render ────────────────────────
-    // bg-canvas was redrawn this frame by canvas_scenes._trainFrame();
-    // mark the CanvasTexture dirty so Three.js re-uploads it to the GPU.
-    // bg-canvas exterior shows through transparent window pixels via CSS compositing
+    // ── Refresh exterior background texture & render ─────────────
+    // bg-canvas was just redrawn by canvas_scenes._trainFrame() for this frame.
+    // Marking needsUpdate=true re-uploads the canvas pixels to the GPU texture,
+    // so the scene.background shows the freshly animated exterior landscape.
+    if (_bgTex) _bgTex.needsUpdate = true;
     _R.render(_scene, _cam);
   }
 
