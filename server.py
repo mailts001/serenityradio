@@ -515,6 +515,48 @@ def api_billing_portal(): return handle_portal()
 @app.route('/api/billing/webhook', methods=['POST'])
 def api_billing_webhook(): return handle_webhook()
 
+# ────────────────────────────────────────────────────────────────
+#  SG Arts & Events  (reads from sg-arts-alert SQLite on same VPS)
+# ────────────────────────────────────────────────────────────────
+@app.route('/api/events/upcoming', methods=['GET'])
+def api_events_upcoming():
+    """Return upcoming Singapore arts events from the sg-arts-alert database."""
+    import sqlite3 as _sqlite3, json as _json, os as _os
+    limit = min(int(request.args.get('limit', 8)), 20)
+    db_path = '/root/sg-arts-alert/sg_arts.db'
+    if not _os.path.exists(db_path):
+        return jsonify({'events': [], 'notice': 'Events DB not found — scanner may not have run yet'})
+    try:
+        conn = _sqlite3.connect(db_path)
+        conn.row_factory = _sqlite3.Row
+        rows = conn.execute(
+            """SELECT title, url, date_start, venue, categories,
+                      price_min, price_max, source
+               FROM events
+               WHERE date_start >= date('now')
+               ORDER BY date_start
+               LIMIT ?""",
+            (limit,)
+        ).fetchall()
+        conn.close()
+        events = []
+        for r in rows:
+            cats = _json.loads(r['categories'] or '[]')
+            pmin = r['price_min']
+            events.append({
+                'title':      r['title'],
+                'url':        r['url'],
+                'date':       (r['date_start'] or '')[:10],
+                'venue':      r['venue'] or '',
+                'categories': cats[:2],          # first 2 tags max
+                'price':      f'SGD {pmin:.0f}' if pmin else 'Check site',
+                'source':     r['source'],
+            })
+        return jsonify({'events': events, 'count': len(events)})
+    except Exception as e:
+        app.logger.error('Events API error: %s', e)
+        return jsonify({'events': [], 'error': 'Temporarily unavailable'})
+
 @app.errorhandler(404)
 def not_found(e):
     return jsonify({'error': 'Not found'}), 404

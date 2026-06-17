@@ -352,6 +352,59 @@
   }
   .cinema-exit:hover { color: #fff; }
 </style>
+  /* ── What's On SG — arts & events widget ── */
+  #events-widget {
+    background: rgba(15,20,35,0.72);
+    backdrop-filter: blur(12px);
+    border: 1px solid rgba(255,255,255,.08);
+    border-radius: 18px;
+    padding: 1.1rem 1.2rem;
+    margin-top: 1.4rem;
+  }
+  .events-header {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 0.85rem;
+  }
+  .events-title {
+    font-size: 11px; letter-spacing: .1em; text-transform: uppercase;
+    color: var(--text-muted); font-weight: 500;
+  }
+  .events-alert-btn {
+    font-size: 11px; padding: 4px 12px; border-radius: 50px;
+    background: rgba(122,158,126,.15); color: var(--sage-light);
+    border: 1px solid rgba(122,158,126,.3); cursor: pointer;
+    font-family: 'DM Sans',sans-serif; text-decoration: none;
+    transition: background .2s;
+  }
+  .events-alert-btn:hover { background: rgba(122,158,126,.28); }
+  .event-row {
+    display: flex; align-items: flex-start; gap: 10px;
+    padding: 7px 0; border-bottom: 1px solid rgba(255,255,255,.05);
+  }
+  .event-row:last-child { border-bottom: none; padding-bottom: 0; }
+  .event-date {
+    font-size: 11px; color: var(--amber); font-weight: 500;
+    min-width: 56px; padding-top: 1px; letter-spacing: .02em;
+  }
+  .event-info { flex: 1; min-width: 0; }
+  .event-name {
+    font-size: 13px; color: var(--text); font-weight: 500;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    text-decoration: none; display: block;
+  }
+  .event-name:hover { color: var(--sage-light); }
+  .event-meta { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+  .event-tag {
+    display: inline-block; font-size: 10px;
+    background: rgba(107,127,168,.18); color: var(--dusk-light);
+    border-radius: 4px; padding: 1px 6px; margin-right: 4px;
+    text-transform: capitalize;
+  }
+  .events-empty { font-size: 13px; color: var(--text-muted); text-align: center; padding: 1rem 0; }
+  .events-footer { margin-top: .75rem; text-align: center; }
+  .events-more { font-size: 11px; color: var(--text-muted); cursor: pointer; background: none; border: none; font-family: 'DM Sans',sans-serif; }
+  .events-more:hover { color: var(--sage-light); }
+
 <link rel="stylesheet" href="/css/moat.css">
 <link rel="stylesheet" href="/css/moat2.css">
 <link rel="manifest" href="/manifest.json">
@@ -499,6 +552,22 @@
       <span id="remaining-label">$5,680 to go</span>
     </div>
     <button class="btn-full btn-amber" style="margin-top:1rem" onclick="openModal('modal-donate')">♡ Support This Station</button>
+  </div>
+
+  <!-- ══ WHAT'S ON SG — Arts & Events Widget ══ -->
+  <div id="events-widget">
+    <div class="events-header">
+      <span class="events-title">🎭 What's On in Singapore</span>
+      <a class="events-alert-btn" href="https://t.me/AceArtsAlertBot" target="_blank" rel="noopener">
+        🔔 Get alerts
+      </a>
+    </div>
+    <div id="events-list">
+      <div class="events-empty">Loading upcoming events…</div>
+    </div>
+    <div class="events-footer">
+      <button class="events-more" onclick="_eventsLoadMore()">Show more ↓</button>
+    </div>
   </div>
 
   <!-- ══ USER ACCOUNT SECTION ══ -->
@@ -1529,6 +1598,88 @@ function toggleAmbient(btn) {
 <!-- Wellness init (script loaded earlier with other /js/ modules) -->
 <script>
   document.addEventListener('DOMContentLoaded', () => { Wellness.init(); });
+</script>
+
+<!-- ══ What's On SG — arts & events widget ══ -->
+<script>
+(function() {
+  'use strict';
+  const MONTH = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  let _eventsOffset  = 0;
+  const _PAGE        = 6;   // events per page
+
+  function _fmtDate(iso) {
+    if (!iso) return '?';
+    const d = new Date(iso + 'T00:00:00');
+    return `${d.getDate()} ${MONTH[d.getMonth()]}`;
+  }
+
+  function _renderEvents(events, append) {
+    const list = document.getElementById('events-list');
+    if (!append) list.innerHTML = '';
+
+    if (!events || events.length === 0) {
+      if (!append) {
+        list.innerHTML = '<div class="events-empty">No upcoming events yet — check back soon ✦</div>';
+      }
+      const moreBtn = document.querySelector('.events-footer');
+      if (moreBtn) moreBtn.style.display = 'none';
+      return;
+    }
+
+    const frag = document.createDocumentFragment();
+    events.forEach(ev => {
+      const row  = document.createElement('div');
+      row.className = 'event-row';
+      const tags = (ev.categories || []).map(t => `<span class="event-tag">${t}</span>`).join('');
+      const venue = ev.venue ? `<span style="margin-right:4px">📍 ${ev.venue.replace(/,.*$/,'')}</span>` : '';
+      row.innerHTML = `
+        <div class="event-date">${_fmtDate(ev.date)}</div>
+        <div class="event-info">
+          <a class="event-name" href="${ev.url || '#'}" target="_blank" rel="noopener" title="${ev.title}">${ev.title}</a>
+          <div class="event-meta">${venue}${tags}<span style="opacity:.6">${ev.price}</span></div>
+        </div>`;
+      frag.appendChild(row);
+    });
+    list.appendChild(frag);
+  }
+
+  async function _fetchEvents(offset, limit) {
+    try {
+      const res = await fetch(`/api/events/upcoming?limit=${limit + offset}`);
+      const data = await res.json();
+      return (data.events || []).slice(offset, offset + limit);
+    } catch (e) {
+      return [];
+    }
+  }
+
+  async function _loadEvents() {
+    _eventsOffset = 0;
+    const events = await _fetchEvents(0, _PAGE);
+    _renderEvents(events, false);
+    _eventsOffset = events.length;
+    // Hide "Show more" if fewer than a full page returned
+    const footer = document.querySelector('.events-footer');
+    if (footer) footer.style.display = events.length < _PAGE ? 'none' : '';
+  }
+
+  window._eventsLoadMore = async function() {
+    const more = await _fetchEvents(_eventsOffset, _PAGE);
+    _renderEvents(more, true);
+    _eventsOffset += more.length;
+    if (more.length < _PAGE) {
+      const footer = document.querySelector('.events-footer');
+      if (footer) footer.style.display = 'none';
+    }
+  };
+
+  // Load on page ready + refresh every 15 min
+  document.addEventListener('DOMContentLoaded', () => {
+    _loadEvents();
+    setInterval(_loadEvents, 15 * 60 * 1000);
+  });
+})();
 </script>
 </body>
 </html>
