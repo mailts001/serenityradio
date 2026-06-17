@@ -1392,47 +1392,52 @@ const CanvasScenes = (() => {
     // Override star screen to show full canvas (no horizon clip)
     _starPositions = null;
     const stars = _getStarPositions(w, h);
-    stars.forEach(s => {
-      const twinkle = 0.70 + 0.30 * Math.sin(t * 0.016 + s.mag * 4.1);
-      const a = twinkle;
+    stars.forEach((s, si) => {
+      // Each star blinks at its own unique rate — mix slow and fast twinklers
+      const rate    = 0.006 + (si % 7) * 0.004 + (s.mag % 1) * 0.005;
+      // Wide amplitude: some stars blink nearly off, others just pulse gently
+      const amp     = 0.30 + (si % 5) * 0.14;
+      const twinkle = (1 - amp) + amp * Math.abs(Math.sin(t * rate + s.mag * 6.3 + si * 1.17));
+      const a = Math.max(0.05, twinkle);
       const r = Math.max(0.5, 3.2 - s.mag * 0.9);
       if (s.mag < 1.2) {
         const glow = _ctx.createRadialGradient(s.sx, s.sy, 0, s.sx, s.sy, r*5);
-        glow.addColorStop(0, `rgba(220,235,255,${a*0.40})`);
+        glow.addColorStop(0, `rgba(220,235,255,${(a*0.45).toFixed(3)})`);
         glow.addColorStop(1, 'rgba(180,210,255,0)');
         _ctx.fillStyle = glow; _ctx.beginPath(); _ctx.arc(s.sx, s.sy, r*5, 0, Math.PI*2); _ctx.fill();
       }
       _ctx.beginPath(); _ctx.arc(s.sx, s.sy, r, 0, Math.PI*2);
-      _ctx.fillStyle = s.mag < 0.5 ? `rgba(255,255,220,${a})` : s.mag < 1.5 ? `rgba(220,235,255,${a})` : `rgba(255,248,230,${a})`;
+      _ctx.fillStyle = s.mag < 0.5 ? `rgba(255,255,220,${a.toFixed(3)})` : s.mag < 1.5 ? `rgba(220,235,255,${a.toFixed(3)})` : `rgba(255,248,230,${a.toFixed(3)})`;
       _ctx.fill();
     });
 
-    // ── Aurora borealis — subtle curtain near lower-middle of sky ──────────
+    // ── Aurora borealis — flowing curtain with visible ripple movement ────
     {
-      const aBase  = h * 0.55;   // curtain centred here
-      const aWave  = Math.sin(t * 0.00018) * 0.05;  // slow vertical drift
-      const aC     = h * (0.55 + aWave);
-      const aAlpha = 0.11 + 0.04 * Math.sin(t * 0.00014);  // gentle pulse
+      const aAlpha = 0.13 + 0.05 * Math.sin(t * 0.00045);  // pulse
       const colors = [
-        { r:0,  g:220, b:130, a: aAlpha },        // green
-        { r:60, g:120, b:255, a: aAlpha * 0.55 }, // blue-violet
-        { r:180,g:30,  b:255, a: aAlpha * 0.30 }, // purple accent
+        { r:0,  g:220, b:130, a: aAlpha },        // green (dominant)
+        { r:40, g:100, b:255, a: aAlpha * 0.60 }, // blue-violet
+        { r:160,g:20,  b:255, a: aAlpha * 0.32 }, // purple accent
       ];
       colors.forEach((col, ci) => {
-        const shift = w * (ci * 0.33 + 0.04 * Math.sin(t * 0.00011 + ci));
-        for (let xi = 0; xi < w; xi += 4) {
-          // Vertical ribbon: amplitude varies with position and time
-          const waveY = Math.sin((xi + shift) * 0.010 + t * 0.00020 + ci * 2.1) * h * 0.055
-                      + Math.sin((xi + shift) * 0.026 + t * 0.00031 + ci * 1.3) * h * 0.020;
-          const top  = aC + waveY - h * 0.055;
-          const bot  = aC + waveY + h * 0.055;
+        // Each colour layer has its own horizontal drift offset
+        const hDrift = t * (0.035 + ci * 0.018);  // noticeable horizontal drift
+        for (let xi = 0; xi < w; xi += 3) {
+          // Multi-frequency wave for organic curtain shape — higher freq for ripple effect
+          const wx   = xi + hDrift;
+          const waveY = Math.sin(wx * 0.014 + ci * 2.1) * h * 0.090   // slow large wave
+                      + Math.sin(wx * 0.035 + t*0.00065 + ci) * h * 0.040  // medium ripple
+                      + Math.sin(wx * 0.072 + t*0.00120) * h * 0.018;  // fast shimmer
+          const aC   = h * (0.48 + ci * 0.04);  // each color band at slightly different height
+          const top  = aC + waveY - h * 0.07;
+          const bot  = aC + waveY + h * 0.07;
           const ray  = _ctx.createLinearGradient(xi, top, xi, bot);
           ray.addColorStop(0,   `rgba(${col.r},${col.g},${col.b},0)`);
-          ray.addColorStop(0.4, `rgba(${col.r},${col.g},${col.b},${(col.a).toFixed(3)})`);
-          ray.addColorStop(0.6, `rgba(${col.r},${col.g},${col.b},${(col.a * 0.6).toFixed(3)})`);
+          ray.addColorStop(0.35,`rgba(${col.r},${col.g},${col.b},${col.a.toFixed(3)})`);
+          ray.addColorStop(0.65,`rgba(${col.r},${col.g},${col.b},${(col.a*0.55).toFixed(3)})`);
           ray.addColorStop(1,   `rgba(${col.r},${col.g},${col.b},0)`);
           _ctx.fillStyle = ray;
-          _ctx.fillRect(xi, top, 4, bot - top);
+          _ctx.fillRect(xi, top, 3, bot - top);
         }
       });
     }
@@ -1891,7 +1896,7 @@ const CanvasScenes = (() => {
 
     // Vertical pan — look up reveals more sky/peaks, look down reveals snowfield
     const altShift = (_panAlt / 50) * h * 0.40;
-    const groundY  = h * 0.62 + altShift;
+    const groundY  = h * 0.70 + altShift;
 
     const isNight = hr < 6 || hr >= 20;
 
@@ -2727,16 +2732,21 @@ const CanvasScenes = (() => {
       });
     }
 
-    // ── Heavy rain (highland/forest biomes, outside the glass) ─
-    if ((ba.name==='highland'||ba.name==='forest') && bl > 0.6) {
-      c.strokeStyle = 'rgba(180,200,220,0.25)';
-      c.lineWidth   = 1;
-      const rSpacing = 18;
-      for (let rx = ((-_tX*4.5)%rSpacing+rSpacing)%rSpacing - rSpacing; rx < W+rSpacing; rx+=rSpacing) {
-        c.beginPath();
-        c.moveTo(rx, 0);
-        c.lineTo(rx - H*0.12, H);  // angled by train speed
-        c.stroke();
+    // ── Heavy rain (highland/forest biomes) — fade smoothly, never sudden ─
+    {
+      // Show rain when IN highland/forest (fade out as we leave, fade in as we enter)
+      const rainStr = (ba.name==='highland'||ba.name==='forest') ? (1 - bl * 0.9) :
+                      (bb.name==='highland'||bb.name==='forest') ? (bl * 0.9)       : 0;
+      if (rainStr > 0.02) {
+        c.strokeStyle = `rgba(180,200,220,${(0.22 * rainStr).toFixed(3)})`;
+        c.lineWidth   = 1;
+        const rSpacing = 22;
+        for (let rx = ((-_tX*4.5)%rSpacing+rSpacing)%rSpacing - rSpacing; rx < W+rSpacing; rx+=rSpacing) {
+          c.beginPath();
+          c.moveTo(rx, 0);
+          c.lineTo(rx - H*0.10, H);
+          c.stroke();
+        }
       }
     }
 
@@ -2988,26 +2998,57 @@ const CanvasScenes = (() => {
   function _drawDetails(c, W, H, details, t, grndC, fogC) {
     if (!details || !details.length) return;
 
-    // Telegraph / power poles (every 95px, medium parallax)
+    // Telegraph / power poles — random spacing and height, not uniform
     if (details.includes('poles')) {
-      const poleSpd = 0.55, poleSpacing = 95;
+      const poleSpd = 0.55;
+      // Each pole 'pi' has a seeded random spacing offset so gaps are irregular
+      // We accumulate world positions rather than using a fixed grid
+      const BASE_SP = 105;  // base spacing (wider than before)
+      // Gather all pole world-x positions visible on screen
       const poleViewX = _tX * poleSpd;
-      const startP = Math.floor(poleViewX / poleSpacing);
-      c.strokeStyle = 'rgba(50,40,30,0.85)';
-      for (let pi=startP-1; pi <= startP + Math.ceil(W/poleSpacing)+1; pi++) {
-        const px = pi * poleSpacing - poleViewX;
-        const pTop = H*0.38, pBot = H*0.70;
-        const pnx = (pi+1)*poleSpacing - poleViewX;  // next pole x
-        c.lineWidth = 2.5;
-        c.beginPath(); c.moveTo(px, pTop); c.lineTo(px, pBot); c.stroke();
-        c.lineWidth = 1;
+      // Build poles lazily using seeded offsets: world_x[pi] = sum of spacings up to pi
+      // Approximate range: how many poles could span 3× screen width at BASE_SP
+      const approxCount = Math.ceil(W * 3 / BASE_SP) + 4;
+      const startEst = Math.max(0, Math.floor(poleViewX / BASE_SP) - 2);
+      // Collect visible poles
+      const polesToDraw = [];
+      for (let pi = startEst; pi < startEst + approxCount; pi++) {
+        const rp = _srng(pi * 6571 + 13);
+        const spacing = BASE_SP + rp() * 80 - 20;  // 85px–165px spacing
+        const worldX = pi * BASE_SP + rp() * 40;   // jitter world position
+        const screenX = worldX - poleViewX;
+        if (screenX < -20 || screenX > W + 20) continue;
+        polesToDraw.push({ pi, screenX, spacing });
+      }
+      // Draw poles + wires
+      for (let di = 0; di < polesToDraw.length; di++) {
+        const { pi, screenX } = polesToDraw[di];
+        const rp = _srng(pi * 6571 + 13); rp(); // advance past spacing draw
+        const heightFrac = 0.28 + rp() * 0.10;   // pole height varies
+        const pTop = H * (0.40 - heightFrac);
+        const pBot = H * 0.695;
+        const thick = 1.8 + rp() * 1.2;
+        c.strokeStyle = 'rgba(50,40,30,0.85)';
+        c.lineWidth = thick;
+        c.beginPath(); c.moveTo(screenX, pTop); c.lineTo(screenX, pBot); c.stroke();
         // Crossbar
-        c.beginPath(); c.moveTo(px-16,pTop+H*0.03); c.lineTo(px+16,pTop+H*0.03); c.stroke();
-        // Wires to next pole (2 wires)
-        c.strokeStyle='rgba(40,35,28,0.50)';
-        c.beginPath(); c.moveTo(px+0,pTop+H*0.025); c.lineTo(pnx+0,pTop+H*0.025); c.stroke();
-        c.beginPath(); c.moveTo(px-12,pTop+H*0.03); c.lineTo(pnx-12,pTop+H*0.03); c.stroke();
-        c.strokeStyle='rgba(50,40,30,0.85)';
+        const cbW = 12 + rp() * 10;
+        c.lineWidth = 1;
+        c.beginPath(); c.moveTo(screenX-cbW, pTop+H*0.03); c.lineTo(screenX+cbW, pTop+H*0.03); c.stroke();
+        // Wires to next visible pole (catenary sag)
+        if (di + 1 < polesToDraw.length) {
+          const nx = polesToDraw[di+1].screenX;
+          const midX = (screenX + nx) * 0.5;
+          c.strokeStyle = 'rgba(40,35,28,0.42)';
+          c.lineWidth = 0.8;
+          for (let w = 0; w < 2; w++) {
+            const wOff = w * 9 - 4;
+            c.beginPath();
+            c.moveTo(screenX + wOff, pTop + H*0.025);
+            c.quadraticCurveTo(midX, pTop + H*0.035 + H*0.008, nx + wOff, pTop + H*0.025);
+            c.stroke();
+          }
+        }
       }
     }
 
@@ -3028,40 +3069,69 @@ const CanvasScenes = (() => {
       }
     }
 
-    // Sheep dots on far hills
+    // Sheep dots on far hills — scroll LEFT (subtract _tX)
     if (details.includes('sheep')) {
       const sheepSpd=0.12;
-      const sr = _srng(9001);
-      for (let si=0; si<8; si++) {
-        const sheepX = ((sr()*W*3 + _tX*sheepSpd) % (W*3.2)) - W*0.1;
-        const sheepY = H*(0.56+sr()*0.06);
-        c.fillStyle='rgba(240,238,232,0.80)';
-        c.beginPath(); c.ellipse(sheepX,sheepY,H*0.014,H*0.010,0,0,Math.PI*2); c.fill();
+      const SHEEP_WORLD = W * 4.0;
+      for (let si=0; si<10; si++) {
+        const sr2 = _srng(9001 + si * 337);
+        // Fixed world position per sheep, scroll left
+        const worldX = sr2() * SHEEP_WORLD;
+        const sheepX = ((worldX - _tX * sheepSpd) % SHEEP_WORLD + SHEEP_WORLD) % SHEEP_WORLD - W*0.05;
+        if (sheepX < -20 || sheepX > W+20) continue;
+        const sheepY = H*(0.53 + sr2()*0.08);
+        const sz = 0.010 + sr2()*0.006;
+        c.fillStyle='rgba(240,238,232,0.82)';
+        c.beginPath(); c.ellipse(sheepX, sheepY, H*sz*1.4, H*sz, 0, 0, Math.PI*2); c.fill();
+        // tiny head
+        c.beginPath(); c.arc(sheepX + H*sz*1.1, sheepY - H*sz*0.5, H*sz*0.5, 0, Math.PI*2); c.fill();
       }
     }
 
-    // Town buildings
+    // Town buildings — clustered groups, varied heights/widths, irregular spacing
     if (details.includes('buildings')) {
-      const bSpd=0.50, bSpacing=80;
+      const bSpd = 0.50;
       const bViewX = _tX * bSpd;
-      const startB = Math.floor(bViewX / bSpacing);
-      for (let bi=startB-1; bi <= startB+Math.ceil(W/bSpacing)+3; bi++) {
-        const r2 = _srng(bi*5381+200);
-        const bx = bi*bSpacing - bViewX + r2()*30;
-        const bh = H*(0.09 + r2()*0.14);
-        const bw = H*(0.04 + r2()*0.06);
-        const by = H*0.68 - bh;
-        c.fillStyle=`rgba(${100+r2()*40|0},${95+r2()*35|0},${90+r2()*30|0},0.88)`;
-        c.fillRect(bx, by, bw, bh);
-        // Roof
-        c.fillStyle=`rgba(80,68,58,0.90)`;
-        c.beginPath();
-        c.moveTo(bx-2,by); c.lineTo(bx+bw/2,by-bh*0.25); c.lineTo(bx+bw+2,by);
-        c.closePath(); c.fill();
-        // Windows
-        c.fillStyle='rgba(255,240,180,0.55)';
-        for (let wr=0;wr<2;wr++) for(let wc=0;wc<2;wc++) {
-          c.fillRect(bx+bw*0.15+wc*bw*0.40, by+bh*0.20+wr*bh*0.38, bw*0.22, bh*0.18);
+      // Use clusters: every ~280px world units a cluster of 2–5 buildings
+      const CLUSTER_SPACING = 280;
+      const startC = Math.max(0, Math.floor(bViewX / CLUSTER_SPACING) - 1);
+      for (let ci = startC; ci <= startC + Math.ceil(W / CLUSTER_SPACING) + 2; ci++) {
+        const rc = _srng(ci * 8191 + 7);
+        const clusterX = ci * CLUSTER_SPACING + rc() * 60 - bViewX;
+        if (clusterX > W + 80) continue;
+        const numBuildings = 2 + Math.floor(rc() * 4);  // 2–5 buildings per cluster
+        let curX = clusterX;
+        for (let bi = 0; bi < numBuildings; bi++) {
+          const r2 = _srng(ci * 8191 + bi * 3779 + 200);
+          const bw = H * (0.038 + r2() * 0.072);   // wider range of widths
+          const bh = H * (0.07  + r2() * 0.20);    // taller range 7–27% of screen height
+          const gap = r2() * 18 - 4;                // slight gap or overlap between buildings
+          const bx = curX;
+          const by = H * 0.68 - bh;
+          curX += bw + gap;
+          if (bx > W + 20 || bx + bw < -20) continue;
+          // Wall
+          const wr = 95+r2()*45|0, wg = 90+r2()*40|0, wb = 85+r2()*35|0;
+          c.fillStyle = `rgba(${wr},${wg},${wb},0.88)`;
+          c.fillRect(bx, by, bw, bh);
+          // Roof (50% chance pitched, 50% flat)
+          c.fillStyle = `rgba(${55+r2()*40|0},${50+r2()*35|0},${45+r2()*25|0},0.92)`;
+          if (r2() > 0.45) {
+            c.beginPath();
+            c.moveTo(bx-1, by); c.lineTo(bx+bw/2, by - bh*(0.18+r2()*0.14)); c.lineTo(bx+bw+1, by);
+            c.closePath(); c.fill();
+          } else {
+            c.fillRect(bx-1, by-H*0.012, bw+2, H*0.012);  // flat parapet
+          }
+          // Windows — random rows and cols
+          const winRows = 1 + Math.floor(r2()*3);
+          const winCols = 1 + Math.floor(r2()*2);
+          c.fillStyle = `rgba(255,240,${150+r2()*80|0},${0.35+r2()*0.45})`;
+          for (let wr2=0; wr2<winRows; wr2++) for(let wc=0; wc<winCols; wc++) {
+            const wx = bx + bw*(0.12 + wc*(0.78/winCols));
+            const wy = by + bh*(0.15 + wr2*(0.72/winRows));
+            c.fillRect(wx, wy, bw*0.22, bh*0.14);
+          }
         }
       }
       // Church steeple (once per visible range)
@@ -3111,10 +3181,11 @@ const CanvasScenes = (() => {
       }
     }
 
-    // Drifting mist patches (highland)
+    // Drifting mist patches (highland) — scroll LEFT (subtract _tX)
     if (details.includes('mist')) {
       for (let mi=0; mi<5; mi++) {
-        const mx = ((_tX*0.22+mi*W*0.4)%(W*2.2))-W*0.1;
+        const MIST_WORLD = W * 2.2;
+        const mx = ((mi*W*0.44 - _tX*0.22) % MIST_WORLD + MIST_WORLD) % MIST_WORLD - W*0.1;
         const my = H*(0.52+mi*0.028);
         const mg = c.createRadialGradient(mx, my, 0, mx, my, H*0.12);
         mg.addColorStop(0,'rgba(200,205,195,0.38)');

@@ -725,32 +725,57 @@ def api_events_concierge():
             except (ValueError, TypeError):
                 pass
 
-        rows = conn.execute(
-            f"""SELECT title, url, date_start, venue, categories,
-                      price_min, price_max, source
-               FROM events
-               WHERE {' AND '.join(where_clauses)}
-               ORDER BY date_start
-               LIMIT 80""",
-            params
-        ).fetchall()
+        def _query_events(clauses, prms):
+            return conn.execute(
+                f"""SELECT title, url, date_start, venue, categories,
+                          price_min, price_max, source
+                   FROM events
+                   WHERE {' AND '.join(clauses)}
+                   ORDER BY date_start
+                   LIMIT 80""",
+                prms
+            ).fetchall()
+
+        def _score_rows(rows):
+            out = []
+            for r in rows:
+                cats_str  = (r['categories'] or '').lower()
+                title_str = r['title'].lower()
+                score = sum(1 for kw in search_cats
+                            if kw in cats_str or kw in title_str)
+                if score > 0:
+                    ev = _fmt_event_row(r, _json.loads)
+                    ev['_score'] = score
+                    out.append(ev)
+            out.sort(key=lambda e: (-e['_score'], e['date'] or 'z'))
+            return out[:4]
+
+        rows = _query_events(where_clauses, params)
+        scored = _score_rows(rows)
+
+        # ── If no keyword matches, fall back: drop date/budget filter, score all upcoming ──
+        used_fallback = False
+        if not scored:
+            fallback_rows = _query_events(["date_start >= date('now')"], [])
+            scored = _score_rows(fallback_rows)
+            if scored:
+                used_fallback = True
+            else:
+                # Last resort: return ANY upcoming events sorted by date
+                any_rows = conn.execute(
+                    """SELECT title, url, date_start, venue, categories,
+                              price_min, price_max, source
+                       FROM events WHERE date_start >= date('now')
+                       ORDER BY date_start LIMIT 4"""
+                ).fetchall()
+                scored = [_fmt_event_row(r, _json.loads) for r in any_rows]
+                if scored:
+                    used_fallback = True
+
         conn.close()
-
-        scored = []
-        for r in rows:
-            cats_str = (r['categories'] or '').lower()
-            title_str = r['title'].lower()
-            score = sum(1 for kw in search_cats
-                        if kw in cats_str or kw in title_str)
-            if score > 0:
-                ev = _fmt_event_row(r, _json.loads)
-                ev['_score'] = score
-                scored.append(ev)
-
-        scored.sort(key=lambda e: (-e['_score'], e['date'] or 'z'))
-        top = scored[:4]
+        top = scored
         for e in top:
-            del e['_score']
+            e.pop('_score', None)
 
         if top:
             ctx_parts = []
@@ -761,7 +786,11 @@ def api_events_concierge():
             if budget is not None:
                 ctx_parts.append(f"within ${budget} budget")
             ctx_str = f" ({', '.join(ctx_parts)})" if ctx_parts else " right now"
-            reply = (f"Here are {len(top)} {matched_mood} experiences in Singapore{ctx_str}:")
+            if used_fallback and (date_from or date_to or budget is not None):
+                reply = (f"No events found for those exact dates/budget, but here are "
+                         f"{len(top)} {matched_mood} upcoming experiences you might enjoy:")
+            else:
+                reply = (f"Here are {len(top)} {matched_mood} experiences in Singapore{ctx_str}:")
         else:
             reply = ("I couldn't find a perfect match — adjust your dates, budget, or mood and try again.")
 

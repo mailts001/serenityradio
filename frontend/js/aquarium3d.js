@@ -1257,7 +1257,7 @@ const Aquarium3D = (() => {
       // Without this, Three.js defers texture upload to the first render() call,
       // which means frame-0 may show fish as solid colours while the GPU catches up.
       // One synchronous render here warms up all shader programs and uploads textures.
-      _updateCaustics(0);
+      // (Note: caustics are disabled, so _updateCaustics is NOT called here)
       _R.render(_scene, _cam);
 
       _raf   = requestAnimationFrame(_loop);
