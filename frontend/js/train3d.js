@@ -1,13 +1,16 @@
 'use strict';
 /* ═══════════════════════════════════════════════════════════════════
    TRAIN3D  —  Vintage railway carriage interior
-   Three.js r149  ·  transparent WebGL canvas layered over bg-canvas
+   Three.js r149  ·  scene.background CanvasTexture from bg-canvas
    ───────────────────────────────────────────────────────────────────
-   Approach: WebGLRenderer with alpha:true + transparent clear color.
-   The WebGL canvas (z-index:1) sits above bg-canvas (z-index:0).
-   Opaque 3D geometry (walls, seats, ceiling) writes pixels; the window
-   opening has NO geometry → those pixels remain transparent → bg-canvas
-   animated exterior shows through via normal CSS compositing.
+   Approach: Opaque WebGLRenderer. scene.background is set to a
+   CanvasTexture wrapping the bg-canvas element (which canvas_scenes.js
+   animates with the exterior scenery each frame). The texture is
+   marked needsUpdate=true every frame so Three.js re-uploads it.
+   Opaque 3D geometry (walls, seats, ceiling) covers the background;
+   the window opening has NO geometry → the background texture shows
+   through, giving the illusion of looking out at the moving landscape.
+   This avoids any CSS-compositing / premultipliedAlpha quirks.
    ═══════════════════════════════════════════════════════════════════ */
 const Train3D = (() => {
 
@@ -28,16 +31,18 @@ const Train3D = (() => {
   const FRAME_T = 0.11;          // frame bar thickness
 
   // ── State
-  let _el   = null;   // WebGL canvas (transparent, z-index:1 above bg-canvas)
-  let _R    = null;
-  let _scene= null;
-  let _cam  = null;
-  let _raf  = null;
+  let _el      = null;   // WebGL canvas (opaque, z-index:1 covers bg-canvas)
+  let _R       = null;
+  let _scene   = null;
+  let _cam     = null;
+  let _raf     = null;
   let _W=0, _H=0;
   let _running = false;
-  let _swayT = 0;
+  let _swayT   = 0;
   let _lastNow = 0;
   let _carriageGroup = null;
+  let _bgCanvas = null;  // reference to bg-canvas element (exterior animation)
+  let _bgTex    = null;  // THREE.CanvasTexture wrapping _bgCanvas
 
   // ─────────────────────────────────────────────────────────────────
   //  PUBLIC API
@@ -45,9 +50,10 @@ const Train3D = (() => {
   function start(canvas2d) {
     if (_running) return;
     _running  = true;
-    // canvas2d is the bg-canvas — we don't need to reference it directly;
-    // it sits at z-index:0 below our transparent WebGL canvas (z-index:1)
-    // and shows through the window opening via CSS compositing.
+    // bg-canvas (canvas2d) is animated by canvas_scenes.js with the exterior
+    // scenery. We wrap it in a CanvasTexture and use it as scene.background so
+    // the exterior is visible through the window opening in the 3D carriage.
+    _bgCanvas = document.getElementById('bg-canvas') || canvas2d || null;
 
     _el = document.createElement('canvas');
     _el.id = 'train3d-canvas';
@@ -85,9 +91,11 @@ const Train3D = (() => {
       });
       _scene = null;
     }
+    if (_bgTex)  { _bgTex.dispose();  _bgTex  = null; }
     if (_R)      { _R.dispose();      _R      = null; }
     _cam = null;
     _carriageGroup = null;
+    _bgCanvas = null;
     const c = document.getElementById('train3d-canvas');
     if (c) c.remove();
     _el = null;
@@ -99,22 +107,28 @@ const Train3D = (() => {
   function _launch() {
     if (!_running || !_el) return;
 
-    // ── Renderer — transparent canvas; bg-canvas shows through window opening
-    // alpha:true means WebGL pixels with alpha=0 are transparent in the DOM,
-    // letting the bg-canvas (z-index:0) show through wherever there's no 3D geometry.
+    // ── Renderer — opaque canvas; exterior shown via scene.background ──
     _R = new THREE.WebGLRenderer({
       canvas:          _el,
       antialias:       true,
-      alpha:           true,   // transparent WebGL canvas
       powerPreference: 'high-performance',
     });
-    _R.setClearColor(0x000000, 0);  // fully transparent clear (RGBA 0,0,0,0)
     _R.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
     _R.shadowMap.enabled = false;
 
-    // ── Scene — no background; transparent areas show bg-canvas below ──
+    // ── Scene background — CanvasTexture from bg-canvas ──────────────
+    // canvas_scenes.js animates the exterior scenery onto bg-canvas each
+    // frame. We wrap it in a CanvasTexture so Three.js renders it as the
+    // scene background. The window opening (no 3D geometry) lets the
+    // background show through, giving a realistic exterior view.
     _scene = new THREE.Scene();
-    // scene.background intentionally NOT set → transparent
+    if (_bgCanvas) {
+      _bgTex = new THREE.CanvasTexture(_bgCanvas);
+      _scene.background = _bgTex;
+    } else {
+      // Fallback: dark sky colour if bg-canvas not found
+      _scene.background = new THREE.Color(0x0a1520);
+    }
 
     // ── Camera ────────────────────────────────────────────────────
     // Eye-level from passenger seat, looking toward the window wall
@@ -687,9 +701,10 @@ const Train3D = (() => {
       _orbit.update();
     }
 
-    // ── Render ───────────────────────────────────────────────────
-    // Transparent WebGL canvas: opaque 3D geometry writes pixels; window
-    // opening has no geometry → stays transparent → bg-canvas shows through.
+    // ── Refresh exterior texture & render ────────────────────────
+    // bg-canvas was redrawn this frame by canvas_scenes._trainFrame();
+    // mark the CanvasTexture dirty so Three.js re-uploads it to the GPU.
+    if (_bgTex) _bgTex.needsUpdate = true;
     _R.render(_scene, _cam);
   }
 
