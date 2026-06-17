@@ -37,8 +37,9 @@ const Train3D = (() => {
   let _swayT = 0;
   let _lastNow = 0;
   let _carriageGroup = null;
-  let _canvas2d = null;   // bg-canvas reference (outdoor scenery drawn by canvas_scenes.js)
-  let _bgTex    = null;   // THREE.CanvasTexture wrapping _canvas2d → used as scene.background
+  let _canvas2d     = null;   // bg-canvas reference (outdoor scenery drawn by canvas_scenes.js)
+  let _bgTex        = null;   // THREE.CanvasTexture wrapping _canvas2d
+  let _backdropMesh = null;   // fullscreen quad rendered before all geometry (renderOrder=-999)
 
   // ─────────────────────────────────────────────────────────────────
   //  PUBLIC API
@@ -83,6 +84,11 @@ const Train3D = (() => {
       });
       _scene = null;
     }
+    if (_backdropMesh) {
+      _backdropMesh.geometry.dispose();
+      _backdropMesh.material.dispose();
+      _backdropMesh = null;
+    }
     if (_bgTex)  { _bgTex.dispose();  _bgTex  = null; }
     if (_R)      { _R.dispose();      _R      = null; }
     _cam = null;
@@ -112,13 +118,30 @@ const Train3D = (() => {
     // ── Scene ─────────────────────────────────────────────────────
     _scene = new THREE.Scene();
 
-    // ── Background: sample the bg-canvas (outdoor animated scenery) each frame
+    // ── Background texture: sample the bg-canvas (outdoor animated scenery) each frame
     if (_canvas2d) {
       _bgTex = new THREE.CanvasTexture(_canvas2d);
-      _bgTex.generateMipmaps = false;                  // canvas is non-POT → must disable
+      _bgTex.generateMipmaps = false;          // non-POT canvas — disable mipmaps
       _bgTex.minFilter       = THREE.LinearFilter;
       _bgTex.wrapS = _bgTex.wrapT = THREE.ClampToEdgeWrapping;
-      _scene.background = _bgTex;
+      _scene.background = _bgTex;              // primary: full-screen background quad
+
+      // ── Belt-and-suspenders backdrop mesh ─────────────────────────
+      // Renders BEFORE all geometry (renderOrder=-999) with depthTest:false
+      // so it shows in any pixel not overwritten by opaque carriage geometry.
+      // This guarantees the outdoor scenery is visible through the window
+      // opening regardless of whether scene.background composites correctly.
+      const bdGeo = new THREE.PlaneGeometry(80, 50);
+      const bdMat = new THREE.MeshBasicMaterial({
+        map:        _bgTex,
+        depthTest:  false,   // always "behind" — render order handles it
+        depthWrite: false,
+      });
+      _backdropMesh = new THREE.Mesh(bdGeo, bdMat);
+      _backdropMesh.renderOrder    = -999;
+      _backdropMesh.frustumCulled  = false;   // don't clip this to camera frustum
+      _backdropMesh.position.set(0, RH * 0.5, WIN_Z - 25);  // z = -29.94, within far=60
+      _scene.add(_backdropMesh);
     }
 
     // ── Camera ────────────────────────────────────────────────────
@@ -177,9 +200,9 @@ const Train3D = (() => {
 
     _buildFloor();
     _buildWalls();
-    _buildWindowWall();    // opaque panels around opening — covers bg texture in wall areas
+    _buildWindowWall();    // opaque panels around opening — covers backdrop in wall areas
     _buildWindowFrame();   // decorative brass+green frame bars
-    _buildGlassPane();     // 0.025 opacity glass — lets scene.background show through opening
+    // Glass pane removed: window opening is clear → backdrop plane shows through directly
     _buildCeiling();
     _buildSeats();
     _buildLuggageRacks();

@@ -53,7 +53,7 @@ const Aquarium3D = (() => {
       name: 'SmallFishA',   // clownfish — bright orange, 3 white rings
       modelName: 'SmallFishA',
       count: 22,  speed: 1.0, speedRange: 1.5,
-      radius: 8,  radiusRange: 6,
+      radius: 6,  radiusRange: 1,   // inner-mid band 5.75-6.25 (no overlap with other species)
       xCk: 1.0, yCk: 0.45, zCk: 0.95,
       tailSpeed: 10, heightOffset: -1, heightRange: 4.5,
       fishLength: 1.8, fishWaveLength: 1.0, fishBendAmount: 2.0,
@@ -86,7 +86,7 @@ const Aquarium3D = (() => {
       name: 'SmallFishB',   // blue chromis — vivid blue, iridescent stripe
       modelName: null,          // no WebGL Samples model — keeps procedural geo
       count: 20,  speed: 1.5, speedRange: 2.0,
-      radius: 6,  radiusRange: 5,
+      radius: 4,  radiusRange: 1,   // innermost band 3.75-4.25
       xCk: 0.75, yCk: 0.55, zCk: 1.05,
       tailSpeed: 12, heightOffset: 2.5, heightRange: 3.5,
       fishLength: 1.4, fishWaveLength: 1.0, fishBendAmount: 1.8,
@@ -117,7 +117,7 @@ const Aquarium3D = (() => {
       name: 'MediumFishA',  // goldfish — metallic gold scales
       modelName: 'MediumFishA',
       count: 10,  speed: 0.8, speedRange: 0.8,
-      radius: 10, radiusRange: 5,
+      radius: 10.5, radiusRange: 1,  // mid-outer band 10.25-10.75
       xCk: 0.9, yCk: 0.35, zCk: 0.85,
       tailSpeed: 7, heightOffset: 0, heightRange: 3.5,
       fishLength: 2.8, fishWaveLength: 0.8, fishBendAmount: 1.5,
@@ -153,7 +153,7 @@ const Aquarium3D = (() => {
       name: 'MediumFishB',  // parrotfish — emerald green with blue fin edges
       modelName: 'MediumFishB',
       count: 10,  speed: 0.9, speedRange: 1.0,
-      radius: 8,  radiusRange: 4,
+      radius: 8.5, radiusRange: 1,  // mid band 8.25-8.75
       xCk: 1.05, yCk: 0.6, zCk: 0.80,
       tailSpeed: 8, heightOffset: -2, heightRange: 4,
       fishLength: 2.6, fishWaveLength: 0.9, fishBendAmount: 1.8,
@@ -184,7 +184,7 @@ const Aquarium3D = (() => {
       name: 'BigFishA',     // reef shark — sleek grey-blue, white belly, black fin tips
       modelName: 'BigFishA',
       count: 3,   speed: 0.4, speedRange: 0.3,
-      radius: 11, radiusRange: 3,
+      radius: 13, radiusRange: 1,   // outer band 12.75-13.25
       xCk: 0.85, yCk: 0.25, zCk: 1.0,
       tailSpeed: 4, heightOffset: 1, heightRange: 2.5,
       fishLength: 5.5, fishWaveLength: 0.6, fishBendAmount: 1.2,
@@ -214,7 +214,7 @@ const Aquarium3D = (() => {
       name: 'BigFishB',     // giant tropical — bronze-copper, wide colour bands
       modelName: 'BigFishB',
       count: 2,   speed: 0.35, speedRange: 0.2,
-      radius: 12, radiusRange: 2,
+      radius: 15, radiusRange: 1,   // outermost band 14.75-15.25
       xCk: 0.95, yCk: 0.20, zCk: 0.90,
       tailSpeed: 3.5, heightOffset: 0, heightRange: 2,
       fishLength: 6.5, fishWaveLength: 0.5, fishBendAmount: 1.0,
@@ -544,7 +544,8 @@ const Aquarium3D = (() => {
       const yCk = spec.yCk;
       const zCk = spec.zCk;
       // Evenly distribute fish around the orbit, with a small random jitter
-      const clockOffset = (i / spec.count) * Math.PI * 2 + (Math.random() - 0.5) * 0.4;
+      // Perfect even spacing — no random jitter to prevent same-species fish collisions
+      const clockOffset = (i / spec.count) * Math.PI * 2;
       const speed  = spec.speed + Math.random() * spec.speedRange * 0.3;  // tighter speed range
       const radius = spec.radius + (Math.random() - 0.5) * spec.radiusRange * 0.5;
 
@@ -748,15 +749,8 @@ const Aquarium3D = (() => {
     fill.position.set(-TW * 0.5, TH * 0.3, 0);
     _scene.add(fill);
 
-    // ── Caustic sand floor
-    _initCaustics(); _updateCaustics(0);
-    const floorG = new THREE.PlaneGeometry(TW * 2.2, TD * 2.2);
-    const floorM = new THREE.MeshStandardMaterial({ map: _causticTex, roughness: 0.95 });
-    const floor  = new THREE.Mesh(floorG, floorM);
-    floor.rotation.x = -Math.PI / 2;
-    floor.position.y = -TH;
-    _scene.add(floor);
-    _disposables.push(floor, floorG, floorM);
+    // Floor, coral and seaweed removed — reduces draw calls and GPU memory.
+    // (Caustic system disabled — _updateCaustics no longer called from _loop)
 
     // ── Back wall (depth)
     const bwG = new THREE.PlaneGeometry(TW * 2.2, TH * 2.2);
@@ -795,11 +789,7 @@ const Aquarium3D = (() => {
     _scene.add(_waterSurface);
     _disposables.push(_waterSurface, surfG, surfM);
 
-    // ── Coral + rocks
-    _buildCoral();
-
-    // ── Seaweed (WebGL Samples SeaweedA/B rendered as line curves here)
-    _buildSeaweed();
+    // Coral, rocks, seaweed removed (floor-based objects, removed with the floor)
 
     // ── Bubbles
     _buildBubbles();
@@ -987,11 +977,7 @@ const Aquarium3D = (() => {
       _cam.updateProjectionMatrix();
     }
 
-    // Every 2 frames — caustics are slow-moving, no need for 60fps update
-    if (++_causticFrame % 2 === 0) _updateCaustics(_clock);
-
     _updateWater(_clock);
-    _updateSeaweed(_clock);
     _updateBubbles();
     _updateFish(_clock);
 

@@ -3165,9 +3165,8 @@ document.addEventListener('DOMContentLoaded', () => {
   window._activeScene = '__cs__';
 
   // Restore last chosen SCENE (not channel — they are decoupled)
-  // Aquarium requires explicit user intent — never auto-restore on load
-  const savedScene = localStorage.getItem('sr_scene') || 'sea';
-  const restoreScene = (savedScene === 'aquarium') ? 'sea' : savedScene;
+  const savedScene   = localStorage.getItem('sr_scene') || 'sea';
+  const restoreScene = savedScene;   // restore aquarium just like any other scene
   CanvasScenes.setScene(restoreScene);
 
   // Highlight the correct scene button on load
