@@ -1096,7 +1096,7 @@ const Aquarium3D = (() => {
         html += `<div style="margin:5px 0 1px;color:#3d7a88;font-size:9px;text-transform:uppercase;letter-spacing:1px">${s.grp}</div>`;
         lastGrp = s.grp;
       }
-      const dStr = Number.isInteger(s.def) ? s.def.toString() : s.def.toFixed(s.step < 0.1 ? 2 : 2);
+      const dStr = Number.isInteger(s.def) ? s.def.toString() : s.def.toFixed(3);
       html += `<label style="display:flex;align-items:center;gap:5px;margin:1px 0">
         <span style="width:96px;color:#7aaabb;font-size:10px">${s.label}</span>
         <input id="${s.id}" type="range" min="${s.min}" max="${s.max}" step="${s.step}" value="${s.def}"
@@ -1123,7 +1123,7 @@ const Aquarium3D = (() => {
       const vl = document.getElementById(s.id + '-v');
       el.addEventListener('input', () => {
         const v = parseFloat(el.value);
-        vl.textContent = Number.isInteger(s.def) ? Math.round(v).toString() : v.toFixed(s.step < 0.1 ? 2 : 2);
+        vl.textContent = Number.isInteger(s.def) ? Math.round(v).toString() : v.toFixed(3);
         switch (s.key) {
           // Fish animation
           case 'speed': _tuning.speed = v; break;

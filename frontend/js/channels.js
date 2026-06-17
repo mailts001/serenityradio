@@ -57,6 +57,20 @@ const CHANNELS = [
       'User acquisition funnel into higher tiers',
     ],
   },
+  {
+    id: 'event', emoji: '📅',
+    label: '📅 Event',
+    desc:  'What\'s On SG · Arts & Culture Events',
+    tierLabel: 'Live',
+    tagline: 'What\'s On in Singapore',
+    features: [
+      'Curated arts & culture events this week',
+      'Theatre, music, dance, exhibitions & more',
+      'Subscribe for personalised event alerts',
+      'Powered by Serenity Radio & sg-arts-alert',
+    ],
+    isSpecial: true,   // triggers scene switch, not playlist load
+  },
 ];
 
 let activeChannel = localStorage.getItem('sr_channel') || 'default';
@@ -95,6 +109,15 @@ async function switchChannel(channelId) {
       CHANNELS.find(c => c.id === channelId)?.emoji || ''
     ))
   );
+
+  const chDef = CHANNELS.find(c => c.id === channelId);
+
+  // 📅 Event tab — switch to sea scene + show events widget
+  if (chDef?.isSpecial) {
+    if (typeof switchScene === 'function') switchScene('outdoor');
+    showChannelToast(chDef);
+    return;
+  }
 
   // Channel only controls music — scene is controlled by the scene buttons
   document.dispatchEvent(new CustomEvent('channel:changed', { detail: channelId }));

@@ -193,7 +193,7 @@ const Train3D = (() => {
     _buildWalls();
     _buildWindowWall();    // opaque panels around opening — covers backdrop in wall areas
     _buildWindowFrame();   // decorative brass+green frame bars
-    // Glass pane removed: window opening is clear → backdrop plane shows through directly
+    _buildGlassPane();     // subtle glass tint over window opening
     _buildCeiling();
     _buildSeats();
     _buildLuggageRacks();
@@ -204,7 +204,7 @@ const Train3D = (() => {
   function _wallMat()    { return new THREE.MeshStandardMaterial({ color:0x1a3320, roughness:0.68, metalness:0.05, side: THREE.DoubleSide }); }
   function _brassMat()   { return new THREE.MeshStandardMaterial({ color:0x9a7830, roughness:0.38, metalness:0.75 }); }
   function _leatherMat() { return new THREE.MeshStandardMaterial({ color:0x7a3e18, roughness:0.82, metalness:0.02 }); }
-  function _creamMat()   { return new THREE.MeshStandardMaterial({ color:0xf2eddf, roughness:0.88, metalness:0.00 }); }
+  function _creamMat()   { return new THREE.MeshStandardMaterial({ color:0xf2eddf, roughness:0.88, metalness:0.00, side: THREE.DoubleSide }); }
   function _woodMat()    { return new THREE.MeshStandardMaterial({ color:0x2a1a0c, roughness:0.90, metalness:0.00 }); }
   function _metalMat()   { return new THREE.MeshStandardMaterial({ color:0x4a5a4a, roughness:0.55, metalness:0.55 }); }
 
@@ -266,24 +266,6 @@ const Train3D = (() => {
       _carriageGroup.add(strip);
     });
 
-    // Vertical support pilasters on each side (every 1.8 units along Z)
-    const pilW = 0.06, pilD = 0.04;
-    for (let z = -RD + 1.0; z <= RD - 0.5; z += 1.8) {
-      [-RW + 0.02, RW - 0.02].forEach(x => {
-        const pil = new THREE.Mesh(
-          new THREE.BoxGeometry(pilD, RH, pilW),
-          _metalMat(),
-        );
-        pil.position.set(x, RH / 2, z);
-        _carriageGroup.add(pil);
-        // Brass cap at top & bottom
-        [0, RH].forEach(py => {
-          const cap = new THREE.Mesh(new THREE.BoxGeometry(pilD * 1.4, 0.05, pilW * 1.4), bm);
-          cap.position.set(x, py, z);
-          _carriageGroup.add(cap);
-        });
-      });
-    }
   }
 
   // ── Window wall — 4 panels around the opening ───────────────────
@@ -379,22 +361,6 @@ const Train3D = (() => {
     _add(new THREE.BoxGeometry(openW + FRAME_T * 2.5, 0.06, 0.22), wm,
       0, WIN_BOT - 0.02, z + 0.14);
 
-    // ── Vertical support columns flanking window ──────────────────
-    const colW = 0.10, colD = 0.14;
-    [-WIN_W - FRAME_T - colW / 2, WIN_W + FRAME_T + colW / 2].forEach(cx => {
-      const col = new THREE.Mesh(
-        new THREE.BoxGeometry(colW, RH, colD),
-        _metalMat(),
-      );
-      col.position.set(cx, RH / 2, z + colD / 2);
-      _carriageGroup.add(col);
-      // Brass cap bands at thirds
-      [RH * 0.25, RH * 0.5, RH * 0.75].forEach(cy => {
-        const band = new THREE.Mesh(new THREE.BoxGeometry(colW * 1.3, 0.04, colD * 1.3), bm);
-        band.position.set(cx, cy, z + colD / 2);
-        _carriageGroup.add(band);
-      });
-    });
   }
 
   // ── Glass pane — very subtle tint only (window shows bg plane behind)

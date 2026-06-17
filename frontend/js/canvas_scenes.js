@@ -2107,7 +2107,7 @@ const CanvasScenes = (() => {
         {c:_trgb(15,85,150), amp:0.07,freq:0.008,spd:0.50,ph:0.0},
         {c:_trgb(22,105,175),amp:0.04,freq:0.014,spd:0.80,ph:1.4},
       ],
-      trees:null, details:['waves','cliffs','lighthouse'],
+      trees:null, details:['waves','cliffs'],
     },
     {
       name:'highland', dur:420,
