@@ -923,6 +923,7 @@ const Aquarium3D = (() => {
   //  WATER SURFACE  (vertex-displaced plane like WebGL Samples inner globe)
   // ════════════════════════════════════════════════════════════════════
   function _updateWater(t) {
+    if (!_waterSurface) return;  // surface removed — skip
     const pos = _waterSurface.geometry.attributes.position;
     for (let i = 0; i < pos.count; i++) {
       const x = pos.getX(i), z = pos.getZ(i);
