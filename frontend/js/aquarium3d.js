@@ -53,9 +53,9 @@ const Aquarium3D = (() => {
       name: 'SmallFishA',   // clownfish — bright orange, 3 white rings
       modelName: 'SmallFishA',
       count: 22,  speed: 1.0, speedRange: 1.5,
-      radius: 6,  radiusRange: 1,   // inner-mid band 5.75-6.25 (no overlap with other species)
+      radius: 6,  radiusRange: 0,   // fixed radius — no jitter within species
       xCk: 1.0, yCk: 0.45, zCk: 0.95,
-      tailSpeed: 10, heightOffset: -1, heightRange: 4.5,
+      tailSpeed: 10, heightOffset: -3.0, heightRange: 1.5,  // height band: -3.75 to -2.25
       fishLength: 1.8, fishWaveLength: 1.0, fishBendAmount: 2.0,
       fishScale: 1.0,
       tex: (ctx) => {
@@ -86,9 +86,9 @@ const Aquarium3D = (() => {
       name: 'SmallFishB',   // blue chromis — vivid blue, iridescent stripe
       modelName: null,          // no WebGL Samples model — keeps procedural geo
       count: 20,  speed: 1.5, speedRange: 2.0,
-      radius: 4,  radiusRange: 1,   // innermost band 3.75-4.25
+      radius: 4,  radiusRange: 0,   // fixed radius — no jitter within species
       xCk: 0.75, yCk: 0.55, zCk: 1.05,
-      tailSpeed: 12, heightOffset: 2.5, heightRange: 3.5,
+      tailSpeed: 12, heightOffset: -1.0, heightRange: 1.5,  // height band: -1.75 to -0.25
       fishLength: 1.4, fishWaveLength: 1.0, fishBendAmount: 1.8,
       fishScale: 0.8,
       tex: (ctx) => {
@@ -117,9 +117,9 @@ const Aquarium3D = (() => {
       name: 'MediumFishA',  // goldfish — metallic gold scales
       modelName: 'MediumFishA',
       count: 10,  speed: 0.8, speedRange: 0.8,
-      radius: 10.5, radiusRange: 1,  // mid-outer band 10.25-10.75
+      radius: 10.5, radiusRange: 0,  // fixed radius — no jitter within species
       xCk: 0.9, yCk: 0.35, zCk: 0.85,
-      tailSpeed: 7, heightOffset: 0, heightRange: 3.5,
+      tailSpeed: 7, heightOffset: 1.5, heightRange: 1.5,   // height band: 0.75 to 2.25
       fishLength: 2.8, fishWaveLength: 0.8, fishBendAmount: 1.5,
       fishScale: 1.4,
       tex: (ctx) => {
@@ -153,9 +153,9 @@ const Aquarium3D = (() => {
       name: 'MediumFishB',  // parrotfish — emerald green with blue fin edges
       modelName: 'MediumFishB',
       count: 10,  speed: 0.9, speedRange: 1.0,
-      radius: 8.5, radiusRange: 1,  // mid band 8.25-8.75
+      radius: 8.5, radiusRange: 0,  // fixed radius — no jitter within species
       xCk: 1.05, yCk: 0.6, zCk: 0.80,
-      tailSpeed: 8, heightOffset: -2, heightRange: 4,
+      tailSpeed: 8, heightOffset: 0.0, heightRange: 1.5,   // height band: -0.75 to 0.75
       fishLength: 2.6, fishWaveLength: 0.9, fishBendAmount: 1.8,
       fishScale: 1.2,
       tex: (ctx) => {
@@ -184,9 +184,9 @@ const Aquarium3D = (() => {
       name: 'BigFishA',     // reef shark — sleek grey-blue, white belly, black fin tips
       modelName: 'BigFishA',
       count: 3,   speed: 0.4, speedRange: 0.3,
-      radius: 13, radiusRange: 1,   // outer band 12.75-13.25
+      radius: 13, radiusRange: 0,   // fixed radius — no jitter within species
       xCk: 0.85, yCk: 0.25, zCk: 1.0,
-      tailSpeed: 4, heightOffset: 1, heightRange: 2.5,
+      tailSpeed: 4, heightOffset: 2.5, heightRange: 1.2,  // height band: 1.9 to 3.1
       fishLength: 5.5, fishWaveLength: 0.6, fishBendAmount: 1.2,
       fishScale: 2.8,
       tex: (ctx) => {
@@ -214,9 +214,9 @@ const Aquarium3D = (() => {
       name: 'BigFishB',     // giant tropical — bronze-copper, wide colour bands
       modelName: 'BigFishB',
       count: 2,   speed: 0.35, speedRange: 0.2,
-      radius: 15, radiusRange: 1,   // outermost band 14.75-15.25
+      radius: 15, radiusRange: 0,   // fixed radius — no jitter within species
       xCk: 0.95, yCk: 0.20, zCk: 0.90,
-      tailSpeed: 3.5, heightOffset: 0, heightRange: 2,
+      tailSpeed: 3.5, heightOffset: 3.5, heightRange: 1.0, // height band: 3.0 to 4.0
       fishLength: 6.5, fishWaveLength: 0.5, fishBendAmount: 1.0,
       fishScale: 3.2,
       tex: (ctx) => {
@@ -764,17 +764,7 @@ const Aquarium3D = (() => {
 
     // Light shafts removed — user found the cone shapes distracting
 
-    // ── Water surface
-    const surfG = new THREE.PlaneGeometry(TW * 2.2, TD * 2.2, 26, 26);
-    const surfM = new THREE.MeshStandardMaterial({
-      color: 0x1878aa, transparent: true, opacity: 0.25,
-      roughness: 0.04, metalness: 0.3, side: THREE.DoubleSide,
-    });
-    _waterSurface = new THREE.Mesh(surfG, surfM);
-    _waterSurface.rotation.x = -Math.PI / 2;
-    _waterSurface.position.y = TH * 0.9;
-    _scene.add(_waterSurface);
-    _disposables.push(_waterSurface, surfG, surfM);
+    // Water surface plane removed — appeared as a solid rectangle from below
 
     // Coral, rocks, seaweed removed (floor-based objects, removed with the floor)
 
