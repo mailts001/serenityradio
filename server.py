@@ -518,40 +518,78 @@ def api_billing_webhook(): return handle_webhook()
 # ────────────────────────────────────────────────────────────────
 #  SG Arts & Events  (reads from sg-arts-alert SQLite on same VPS)
 # ────────────────────────────────────────────────────────────────
+def _events_db_path():
+    import os as _os
+    return '/root/sg-arts-alert/sg_arts.db'
+
+def _urgency(date_str):
+    """Return sell-out urgency label based on days until event."""
+    from datetime import date as _date
+    if not date_str:
+        return None
+    try:
+        ev_date = _date.fromisoformat(date_str[:10])
+        days = (ev_date - _date.today()).days
+        if days <= 0:   return 'today'
+        if days <= 2:   return 'soon'
+        if days <= 7:   return 'this_week'
+        return None
+    except Exception:
+        return None
+
+def _fmt_event_row(r, json_loads):
+    cats = json_loads(r['categories'] or '[]')
+    pmin = r['price_min']
+    date_s = (r['date_start'] or '')[:10]
+    return {
+        'title':      r['title'],
+        'url':        r['url'],
+        'date':       date_s,
+        'venue':      r['venue'] or '',
+        'categories': cats[:3],
+        'price':      f'SGD {pmin:.0f}' if pmin else 'Free / Check site',
+        'source':     r['source'] or '',
+        'urgency':    _urgency(date_s),
+    }
+
 @app.route('/api/events/upcoming', methods=['GET'])
 def api_events_upcoming():
-    """Return upcoming Singapore arts events from the sg-arts-alert database."""
+    """Return upcoming SG arts events; supports ?category= and ?q= filters."""
     import sqlite3 as _sqlite3, json as _json, os as _os
-    limit = min(int(request.args.get('limit', 8)), 20)
-    db_path = '/root/sg-arts-alert/sg_arts.db'
+    limit    = min(int(request.args.get('limit', 10)), 40)
+    category = (request.args.get('category') or '').strip().lower()
+    q        = (request.args.get('q') or '').strip().lower()
+    db_path  = _events_db_path()
     if not _os.path.exists(db_path):
         return jsonify({'events': [], 'notice': 'Events DB not found — scanner may not have run yet'})
     try:
         conn = _sqlite3.connect(db_path)
         conn.row_factory = _sqlite3.Row
+
+        where_clauses = ["date_start >= date('now')"]
+        params = []
+
+        if category:
+            where_clauses.append("lower(categories) LIKE ?")
+            params.append(f'%{category}%')
+        if q:
+            where_clauses.append("(lower(title) LIKE ? OR lower(venue) LIKE ? OR lower(categories) LIKE ?)")
+            params.extend([f'%{q}%', f'%{q}%', f'%{q}%'])
+
+        where_sql = ' AND '.join(where_clauses)
+        params.append(limit)
+
         rows = conn.execute(
-            """SELECT title, url, date_start, venue, categories,
-                      price_min, price_max, source
-               FROM events
-               WHERE date_start >= date('now')
-               ORDER BY date_start
-               LIMIT ?""",
-            (limit,)
+            f"""SELECT title, url, date_start, venue, categories,
+                       price_min, price_max, source
+                FROM events
+                WHERE {where_sql}
+                ORDER BY date_start
+                LIMIT ?""",
+            params
         ).fetchall()
         conn.close()
-        events = []
-        for r in rows:
-            cats = _json.loads(r['categories'] or '[]')
-            pmin = r['price_min']
-            events.append({
-                'title':      r['title'],
-                'url':        r['url'],
-                'date':       (r['date_start'] or '')[:10],
-                'venue':      r['venue'] or '',
-                'categories': cats[:2],          # first 2 tags max
-                'price':      f'SGD {pmin:.0f}' if pmin else 'Check site',
-                'source':     r['source'],
-            })
+        events = [_fmt_event_row(r, _json.loads) for r in rows]
         return jsonify({'events': events, 'count': len(events)})
     except Exception as e:
         app.logger.error('Events API error: %s', e)
@@ -600,6 +638,108 @@ def api_events_subscribe():
     except Exception as e:
         app.logger.error('Events subscribe error: %s', e)
         return jsonify({'ok': False, 'error': 'Temporarily unavailable'}), 500
+
+@app.route('/api/events/concierge', methods=['POST'])
+def api_events_concierge():
+    """
+    Wellness + Arts Concierge (Tier 3).
+    POST body: { "query": "I'm stressed and have Saturday free" }
+    Returns top matched events + a short explanation sentence.
+    """
+    import sqlite3 as _sqlite3, json as _json, os as _os, re as _re
+    from datetime import date as _date
+
+    data  = request.get_json(silent=True) or {}
+    query = (data.get('query') or '').strip().lower()[:300]
+    if len(query) < 3:
+        return jsonify({'ok': False, 'error': 'Tell me a bit more about what you\'re looking for'}), 400
+
+    db_path = _events_db_path()
+    if not _os.path.exists(db_path):
+        return jsonify({'ok': False, 'events': [], 'reply': 'Our events database is warming up — check back soon!'}), 200
+
+    # ── Mood / intent → category keyword mapping ──────────────────
+    MOOD_MAP = {
+        'stressed|stress|anxious|overwhelmed|burnout|tense|tired':
+            (['meditation', 'wellness', 'sound', 'yoga', 'nature', 'mindfulness', 'healing'], 'calm'),
+        'relax|unwind|chill|peace|quiet|soothe':
+            (['jazz', 'classical', 'ambient', 'spa', 'wellness', 'meditation', 'garden'], 'relaxing'),
+        'inspire|creative|art|gallery|museum|exhibition|photography':
+            (['art', 'exhibition', 'museum', 'gallery', 'photography', 'design', 'craft'], 'inspiring'),
+        'music|concert|live|band|jazz|classical|indie|pop|orchestra':
+            (['music', 'concert', 'jazz', 'classical', 'performance', 'orchestra', 'band'], 'musical'),
+        'family|kids|children|daughter|son|child|educational':
+            (['family', 'children', 'educational', 'workshop', 'science', 'interactive'], 'family-friendly'),
+        'date|romantic|partner|couple|girlfriend|boyfriend|anniversary':
+            (['theatre', 'dance', 'concert', 'dinner', 'wine', 'exhibition', 'film'], 'romantic'),
+        'social|friend|group|party|festival|outdoor|picnic|market':
+            (['festival', 'outdoor', 'food', 'market', 'community', 'social'], 'social'),
+        'japanese|japan|anime|manga|tea|kimono|sakura':
+            (['japanese', 'japan', 'anime', 'asia', 'asian', 'cultural'], 'Japanese-cultural'),
+        'active|sport|dance|movement|physical|workshop|class':
+            (['dance', 'workshop', 'sports', 'outdoor', 'fitness', 'active'], 'active'),
+        'culture|heritage|history|traditional|folk|chinese|malay|indian':
+            (['heritage', 'cultural', 'traditional', 'history', 'folk', 'community'], 'cultural'),
+        'free|cheap|budget|affordable':
+            (['free', 'community', 'public', 'open'], 'budget-friendly'),
+    }
+
+    matched_mood  = 'curated'
+    keyword_scores = {}   # event_id → score
+    search_cats   = []
+
+    for mood_pattern, (cats, label) in MOOD_MAP.items():
+        if _re.search(mood_pattern, query):
+            matched_mood = label
+            search_cats.extend(cats)
+
+    # Also extract any bare category words from the query itself
+    bare_words = _re.findall(r'\b[a-z]{3,}\b', query)
+    search_cats.extend(bare_words)
+    search_cats = list(dict.fromkeys(search_cats))[:12]   # dedupe, cap
+
+    try:
+        conn = _sqlite3.connect(db_path)
+        conn.row_factory = _sqlite3.Row
+
+        rows = conn.execute(
+            """SELECT title, url, date_start, venue, categories,
+                      price_min, price_max, source
+               FROM events
+               WHERE date_start >= date('now')
+               ORDER BY date_start
+               LIMIT 60"""
+        ).fetchall()
+        conn.close()
+
+        scored = []
+        for r in rows:
+            cats_str = (r['categories'] or '').lower()
+            title_str = r['title'].lower()
+            score = sum(1 for kw in search_cats
+                        if kw in cats_str or kw in title_str)
+            if score > 0:
+                ev = _fmt_event_row(r, _json.loads)
+                ev['_score'] = score
+                scored.append(ev)
+
+        scored.sort(key=lambda e: (-e['_score'], e['date'] or 'z'))
+        top = scored[:4]
+        for e in top:
+            del e['_score']
+
+        if top:
+            reply = (f"Based on your mood, here are {len(top)} {matched_mood} "
+                     f"experiences in Singapore right now:")
+        else:
+            reply = ("I couldn't find a perfect match today — "
+                     "try browsing all events or check back as new ones are added.")
+
+        return jsonify({'ok': True, 'events': top, 'reply': reply})
+
+    except Exception as e:
+        app.logger.error('Concierge error: %s', e)
+        return jsonify({'ok': False, 'events': [], 'reply': 'Something went wrong — try again shortly.'}), 500
 
 @app.errorhandler(404)
 def not_found(e):

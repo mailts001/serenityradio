@@ -356,7 +356,7 @@
   .cinema-exit:hover { color: #fff; }
 </style>
 <style>
-  /* ── What's On SG — arts & events widget ── */
+  /* ── What's On SG — Platform moat widget ── */
   #events-widget {
     background: rgba(15,20,35,0.72);
     backdrop-filter: blur(12px);
@@ -364,23 +364,50 @@
     border-radius: 18px;
     padding: 1.1rem 1.2rem;
     margin-top: 1.4rem;
+    transition: opacity .35s ease;
   }
-  .events-header {
-    display: flex; align-items: center; justify-content: space-between;
-    margin-bottom: 0.85rem;
+  /* ── Inner tab bar: Browse / Concierge / Alerts ── */
+  .ew-tabs {
+    display: flex; gap: 4px; margin-bottom: .9rem;
+    border-bottom: 1px solid rgba(255,255,255,.07); padding-bottom: .5rem;
   }
-  .events-title {
-    font-size: 11px; letter-spacing: .1em; text-transform: uppercase;
-    color: var(--text-muted); font-weight: 500;
+  .ew-tab {
+    font-size: 11px; padding: 4px 11px; border-radius: 50px; cursor: pointer;
+    background: transparent; color: var(--text-muted);
+    border: 1px solid transparent; font-family: 'DM Sans',sans-serif;
+    transition: all .15s;
   }
-  .events-alert-btn {
-    font-size: 11px; padding: 4px 12px; border-radius: 50px;
-    background: rgba(122,158,126,.15); color: var(--sage-light);
-    border: 1px solid rgba(122,158,126,.3); cursor: pointer;
-    font-family: 'DM Sans',sans-serif; text-decoration: none;
-    transition: background .2s;
+  .ew-tab.active {
+    background: rgba(122,158,126,.18); color: var(--sage-light);
+    border-color: rgba(122,158,126,.3);
   }
-  .events-alert-btn:hover { background: rgba(122,158,126,.28); }
+  .ew-panel { display: none; }
+  .ew-panel.active { display: block; }
+  /* ── Search + category filters ── */
+  .ew-search-row {
+    display: flex; gap: 7px; align-items: center; margin-bottom: .65rem;
+  }
+  #ew-search {
+    flex: 1; background: rgba(255,255,255,.06);
+    border: 1px solid rgba(255,255,255,.11); border-radius: 8px;
+    padding: 6px 10px; color: var(--text); font-size: 12px;
+    font-family: 'DM Sans',sans-serif; outline: none;
+  }
+  #ew-search::placeholder { color: var(--text-muted); }
+  .ew-cat-bar {
+    display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: .65rem;
+  }
+  .ew-cat-btn {
+    font-size: 10px; padding: 3px 9px; border-radius: 50px; cursor: pointer;
+    background: rgba(255,255,255,.05); color: var(--text-muted);
+    border: 1px solid rgba(255,255,255,.09); font-family: 'DM Sans',sans-serif;
+    transition: all .15s;
+  }
+  .ew-cat-btn.active {
+    background: rgba(107,127,168,.25); color: var(--dusk-light);
+    border-color: rgba(107,127,168,.4);
+  }
+  /* ── Event rows ── */
   .event-row {
     display: flex; align-items: flex-start; gap: 10px;
     padding: 7px 0; border-bottom: 1px solid rgba(255,255,255,.05);
@@ -389,6 +416,7 @@
   .event-date {
     font-size: 11px; color: var(--amber); font-weight: 500;
     min-width: 56px; padding-top: 1px; letter-spacing: .02em;
+    flex-shrink: 0;
   }
   .event-info { flex: 1; min-width: 0; }
   .event-name {
@@ -404,11 +432,50 @@
     border-radius: 4px; padding: 1px 6px; margin-right: 4px;
     text-transform: capitalize;
   }
+  .event-urgency-today {
+    display: inline-block; font-size: 9px; font-weight: 700;
+    background: rgba(255,90,60,.22); color: #ff7055;
+    border-radius: 4px; padding: 1px 6px; margin-right: 4px;
+    letter-spacing: .04em; text-transform: uppercase;
+  }
+  .event-urgency-soon {
+    display: inline-block; font-size: 9px; font-weight: 700;
+    background: rgba(255,180,0,.18); color: #ffc840;
+    border-radius: 4px; padding: 1px 6px; margin-right: 4px;
+    letter-spacing: .04em;
+  }
+  .event-urgency-week {
+    display: inline-block; font-size: 9px;
+    background: rgba(122,158,126,.15); color: var(--sage-light);
+    border-radius: 4px; padding: 1px 6px; margin-right: 4px;
+    letter-spacing: .04em;
+  }
   .events-empty { font-size: 13px; color: var(--text-muted); text-align: center; padding: 1rem 0; }
   .events-footer { margin-top: .75rem; text-align: center; }
   .events-more { font-size: 11px; color: var(--text-muted); cursor: pointer; background: none; border: none; font-family: 'DM Sans',sans-serif; }
   .events-more:hover { color: var(--sage-light); }
-  #events-widget { transition: opacity .35s ease; }
+  /* ── Concierge panel ── */
+  #ew-concierge-input {
+    width: 100%; box-sizing: border-box;
+    background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.11);
+    border-radius: 10px; padding: 9px 12px; color: var(--text); font-size: 13px;
+    font-family: 'DM Sans',sans-serif; outline: none; resize: none; min-height: 58px;
+  }
+  #ew-concierge-input::placeholder { color: var(--text-muted); line-height: 1.4; }
+  .ew-concierge-examples {
+    display: flex; flex-wrap: wrap; gap: 5px; margin: .5rem 0;
+  }
+  .ew-cx-chip {
+    font-size: 10px; padding: 3px 9px; border-radius: 20px; cursor: pointer;
+    background: rgba(255,255,255,.05); color: var(--text-muted);
+    border: 1px solid rgba(255,255,255,.09); font-family: 'DM Sans',sans-serif;
+  }
+  .ew-cx-chip:hover { background: rgba(255,255,255,.10); color: var(--text); }
+  #ew-concierge-reply {
+    font-size: 12px; color: var(--sage-light); margin: .6rem 0 .3rem;
+    display: none; line-height: 1.4;
+  }
+  /* ── Alerts / Subscribe panel ── */
   .sub-tag {
     font-size: 11px; padding: 3px 9px; border-radius: 20px; cursor: pointer;
     background: rgba(255,255,255,.05); color: var(--text-muted);
@@ -419,6 +486,21 @@
     background: rgba(122,158,126,.22); color: var(--sage-light);
     border-color: rgba(122,158,126,.35);
   }
+  .ew-title-row {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: .75rem;
+  }
+  .events-title {
+    font-size: 11px; letter-spacing: .1em; text-transform: uppercase;
+    color: var(--text-muted); font-weight: 500;
+  }
+  .events-alert-btn {
+    font-size: 11px; padding: 4px 12px; border-radius: 50px;
+    background: rgba(122,158,126,.15); color: var(--sage-light);
+    border: 1px solid rgba(122,158,126,.3); cursor: pointer;
+    font-family: 'DM Sans',sans-serif; text-decoration: none; transition: background .2s;
+  }
+  .events-alert-btn:hover { background: rgba(122,158,126,.28); }
 </style>
 
 <link rel="stylesheet" href="/css/moat.css">
@@ -572,28 +654,79 @@
 
   <!-- ══ WHAT'S ON SG — Arts & Events Widget (shown in Outdoor mode) ══ -->
   <div id="events-widget" style="display:none">
-    <div class="events-header">
-      <span class="events-title">🌳 What's On in Singapore</span>
-      <a class="events-alert-btn" href="https://t.me/AceArtsAlertBot" target="_blank" rel="noopener">
-        🔔 Get alerts
-      </a>
+    <!-- Header row -->
+    <div class="ew-title-row">
+      <span class="events-title">📅 What's On in Singapore</span>
+      <a class="events-alert-btn" href="https://t.me/AceArtsAlertBot" target="_blank" rel="noopener">🔔 Telegram alerts</a>
     </div>
-    <div id="events-list">
-      <div class="events-empty">Loading upcoming events…</div>
+
+    <!-- Tab bar -->
+    <div class="ew-tabs">
+      <button class="ew-tab active" onclick="_ewTab(this,'browse')">🗓 Browse</button>
+      <button class="ew-tab" onclick="_ewTab(this,'concierge')">✨ Concierge</button>
+      <button class="ew-tab" onclick="_ewTab(this,'alerts')">🔔 My Alerts</button>
     </div>
-    <div class="events-footer">
-      <button class="events-more" onclick="_eventsLoadMore()">Show more ↓</button>
+
+    <!-- ── Panel 1: Browse ────────────────────── -->
+    <div class="ew-panel active" id="ewp-browse">
+      <div class="ew-search-row">
+        <input id="ew-search" type="search" placeholder="Search events, venues…" oninput="_ewSearch(this.value)">
+      </div>
+      <div class="ew-cat-bar" id="ew-cats">
+        <button class="ew-cat-btn active" data-cat="" onclick="_ewCat(this,'')">All</button>
+        <button class="ew-cat-btn" data-cat="music" onclick="_ewCat(this,'music')">🎵 Music</button>
+        <button class="ew-cat-btn" data-cat="art" onclick="_ewCat(this,'art')">🎨 Art</button>
+        <button class="ew-cat-btn" data-cat="theatre" onclick="_ewCat(this,'theatre')">🎭 Theatre</button>
+        <button class="ew-cat-btn" data-cat="wellness" onclick="_ewCat(this,'wellness')">🌿 Wellness</button>
+        <button class="ew-cat-btn" data-cat="dance" onclick="_ewCat(this,'dance')">💃 Dance</button>
+        <button class="ew-cat-btn" data-cat="family" onclick="_ewCat(this,'family')">👨‍👩‍👧 Family</button>
+        <button class="ew-cat-btn" data-cat="food" onclick="_ewCat(this,'food')">🍜 Food</button>
+      </div>
+      <div id="events-list"><div class="events-empty">Loading upcoming events…</div></div>
+      <div class="events-footer" id="ew-browse-footer">
+        <button class="events-more" onclick="_eventsLoadMore()">Show more ↓</button>
+      </div>
     </div>
-    <!-- Subscription mini-form -->
-    <div id="events-subscribe" style="margin-top:1rem;border-top:1px solid rgba(255,255,255,.07);padding-top:.9rem;">
-      <div class="events-title" style="margin-bottom:.55rem;">📬 Notify me about</div>
+
+    <!-- ── Panel 2: Concierge AI ─────────────── -->
+    <div class="ew-panel" id="ewp-concierge">
+      <div style="font-size:12px;color:var(--text-muted);margin-bottom:.6rem;line-height:1.5">
+        Tell me what you're looking for and I'll curate the perfect experience.
+      </div>
+      <textarea id="ew-concierge-input"
+        placeholder="e.g. I'm stressed and need to recharge… or Family Saturday, budget $50… or Japanese culture and tea ceremony…"></textarea>
+      <div class="ew-concierge-examples">
+        <button class="ew-cx-chip" onclick="_ewCxFill('I\'m stressed and need to unwind')">😮‍💨 I\'m stressed</button>
+        <button class="ew-cx-chip" onclick="_ewCxFill('Family day out, kids friendly, Saturday')">👨‍👩‍👧 Family day</button>
+        <button class="ew-cx-chip" onclick="_ewCxFill('Romantic evening, art or theatre')">🌹 Date night</button>
+        <button class="ew-cx-chip" onclick="_ewCxFill('Japanese culture, tea, meditation')">🍵 Japanese</button>
+        <button class="ew-cx-chip" onclick="_ewCxFill('free or budget friendly outdoor festival')">💸 Free / budget</button>
+      </div>
+      <button onclick="_ewConcierge()" style="
+        margin-top:.5rem;width:100%;padding:9px;border-radius:10px;
+        background:rgba(122,158,126,.22);border:1px solid rgba(122,158,126,.35);
+        color:var(--sage-light);font-size:13px;font-family:'DM Sans',sans-serif;cursor:pointer;">
+        ✨ Find for me
+      </button>
+      <div id="ew-concierge-reply"></div>
+      <div id="ew-concierge-list"></div>
+    </div>
+
+    <!-- ── Panel 3: My Alerts ─────────────────── -->
+    <div class="ew-panel" id="ewp-alerts">
+      <div style="font-size:12px;color:var(--text-muted);margin-bottom:.75rem;line-height:1.5">
+        Get notified when events matching your interests are added or selling out.
+      </div>
+      <div class="events-title" style="margin-bottom:.45rem;">Notify me about</div>
       <div id="events-sub-tags" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:.65rem;">
         <button class="sub-tag active" data-tag="art" onclick="_toggleSubTag(this)">🎨 Art</button>
         <button class="sub-tag active" data-tag="music" onclick="_toggleSubTag(this)">🎵 Music</button>
         <button class="sub-tag active" data-tag="theatre" onclick="_toggleSubTag(this)">🎭 Theatre</button>
         <button class="sub-tag active" data-tag="dance" onclick="_toggleSubTag(this)">💃 Dance</button>
+        <button class="sub-tag" data-tag="wellness" onclick="_toggleSubTag(this)">🌿 Wellness</button>
         <button class="sub-tag" data-tag="film" onclick="_toggleSubTag(this)">🎬 Film</button>
         <button class="sub-tag" data-tag="food" onclick="_toggleSubTag(this)">🍜 Food</button>
+        <button class="sub-tag" data-tag="family" onclick="_toggleSubTag(this)">👨‍👩‍👧 Family</button>
       </div>
       <div style="display:flex;gap:8px;align-items:center;">
         <input id="events-sub-input" type="text" placeholder="Telegram @username or email" style="
@@ -606,6 +739,11 @@
           font-family:'DM Sans',sans-serif;cursor:pointer;white-space:nowrap;">Save →</button>
       </div>
       <div id="events-sub-msg" style="font-size:11px;color:var(--sage-light);margin-top:.4rem;display:none;"></div>
+      <div style="margin-top:.9rem;font-size:11px;color:var(--text-muted);line-height:1.5;
+        border-top:1px solid rgba(255,255,255,.06);padding-top:.75rem">
+        🔔 Also join <a href="https://t.me/AceArtsAlertBot" target="_blank" style="color:var(--sage-light)">@AceArtsAlertBot</a>
+        on Telegram for instant sell-out alerts and last-minute deals.
+      </div>
     </div>
   </div>
 
@@ -1653,90 +1791,145 @@ function toggleAmbient(btn) {
 
 <!-- ══ What's On SG — arts & events widget ══ -->
 <script>
+/* ── Platform Moat Widget ─────────────────────────────────────────── */
 (function() {
   'use strict';
   const MONTH = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-  let _eventsOffset  = 0;
-  const _PAGE        = 6;   // events per page
+  let _eventsOffset = 0;
+  let _activeCategory = '';
+  let _searchQ = '';
+  const _PAGE = 8;
 
+  // ── Helpers ──────────────────────────────────────────────────────
   function _fmtDate(iso) {
     if (!iso) return '?';
     const d = new Date(iso + 'T00:00:00');
     return `${d.getDate()} ${MONTH[d.getMonth()]}`;
   }
 
-  function _renderEvents(events, append) {
-    const list = document.getElementById('events-list');
-    if (!append) list.innerHTML = '';
+  function _urgencyBadge(u) {
+    if (u === 'today')     return '<span class="event-urgency-today">🔥 Today</span>';
+    if (u === 'soon')      return '<span class="event-urgency-soon">⚡ Act soon</span>';
+    if (u === 'this_week') return '<span class="event-urgency-week">📅 This week</span>';
+    return '';
+  }
 
-    if (!events || events.length === 0) {
-      if (!append) {
-        list.innerHTML = '<div class="events-empty">No upcoming events yet — check back soon ✦</div>';
-      }
-      const moreBtn = document.querySelector('.events-footer');
-      if (moreBtn) moreBtn.style.display = 'none';
-      return;
-    }
-
-    const frag = document.createDocumentFragment();
-    events.forEach(ev => {
-      const row  = document.createElement('div');
-      row.className = 'event-row';
-      const tags = (ev.categories || []).map(t => `<span class="event-tag">${t}</span>`).join('');
-      const venue = ev.venue ? `<span style="margin-right:4px">📍 ${ev.venue.replace(/,.*$/,'')}</span>` : '';
-      row.innerHTML = `
+  function _renderEventRow(ev) {
+    const tags    = (ev.categories || []).map(t => `<span class="event-tag">${t}</span>`).join('');
+    const venue   = ev.venue ? `<span style="margin-right:4px">📍 ${ev.venue.replace(/,.*/,'')}</span>` : '';
+    const urgency = _urgencyBadge(ev.urgency);
+    return `
+      <div class="event-row">
         <div class="event-date">${_fmtDate(ev.date)}</div>
         <div class="event-info">
-          <a class="event-name" href="${ev.url || '#'}" target="_blank" rel="noopener" title="${ev.title}">${ev.title}</a>
-          <div class="event-meta">${venue}${tags}<span style="opacity:.6">${ev.price}</span></div>
-        </div>`;
-      frag.appendChild(row);
-    });
-    list.appendChild(frag);
+          <a class="event-name" href="${ev.url||'#'}" target="_blank" rel="noopener" title="${ev.title}">${ev.title}</a>
+          <div class="event-meta">${urgency}${venue}${tags}<span style="opacity:.6">${ev.price}</span></div>
+        </div>
+      </div>`;
   }
 
-  async function _fetchEvents(offset, limit) {
+  function _renderEvents(events, listId, append) {
+    const list = document.getElementById(listId || 'events-list');
+    if (!list) return;
+    if (!append) list.innerHTML = '';
+    if (!events || !events.length) {
+      if (!append) list.innerHTML = '<div class="events-empty">No events found — try a different filter ✦</div>';
+      return;
+    }
+    list.insertAdjacentHTML('beforeend', events.map(_renderEventRow).join(''));
+  }
+
+  // ── Browse panel ─────────────────────────────────────────────────
+  async function _fetchEvents(offset, limit, category, q) {
     try {
-      const res = await fetch(`/api/events/upcoming?limit=${limit + offset}`);
+      const params = new URLSearchParams({ limit: limit + offset });
+      if (category) params.set('category', category);
+      if (q)        params.set('q', q);
+      const res  = await fetch('/api/events/upcoming?' + params);
       const data = await res.json();
       return (data.events || []).slice(offset, offset + limit);
-    } catch (e) {
-      return [];
-    }
+    } catch(e) { return []; }
   }
 
-  async function _loadEvents() {
-    _eventsOffset = 0;
-    const events = await _fetchEvents(0, _PAGE);
-    _renderEvents(events, false);
+  async function _loadEvents(reset) {
+    if (reset !== false) _eventsOffset = 0;
+    document.getElementById('events-list').innerHTML = '<div class="events-empty" style="padding:.5rem 0">Loading…</div>';
+    const events = await _fetchEvents(0, _PAGE, _activeCategory, _searchQ);
+    _renderEvents(events, 'events-list', false);
     _eventsOffset = events.length;
-    // Hide "Show more" if fewer than a full page returned
-    const footer = document.querySelector('.events-footer');
-    if (footer) footer.style.display = events.length < _PAGE ? 'none' : '';
+    const ft = document.getElementById('ew-browse-footer');
+    if (ft) ft.style.display = events.length < _PAGE ? 'none' : '';
   }
-  window._loadEvents = _loadEvents;  // expose so switchScene can call it
+  window._loadEvents = _loadEvents;
 
   window._eventsLoadMore = async function() {
-    const more = await _fetchEvents(_eventsOffset, _PAGE);
-    _renderEvents(more, true);
+    const more = await _fetchEvents(_eventsOffset, _PAGE, _activeCategory, _searchQ);
+    _renderEvents(more, 'events-list', true);
     _eventsOffset += more.length;
     if (more.length < _PAGE) {
-      const footer = document.querySelector('.events-footer');
-      if (footer) footer.style.display = 'none';
+      const ft = document.getElementById('ew-browse-footer');
+      if (ft) ft.style.display = 'none';
     }
   };
 
-  // No auto-load on DOMContentLoaded — events widget is hidden until Outdoor mode
-  // Refresh every 15 min if widget is visible
-  setInterval(() => {
-    const ew = document.getElementById('events-widget');
-    if (ew && ew.style.display !== 'none') _loadEvents();
-  }, 15 * 60 * 1000);
+  // Category filter
+  window._ewCat = function(btn, cat) {
+    document.querySelectorAll('.ew-cat-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    _activeCategory = cat;
+    _loadEvents(true);
+  };
 
-  // ── Subscription tag toggle ──────────────────────────────────────
+  // Search debounce
+  let _searchTimer;
+  window._ewSearch = function(q) {
+    clearTimeout(_searchTimer);
+    _searchQ = q.trim().toLowerCase();
+    _searchTimer = setTimeout(() => _loadEvents(true), 380);
+  };
+
+  // ── Tab switching ─────────────────────────────────────────────────
+  window._ewTab = function(btn, panelId) {
+    document.querySelectorAll('.ew-tab').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.ew-panel').forEach(p => p.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById('ewp-' + panelId)?.classList.add('active');
+  };
+
+  // ── Concierge AI ──────────────────────────────────────────────────
+  window._ewCxFill = function(txt) {
+    const ta = document.getElementById('ew-concierge-input');
+    if (ta) { ta.value = txt; ta.focus(); }
+  };
+
+  window._ewConcierge = async function() {
+    const q    = document.getElementById('ew-concierge-input')?.value?.trim();
+    const repl = document.getElementById('ew-concierge-reply');
+    const list = document.getElementById('ew-concierge-list');
+    if (!q || q.length < 3) { repl.textContent = 'Tell me a bit more…'; repl.style.display='block'; return; }
+    repl.textContent = '✨ Finding the best matches…'; repl.style.display = 'block';
+    list.innerHTML = '';
+    try {
+      const res  = await fetch('/api/events/concierge', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query: q }),
+      });
+      const data = await res.json();
+      repl.textContent = data.reply || '';
+      if (data.events && data.events.length) {
+        _renderEvents(data.events, 'ew-concierge-list', false);
+      } else {
+        list.innerHTML = '<div class="events-empty">No matches today — try browsing All events ✦</div>';
+      }
+    } catch(e) {
+      repl.textContent = 'Network error — try again.';
+    }
+  };
+
+  // ── Alerts / Subscribe ────────────────────────────────────────────
   window._toggleSubTag = function(el) { el.classList.toggle('active'); };
 
-  // ── Submit event subscription ────────────────────────────────────
   window._submitEventsSub = async function() {
     const contact = document.getElementById('events-sub-input')?.value?.trim();
     if (!contact) { _showSubMsg('Please enter a Telegram @username or email.', false); return; }
@@ -1744,8 +1937,7 @@ function toggleAmbient(btn) {
     if (!tags.length) { _showSubMsg('Pick at least one category.', false); return; }
     try {
       const res  = await fetch('/api/events/subscribe', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ contact, categories: tags }),
       });
       const data = await res.json();
@@ -1753,19 +1945,25 @@ function toggleAmbient(btn) {
         _showSubMsg('✓ Saved! You\'ll be notified when matching events are added.', true);
         document.getElementById('events-sub-input').value = '';
       } else {
-        _showSubMsg(data.error || 'Something went wrong — try again.', false);
+        _showSubMsg(data.error || 'Something went wrong.', false);
       }
-    } catch(e) { _showSubMsg('Network error — try again later.', false); }
+    } catch(e) { _showSubMsg('Network error — try again.', false); }
   };
 
   function _showSubMsg(txt, ok) {
     const el = document.getElementById('events-sub-msg');
     if (!el) return;
     el.textContent = txt;
-    el.style.color = ok ? 'var(--sage-light)' : 'var(--amber)';
+    el.style.color   = ok ? 'var(--sage-light)' : 'var(--amber)';
     el.style.display = 'block';
     setTimeout(() => { el.style.display = 'none'; }, 5000);
   }
+
+  // Auto-refresh if widget visible
+  setInterval(() => {
+    const ew = document.getElementById('events-widget');
+    if (ew && ew.style.display !== 'none') _loadEvents();
+  }, 15 * 60 * 1000);
 })();
 </script>
 </body>
