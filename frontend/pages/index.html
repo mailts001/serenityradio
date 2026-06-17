@@ -1045,21 +1045,18 @@ function switchScene(scene) {
 
   const isPro = typeof Auth !== 'undefined' && Auth.isPro();
 
-  if (PRO_SCENES.has(scene) && !isPro) {
-    // Give a 30-second free preview, then nudge upgrade
-    _applyScene(scene);
-    showToast(`✦ 30-second preview of ${scene.charAt(0).toUpperCase()+scene.slice(1)} scene`);
-    _scenePreviewTimer = setTimeout(() => {
-      // Return to sea
-      _applyScene('sea');
-      // Show upgrade prompt
-      if (typeof Auth !== 'undefined') {
-        Auth.requirePro('scenes',
-          `Unlock all 6 immersive scenes — Sea, Space, Forest, Snow, Train Journey & Live Aquarium. Free accounts enjoy the Sea view.`);
-      }
-    }, 30000);
-    return;
-  }
+  // NOTE: Pro scene gate temporarily disabled for testing — re-enable before launch
+  // if (PRO_SCENES.has(scene) && !isPro) {
+  //   _applyScene(scene);
+  //   showToast(`✦ 30-second preview of ${scene.charAt(0).toUpperCase()+scene.slice(1)} scene`);
+  //   _scenePreviewTimer = setTimeout(() => {
+  //     _applyScene('sea');
+  //     if (typeof Auth !== 'undefined') {
+  //       Auth.requirePro('scenes', `Unlock all 6 immersive scenes...`);
+  //     }
+  //   }, 30000);
+  //   return;
+  // }
 
   _applyScene(scene);
 }

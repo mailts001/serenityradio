@@ -1,15 +1,13 @@
 'use strict';
 /* ═══════════════════════════════════════════════════════════════════
    TRAIN3D  —  Vintage railway carriage interior
-   Three.js r149  ·  opaque WebGL renderer + scene.background texture
+   Three.js r149  ·  transparent WebGL canvas layered over bg-canvas
    ───────────────────────────────────────────────────────────────────
-   Approach: bg-canvas (animated outdoor scenery drawn by _trainFrame
-   in canvas_scenes.js) is sampled each frame into a THREE.CanvasTexture
-   set as scene.background.  This renders as a GPU fullscreen quad
-   BEFORE any geometry — completely immune to CSS z-index issues.
-   The window wall panels are opaque geometry; the glass pane (0.025
-   opacity, depthWrite:false) lets the background show through the
-   window opening.
+   Approach: WebGLRenderer with alpha:true + transparent clear color.
+   The WebGL canvas (z-index:1) sits above bg-canvas (z-index:0).
+   Opaque 3D geometry (walls, seats, ceiling) writes pixels; the window
+   opening has NO geometry → those pixels remain transparent → bg-canvas
+   animated exterior shows through via normal CSS compositing.
    ═══════════════════════════════════════════════════════════════════ */
 const Train3D = (() => {
 
@@ -27,7 +25,7 @@ const Train3D = (() => {
   const FRAME_T = 0.11;          // frame bar thickness
 
   // ── State
-  let _el   = null;   // WebGL canvas
+  let _el   = null;   // WebGL canvas (transparent, z-index:1 above bg-canvas)
   let _R    = null;
   let _scene= null;
   let _cam  = null;
@@ -37,9 +35,6 @@ const Train3D = (() => {
   let _swayT = 0;
   let _lastNow = 0;
   let _carriageGroup = null;
-  let _canvas2d     = null;   // bg-canvas reference (outdoor scenery drawn by canvas_scenes.js)
-  let _bgTex        = null;   // THREE.CanvasTexture wrapping _canvas2d
-  let _backdropMesh = null;   // fullscreen quad rendered before all geometry (renderOrder=-999)
 
   // ─────────────────────────────────────────────────────────────────
   //  PUBLIC API
@@ -47,7 +42,9 @@ const Train3D = (() => {
   function start(canvas2d) {
     if (_running) return;
     _running  = true;
-    _canvas2d = canvas2d || null;   // bg-canvas; will become scene.background texture
+    // canvas2d is the bg-canvas — we don't need to reference it directly;
+    // it sits at z-index:0 below our transparent WebGL canvas (z-index:1)
+    // and shows through the window opening via CSS compositing.
 
     _el = document.createElement('canvas');
     _el.id = 'train3d-canvas';
@@ -84,16 +81,9 @@ const Train3D = (() => {
       });
       _scene = null;
     }
-    if (_backdropMesh) {
-      _backdropMesh.geometry.dispose();
-      _backdropMesh.material.dispose();
-      _backdropMesh = null;
-    }
-    if (_bgTex)  { _bgTex.dispose();  _bgTex  = null; }
     if (_R)      { _R.dispose();      _R      = null; }
     _cam = null;
     _carriageGroup = null;
-    _canvas2d = null;
     const c = document.getElementById('train3d-canvas');
     if (c) c.remove();
     _el = null;
@@ -105,44 +95,22 @@ const Train3D = (() => {
   function _launch() {
     if (!_running || !_el) return;
 
-    // ── Renderer — opaque; bg scenery is rendered via scene.background texture
+    // ── Renderer — transparent canvas; bg-canvas shows through window opening
+    // alpha:true means WebGL pixels with alpha=0 are transparent in the DOM,
+    // letting the bg-canvas (z-index:0) show through wherever there's no 3D geometry.
     _R = new THREE.WebGLRenderer({
       canvas:          _el,
       antialias:       true,
+      alpha:           true,   // transparent WebGL canvas
       powerPreference: 'high-performance',
     });
-    _R.setClearColor(0x0b1a0f);  // dark fallback (covered by bg texture when available)
+    _R.setClearColor(0x000000, 0);  // fully transparent clear (RGBA 0,0,0,0)
     _R.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
     _R.shadowMap.enabled = false;
 
-    // ── Scene ─────────────────────────────────────────────────────
+    // ── Scene — no background; transparent areas show bg-canvas below ──
     _scene = new THREE.Scene();
-
-    // ── Background texture: sample the bg-canvas (outdoor animated scenery) each frame
-    if (_canvas2d) {
-      _bgTex = new THREE.CanvasTexture(_canvas2d);
-      _bgTex.generateMipmaps = false;          // non-POT canvas — disable mipmaps
-      _bgTex.minFilter       = THREE.LinearFilter;
-      _bgTex.wrapS = _bgTex.wrapT = THREE.ClampToEdgeWrapping;
-      _scene.background = _bgTex;              // primary: full-screen background quad
-
-      // ── Belt-and-suspenders backdrop mesh ─────────────────────────
-      // Renders BEFORE all geometry (renderOrder=-999) with depthTest:false
-      // so it shows in any pixel not overwritten by opaque carriage geometry.
-      // This guarantees the outdoor scenery is visible through the window
-      // opening regardless of whether scene.background composites correctly.
-      const bdGeo = new THREE.PlaneGeometry(80, 50);
-      const bdMat = new THREE.MeshBasicMaterial({
-        map:        _bgTex,
-        depthTest:  false,   // always "behind" — render order handles it
-        depthWrite: false,
-      });
-      _backdropMesh = new THREE.Mesh(bdGeo, bdMat);
-      _backdropMesh.renderOrder    = -999;
-      _backdropMesh.frustumCulled  = false;   // don't clip this to camera frustum
-      _backdropMesh.position.set(0, RH * 0.5, WIN_Z - 25);  // z = -29.94, within far=60
-      _scene.add(_backdropMesh);
-    }
+    // scene.background intentionally NOT set → transparent
 
     // ── Camera ────────────────────────────────────────────────────
     // Eye-level from passenger seat, looking toward the window wall
@@ -678,8 +646,9 @@ const Train3D = (() => {
     const lookY = 1.02 + Math.sin(_swayT * 0.7) * 0.008;
     _cam.lookAt(_cam.position.x * 0.08, lookY, WIN_Z);
 
-    // Sync bg texture from whatever _trainFrame drew on bg-canvas this frame
-    if (_bgTex) _bgTex.needsUpdate = true;
+    // ── Render ───────────────────────────────────────────────────
+    // Transparent WebGL canvas: opaque 3D geometry writes pixels; window
+    // opening has no geometry → stays transparent → bg-canvas shows through.
     _R.render(_scene, _cam);
   }
 

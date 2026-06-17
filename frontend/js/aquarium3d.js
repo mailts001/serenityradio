@@ -762,20 +762,7 @@ const Aquarium3D = (() => {
     _scene.add(bw);
     _disposables.push(bw, bwG, bwM);
 
-    // ── Light shafts (light rays from surface, similar to WebGL Samples LightRay)
-    const shaftM = new THREE.MeshBasicMaterial({
-      color: 0x70c0ff, transparent: true, opacity: 0.042,
-      depthWrite: false, side: THREE.DoubleSide,
-    });
-    [-TW*0.55, -TW*0.18, TW*0.18, TW*0.55].forEach((x, i) => {
-      const sg = new THREE.ConeGeometry(2.4, TH * 2.4, 6, 1, true);
-      const s  = new THREE.Mesh(sg, shaftM);
-      s.position.set(x, -TH * 0.1, (i % 2 ? 2.5 : -2.5));
-      s.rotation.x = 0.07 + i * 0.018;
-      _scene.add(s);
-      _disposables.push(s, sg);
-    });
-    _disposables.push(shaftM);
+    // Light shafts removed — user found the cone shapes distracting
 
     // ── Water surface
     const surfG = new THREE.PlaneGeometry(TW * 2.2, TD * 2.2, 26, 26);
@@ -1211,7 +1198,7 @@ const Aquarium3D = (() => {
     if (_running) return;
     _running = true;
     _canvas2d = canvas2dRef;
-    if (_canvas2d) _canvas2d.style.display = 'none';
+    // Don't hide bg-canvas — aquarium sits at z:1 (above bg:0, below UI:2)
     _tuning = { speed: 1.0, bend: 1.0, wave: 1.0, tail: 1.0 };
     _tuningLight = 1.0; _tuningCamSpd = 1.0; _specCountMult = 1.0;
     _tuningEyeRadius = 2.2; _tuningEyeHeight = 1.5; _tuningFOV = 60;
@@ -1232,7 +1219,7 @@ const Aquarium3D = (() => {
         _el.id = 'aquarium3d-canvas';
         Object.assign(_el.style, {
           position:'fixed', inset:'0', width:'100%', height:'100%',
-          zIndex:'3', display:'block',
+          zIndex:'1', display:'block',  // behind UI (.page z:2), above bg-canvas (z:0)
         });
         document.body.appendChild(_el);
       }
@@ -1279,7 +1266,7 @@ const Aquarium3D = (() => {
     _scene = null; _cam = null;
 
     if (_el) { _el.remove(); _el = null; }
-    if (_canvas2d) { _canvas2d.style.display = ''; _canvas2d = null; }
+    _canvas2d = null;
     _removeControls();
   }
 
