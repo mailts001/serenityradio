@@ -6,15 +6,15 @@
 // ── Platform tiers — each tab shows the moat concept + switches music channel ──
 const CHANNELS = [
   {
-    id: 'default', emoji: '🔍',
-    label: '🔍 Discover',
-    desc:  'AI Curator · Knowledge Graph · Event Discovery',
+    id: 'default', emoji: '📡',
+    label: '📡 Scout',
+    desc:  'AI scans Instagram · Facebook · Telegram · Community groups',
     tierLabel: 'Tier 2',
-    tagline: 'Singapore Arts Knowledge Graph',
+    tagline: 'Social & Community Event Radar',
     features: [
-      'Every event, venue & artist aggregated',
-      'AI-powered discovery & recommendations',
-      'Featured placements · Affiliate commissions',
+      'AI scouts Instagram, Facebook Events & Telegram channels',
+      'Surfaces events only promoted in community groups',
+      'Knowledge graph links venues, artists & communities',
       'White-label API for venue & media partners',
     ],
   },
@@ -99,15 +99,16 @@ function renderChannelTabs() {
 
 // ── Moat section each channel maps to ─────────────────────────
 const CHANNEL_SECTION = {
-  default: 'browse',
+  default: 'scout',
   focus:   'organizer',
   yoga:    'concierge',
   sleep:   'alerts',
   event:   'browse',
 };
 const SECTION_TITLE = {
+  scout:      '📡 Social & Community Event Radar',
   browse:     '📅 What\'s On in Singapore',
-  concierge:  '✨ Wellness Concierge',
+  concierge:  '✨ Singapore Life Planner',
   alerts:     '🔔 My Alerts',
   organizer:  '🏢 Organizer Intelligence',
 };

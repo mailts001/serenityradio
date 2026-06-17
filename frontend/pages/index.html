@@ -608,7 +608,55 @@
         <button class="mp-close" onclick="_moatClose()" title="Close">×</button>
       </div>
 
-      <!-- ── Section 1: Browse events (Discover + Event tabs) ── -->
+      <!-- ── Section 0: Scout (Social & Community Radar) ── -->
+      <div class="mp-section" id="mp-scout">
+        <p class="mp-lead">Many of Singapore's best events are only announced on Instagram, Facebook Events, Telegram channels and community groups — not on ticketing sites.</p>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:.85rem 0 1rem;">
+          <div style="background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:10px;padding:.7rem .9rem;">
+            <div style="font-size:18px;margin-bottom:4px">📸</div>
+            <div style="font-size:12px;font-weight:600;color:var(--sage-light)">Instagram</div>
+            <div style="font-size:11px;color:var(--text-muted);margin-top:2px">Story drops &amp; pop-ups</div>
+          </div>
+          <div style="background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:10px;padding:.7rem .9rem;">
+            <div style="font-size:18px;margin-bottom:4px">📘</div>
+            <div style="font-size:12px;font-weight:600;color:var(--sage-light)">Facebook Events</div>
+            <div style="font-size:11px;color:var(--text-muted);margin-top:2px">Community &amp; grassroots</div>
+          </div>
+          <div style="background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:10px;padding:.7rem .9rem;">
+            <div style="font-size:18px;margin-bottom:4px">✈️</div>
+            <div style="font-size:12px;font-weight:600;color:var(--sage-light)">Telegram Channels</div>
+            <div style="font-size:11px;color:var(--text-muted);margin-top:2px">Hidden gems &amp; presales</div>
+          </div>
+          <div style="background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:10px;padding:.7rem .9rem;">
+            <div style="font-size:18px;margin-bottom:4px">🏘️</div>
+            <div style="font-size:12px;font-weight:600;color:var(--sage-light)">Community Groups</div>
+            <div style="font-size:11px;color:var(--text-muted);margin-top:2px">Interest &amp; heritage circles</div>
+          </div>
+        </div>
+        <div style="background:linear-gradient(135deg,rgba(122,158,126,.12),rgba(122,158,126,.04));border:1px solid rgba(122,158,126,.25);border-radius:12px;padding:.9rem 1rem;margin-bottom:.9rem;">
+          <div style="font-size:12px;font-weight:600;color:var(--sage-light);margin-bottom:.35rem">🤖 What the AI Scout does</div>
+          <div style="font-size:12px;color:var(--text-muted);line-height:1.6">
+            Instead of listing 137 events, the Scout surfaces your <strong style="color:var(--text)">top 10</strong> — scored by interest match, budget fit, proximity, popularity and availability. Not just what's happening. <em>What's right for you.</em>
+          </div>
+        </div>
+        <div class="mp-coming-soon" style="padding:.85rem 1rem;text-align:left;">
+          <div style="font-size:12px;font-weight:600;color:var(--sage-light);margin-bottom:.3rem">📡 Scout is in development</div>
+          <p style="font-size:11px;color:var(--text-muted);margin:.3rem 0 .7rem">Be first to access social event radar — enter your Telegram or email:</p>
+          <div style="display:flex;gap:8px;">
+            <input id="scout-waitlist-input" type="text" placeholder="@TelegramUsername or email"
+              style="flex:1;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.12);
+              border-radius:8px;padding:7px 10px;color:var(--text);font-size:12px;
+              font-family:'DM Sans',sans-serif;outline:none;">
+            <button onclick="_scoutWaitlist()" style="
+              background:rgba(122,158,126,.25);border:1px solid rgba(122,158,126,.35);
+              border-radius:8px;padding:7px 14px;color:var(--sage-light);font-size:12px;
+              font-family:'DM Sans',sans-serif;cursor:pointer;white-space:nowrap;">Notify me →</button>
+          </div>
+          <div id="scout-waitlist-msg" style="font-size:11px;color:var(--sage-light);margin-top:.4rem;display:none;"></div>
+        </div>
+      </div>
+
+      <!-- ── Section 1: Browse events (Event tab) ── -->
       <div class="mp-section active" id="mp-browse">
         <div class="ew-search-row">
           <input id="ew-search" type="search" placeholder="Search events, venues…" oninput="_ewSearch(this.value)">
@@ -635,22 +683,48 @@
 
       <!-- ── Section 2: Wellness Concierge (Concierge tab) ── -->
       <div class="mp-section" id="mp-concierge">
-        <p class="mp-lead">Tell me how you feel or what you're looking for — I'll curate experiences just for you.</p>
+        <p class="mp-lead">Tell me your mood, dates and budget — I'll plan your perfect Singapore experience.</p>
         <textarea id="ew-concierge-input"
-          placeholder="e.g. I'm stressed and need to unwind…&#10;e.g. Family Saturday, budget $50…&#10;e.g. Japanese culture and tea ceremony…"></textarea>
+          placeholder="e.g. I have a free weekend and $150 — what should I do?&#10;e.g. I'm stressed and need to unwind…&#10;e.g. Family day out, kids friendly, Saturday…"></textarea>
+        <!-- Date + Budget row -->
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:7px;margin:.5rem 0 .4rem;">
+          <div>
+            <label style="font-size:10px;color:var(--text-muted);letter-spacing:.06em;text-transform:uppercase;display:block;margin-bottom:3px">From</label>
+            <input type="date" id="cx-date-from" style="
+              width:100%;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.12);
+              border-radius:8px;padding:6px 8px;color:var(--text);font-size:12px;
+              font-family:'DM Sans',sans-serif;outline:none;box-sizing:border-box;
+              color-scheme:dark;">
+          </div>
+          <div>
+            <label style="font-size:10px;color:var(--text-muted);letter-spacing:.06em;text-transform:uppercase;display:block;margin-bottom:3px">To</label>
+            <input type="date" id="cx-date-to" style="
+              width:100%;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.12);
+              border-radius:8px;padding:6px 8px;color:var(--text);font-size:12px;
+              font-family:'DM Sans',sans-serif;outline:none;box-sizing:border-box;
+              color-scheme:dark;">
+          </div>
+          <div>
+            <label style="font-size:10px;color:var(--text-muted);letter-spacing:.06em;text-transform:uppercase;display:block;margin-bottom:3px">Budget $SGD</label>
+            <input type="number" id="cx-budget" min="0" placeholder="e.g. 150" style="
+              width:100%;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.12);
+              border-radius:8px;padding:6px 8px;color:var(--text);font-size:12px;
+              font-family:'DM Sans',sans-serif;outline:none;box-sizing:border-box;">
+          </div>
+        </div>
         <div class="ew-cx-chips">
           <button class="ew-cx-chip" onclick="_ewCxFill('I\'m stressed and need to unwind')">😮‍💨 Stressed</button>
-          <button class="ew-cx-chip" onclick="_ewCxFill('family day out kids friendly saturday')">👨‍👩‍👧 Family day</button>
+          <button class="ew-cx-chip" onclick="_ewCxFill('family day out kids friendly')">👨‍👩‍👧 Family day</button>
           <button class="ew-cx-chip" onclick="_ewCxFill('romantic evening art or theatre')">🌹 Date night</button>
           <button class="ew-cx-chip" onclick="_ewCxFill('japanese culture tea meditation')">🍵 Japanese</button>
-          <button class="ew-cx-chip" onclick="_ewCxFill('free or budget friendly outdoor festival')">💸 Free events</button>
+          <button class="ew-cx-chip" onclick="_ewCxFill('free or budget outdoor festival')">💸 Free events</button>
           <button class="ew-cx-chip" onclick="_ewCxFill('live music concert this week')">🎶 Live music</button>
         </div>
         <button onclick="_ewConcierge()" style="
           width:100%;padding:9px;border-radius:10px;margin-top:.3rem;
           background:rgba(122,158,126,.22);border:1px solid rgba(122,158,126,.35);
           color:var(--sage-light);font-size:13px;font-family:'DM Sans',sans-serif;cursor:pointer;">
-          ✨ Find for me
+          ✨ Plan my experience
         </button>
         <div id="ew-concierge-reply"></div>
         <div id="ew-concierge-list"></div>
@@ -1942,24 +2016,32 @@ function toggleAmbient(btn) {
   };
 
   window._ewConcierge = async function() {
-    const q    = document.getElementById('ew-concierge-input')?.value?.trim();
-    const repl = document.getElementById('ew-concierge-reply');
-    const list = document.getElementById('ew-concierge-list');
+    const q        = document.getElementById('ew-concierge-input')?.value?.trim();
+    const dateFrom = document.getElementById('cx-date-from')?.value || '';
+    const dateTo   = document.getElementById('cx-date-to')?.value   || '';
+    const budgetRaw= document.getElementById('cx-budget')?.value;
+    const budget   = budgetRaw ? parseFloat(budgetRaw) : undefined;
+    const repl     = document.getElementById('ew-concierge-reply');
+    const list     = document.getElementById('ew-concierge-list');
     if (!q || q.length < 3) { repl.textContent = 'Tell me a bit more…'; repl.style.display='block'; return; }
-    repl.textContent = '✨ Finding the best matches…'; repl.style.display = 'block';
+    repl.textContent = '✨ Planning your experience…'; repl.style.display = 'block';
     list.innerHTML = '';
     try {
+      const body = { query: q };
+      if (dateFrom) body.date_from = dateFrom;
+      if (dateTo)   body.date_to   = dateTo;
+      if (budget != null && !isNaN(budget)) body.budget = budget;
       const res  = await fetch('/api/events/concierge', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ query: q }),
+        body: JSON.stringify(body),
       });
       const data = await res.json();
       repl.textContent = data.reply || '';
       if (data.events && data.events.length) {
         _renderEvents(data.events, 'ew-concierge-list', false);
       } else {
-        list.innerHTML = '<div class="events-empty">No matches today — try browsing All events ✦</div>';
+        list.innerHTML = '<div class="events-empty">No matches — try adjusting dates, budget or mood ✦</div>';
       }
     } catch(e) {
       repl.textContent = 'Network error — try again.';
@@ -2009,6 +2091,25 @@ function toggleAmbient(btn) {
   }, 15 * 60 * 1000);
 
   // ── Organizer waitlist ────────────────────────────────────────────
+  window._scoutWaitlist = async function() {
+    const contact = document.getElementById('scout-waitlist-input')?.value?.trim();
+    const msg     = document.getElementById('scout-waitlist-msg');
+    if (!contact) {
+      if (msg) { msg.textContent = 'Please enter a Telegram @username or email.'; msg.style.color='var(--amber)'; msg.style.display='block'; }
+      return;
+    }
+    try {
+      await fetch('/api/events/subscribe', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ contact, categories: ['scout-waitlist'] }),
+      });
+      if (msg) { msg.textContent = '✓ Got it! You\'ll be first to know when Scout launches.'; msg.style.color='var(--sage-light)'; msg.style.display='block'; }
+      document.getElementById('scout-waitlist-input').value = '';
+    } catch(e) {
+      if (msg) { msg.textContent = 'Could not save — try again.'; msg.style.color='var(--amber)'; msg.style.display='block'; }
+    }
+  };
+
   window._orgWaitlist = async function() {
     const email = document.getElementById('mp-waitlist-input')?.value?.trim();
     const msg   = document.getElementById('mp-waitlist-msg');

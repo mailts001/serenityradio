@@ -651,8 +651,11 @@ def api_events_concierge():
 
     if request.method == 'OPTIONS':
         return '', 204
-    data  = request.get_json(silent=True) or {}
-    query = (data.get('query') or '').strip().lower()[:300]
+    data      = request.get_json(silent=True) or {}
+    query     = (data.get('query') or '').strip().lower()[:300]
+    date_from = (data.get('date_from') or '').strip()[:10]   # YYYY-MM-DD
+    date_to   = (data.get('date_to')   or '').strip()[:10]
+    budget    = data.get('budget')                            # numeric or None
     if len(query) < 3:
         return jsonify({'ok': False, 'error': 'Tell me a bit more about what you\'re looking for'}), 400
 
@@ -704,13 +707,32 @@ def api_events_concierge():
         conn = _sqlite3.connect(db_path)
         conn.row_factory = _sqlite3.Row
 
+        # Build date filter: use provided range or fall back to 'from today'
+        where_clauses = ["date_start >= date('now')"]
+        params        = []
+        if date_from:
+            where_clauses = [f"date_start >= ?"]
+            params.append(date_from)
+        if date_to:
+            where_clauses.append("date_start <= ?")
+            params.append(date_to)
+        # Budget filter (price_min = 0 counts as free)
+        if budget is not None:
+            try:
+                bval = float(budget)
+                where_clauses.append("(price_min IS NULL OR price_min <= ?)")
+                params.append(bval)
+            except (ValueError, TypeError):
+                pass
+
         rows = conn.execute(
-            """SELECT title, url, date_start, venue, categories,
+            f"""SELECT title, url, date_start, venue, categories,
                       price_min, price_max, source
                FROM events
-               WHERE date_start >= date('now')
+               WHERE {' AND '.join(where_clauses)}
                ORDER BY date_start
-               LIMIT 60"""
+               LIMIT 80""",
+            params
         ).fetchall()
         conn.close()
 
@@ -731,11 +753,17 @@ def api_events_concierge():
             del e['_score']
 
         if top:
-            reply = (f"Based on your mood, here are {len(top)} {matched_mood} "
-                     f"experiences in Singapore right now:")
+            ctx_parts = []
+            if date_from and date_to:
+                ctx_parts.append(f"{date_from} – {date_to}")
+            elif date_from:
+                ctx_parts.append(f"from {date_from}")
+            if budget is not None:
+                ctx_parts.append(f"within ${budget} budget")
+            ctx_str = f" ({', '.join(ctx_parts)})" if ctx_parts else " right now"
+            reply = (f"Here are {len(top)} {matched_mood} experiences in Singapore{ctx_str}:")
         else:
-            reply = ("I couldn't find a perfect match today — "
-                     "try browsing all events or check back as new ones are added.")
+            reply = ("I couldn't find a perfect match — adjust your dates, budget, or mood and try again.")
 
         return jsonify({'ok': True, 'events': top, 'reply': reply})
 
