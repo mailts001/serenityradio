@@ -1044,15 +1044,35 @@ const Aquarium3D = (() => {
 
   function _buildControls() {
     if (_controlPanel) return;
+
+    // ── Toggle gear button (always visible when aquarium is active) ──
+    const gear = document.createElement('button');
+    gear.id = 'aq-gear';
+    gear.textContent = '⚙';
+    gear.title = 'Aquarium settings';
+    gear.style.cssText = [
+      'position:fixed;bottom:16px;right:16px;z-index:21',
+      'width:34px;height:34px;border-radius:50%;border:1px solid rgba(80,160,255,0.35)',
+      'background:rgba(0,8,18,0.80);color:#aaddff;font-size:16px',
+      'cursor:pointer;pointer-events:auto;display:flex;align-items:center;justify-content:center',
+      'box-shadow:0 2px 10px rgba(0,60,160,0.35)',
+    ].join(';');
+    gear.onclick = () => {
+      const p = document.getElementById('aq-controls');
+      if (p) p.style.display = p.style.display === 'none' ? '' : 'none';
+    };
+    document.body.appendChild(gear);
+
     const panel = document.createElement('div');
     panel.id = 'aq-controls';
     panel.style.cssText = [
-      'position:fixed;bottom:14px;right:14px;z-index:20',
+      'position:fixed;bottom:58px;right:14px;z-index:20',
       'background:rgba(0,8,18,0.88);color:#aaddff',
       'padding:12px 16px;border-radius:10px;font:11px/1.7 monospace',
-      'pointer-events:auto;user-select:none;min-width:220px;max-height:92vh;overflow-y:auto',
+      'pointer-events:auto;user-select:none;min-width:220px;max-height:88vh;overflow-y:auto',
       'border:1px solid rgba(80,160,255,0.30)',
       'box-shadow:0 4px 20px rgba(0,80,180,0.30)',
+      'display:none',   // hidden by default — toggle with gear button
     ].join(';');
 
     // Full WebGL Samples-style parameter set mapped to our Three.js impl
@@ -1181,6 +1201,7 @@ const Aquarium3D = (() => {
 
   function _removeControls() {
     if (_controlPanel) { _controlPanel.remove(); _controlPanel = null; }
+    document.getElementById('aq-gear')?.remove();
   }
 
   function start(canvas2dRef) {

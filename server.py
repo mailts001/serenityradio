@@ -639,7 +639,7 @@ def api_events_subscribe():
         app.logger.error('Events subscribe error: %s', e)
         return jsonify({'ok': False, 'error': 'Temporarily unavailable'}), 500
 
-@app.route('/api/events/concierge', methods=['POST'])
+@app.route('/api/events/concierge', methods=['POST', 'OPTIONS'])
 def api_events_concierge():
     """
     Wellness + Arts Concierge (Tier 3).
@@ -649,6 +649,8 @@ def api_events_concierge():
     import sqlite3 as _sqlite3, json as _json, os as _os, re as _re
     from datetime import date as _date
 
+    if request.method == 'OPTIONS':
+        return '', 204
     data  = request.get_json(silent=True) or {}
     query = (data.get('query') or '').strip().lower()[:300]
     if len(query) < 3:
