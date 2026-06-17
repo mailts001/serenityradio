@@ -5,12 +5,13 @@
 
 /* ── Channel tabs ── */
 #channel-tabs {
-  display: flex; gap: 8px; justify-content: center;
-  flex-wrap: wrap; margin: 1rem 0 1.5rem;
+  display: flex; gap: 7px; justify-content: center;
+  flex-wrap: wrap; margin: 1rem 0 0;
+  /* No bottom margin — moat-panel snaps flush below when open */
 }
 .ch-tab {
   background: var(--bg2); border: 1px solid var(--border);
-  border-radius: 20px; padding: 7px 16px; font-size: 13px;
+  border-radius: 20px; padding: 7px 15px; font-size: 13px;
   color: var(--text-muted); cursor: pointer;
   transition: all .2s; font-family: inherit;
   display: inline-flex; align-items: center; gap: 5px;
@@ -21,6 +22,9 @@
   background: var(--sage); color: #fff;
   border-color: var(--sage);
   box-shadow: 0 0 14px rgba(122,158,126,.3);
+  /* When active, square off bottom corners so panel feels attached */
+  border-bottom-left-radius: 6px;
+  border-bottom-right-radius: 6px;
 }
 /* Tier badge inside the channel tab */
 .ch-tier-badge {
@@ -36,6 +40,29 @@
   color: rgba(255,255,255,.38);
 }
 .ch-ambient:hover { color: rgba(180,220,160,.9); border-color: rgba(140,200,120,.3); }
+
+/* ── Moat panel visual connection ── */
+/* Spacer between tabs row and panel collapses to 0 when panel open */
+#channel-tabs {
+  transition: margin-bottom 0.42s cubic-bezier(0.4,0,0.2,1);
+}
+/* A thin sage accent bar below the tabs row that only shows when panel is open */
+#channel-tabs::after {
+  content: '';
+  display: block;
+  position: absolute;
+  bottom: -1px; left: 6%; right: 6%;
+  height: 2px;
+  background: var(--sage);
+  border-radius: 2px 2px 0 0;
+  opacity: 0;
+  transition: opacity 0.3s;
+  pointer-events: none;
+}
+#channel-tabs { position: relative; }
+/* When panel is open, show the connector and compress gap */
+body.moat-open #channel-tabs { margin-bottom: -1px; }
+body.moat-open #channel-tabs::after { opacity: 0.55; }
 
 /* ── Channel switch toast ── */
 #ch-toast {

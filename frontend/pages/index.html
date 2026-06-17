@@ -356,57 +356,75 @@
   .cinema-exit:hover { color: #fff; }
 </style>
 <style>
-  /* ── What's On SG — Platform moat widget ── */
-  #events-widget {
-    background: rgba(15,20,35,0.72);
-    backdrop-filter: blur(12px);
-    border: 1px solid rgba(255,255,255,.08);
-    border-radius: 18px;
-    padding: 1.1rem 1.2rem;
-    margin-top: 1.4rem;
-    transition: opacity .35s ease;
+  /* ═══════════════════════════════════════════════════════════════
+     MOAT ACCORDION PANEL
+     Sits directly below channel-tabs; slides open per tab click.
+     Each outer tab reveals one dedicated section — no inner tabs.
+  ═══════════════════════════════════════════════════════════════ */
+
+  /* ── Accordion wrapper ── */
+  #moat-panel {
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.42s cubic-bezier(0.4,0,0.2,1);
+    position: relative;
   }
-  /* ── Inner tab bar: Browse / Concierge / Alerts ── */
-  .ew-tabs {
-    display: flex; gap: 4px; margin-bottom: .9rem;
-    border-bottom: 1px solid rgba(255,255,255,.07); padding-bottom: .5rem;
+  #moat-panel.open { max-height: 780px; }
+
+  /* ── Inner card ── */
+  .mp-card {
+    background: rgba(12,18,32,0.78);
+    backdrop-filter: blur(14px);
+    border: 1px solid rgba(255,255,255,.07);
+    border-top: none;
+    border-radius: 0 0 18px 18px;
+    padding: 1.1rem 1.15rem 1.3rem;
+    margin-bottom: .5rem;
+    position: relative;
   }
-  .ew-tab {
-    font-size: 11px; padding: 4px 11px; border-radius: 50px; cursor: pointer;
-    background: transparent; color: var(--text-muted);
-    border: 1px solid transparent; font-family: 'DM Sans',sans-serif;
-    transition: all .15s;
+
+  /* ── Section heading row ── */
+  .mp-head {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: .85rem;
   }
-  .ew-tab.active {
-    background: rgba(122,158,126,.18); color: var(--sage-light);
-    border-color: rgba(122,158,126,.3);
+  .mp-title {
+    font-size: 11px; letter-spacing: .1em; text-transform: uppercase;
+    color: var(--text-muted); font-weight: 600;
   }
-  .ew-panel { display: none; }
-  .ew-panel.active { display: block; }
-  /* ── Search + category filters ── */
-  .ew-search-row {
-    display: flex; gap: 7px; align-items: center; margin-bottom: .65rem;
+  .mp-close {
+    background: none; border: none; color: var(--text-muted);
+    font-size: 18px; line-height: 1; cursor: pointer; padding: 0 2px;
+    font-family: 'DM Sans',sans-serif;
+    transition: color .15s;
   }
+  .mp-close:hover { color: var(--text); }
+
+  /* ── Sections (one visible at a time) ── */
+  .mp-section { display: none; }
+  .mp-section.active { display: block; }
+
+  /* ── Search + category filters (Browse section) ── */
+  .ew-search-row { display: flex; gap: 7px; align-items: center; margin-bottom: .65rem; }
   #ew-search {
     flex: 1; background: rgba(255,255,255,.06);
-    border: 1px solid rgba(255,255,255,.11); border-radius: 8px;
+    border: 1px solid rgba(255,255,255,.10); border-radius: 8px;
     padding: 6px 10px; color: var(--text); font-size: 12px;
     font-family: 'DM Sans',sans-serif; outline: none;
   }
   #ew-search::placeholder { color: var(--text-muted); }
-  .ew-cat-bar {
-    display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: .65rem;
-  }
+  .ew-cat-bar { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: .65rem; }
   .ew-cat-btn {
     font-size: 10px; padding: 3px 9px; border-radius: 50px; cursor: pointer;
     background: rgba(255,255,255,.05); color: var(--text-muted);
-    border: 1px solid rgba(255,255,255,.09); font-family: 'DM Sans',sans-serif;
+    border: 1px solid rgba(255,255,255,.08); font-family: 'DM Sans',sans-serif;
     transition: all .15s;
   }
   .ew-cat-btn.active {
     background: rgba(107,127,168,.25); color: var(--dusk-light);
     border-color: rgba(107,127,168,.4);
   }
+
   /* ── Event rows ── */
   .event-row {
     display: flex; align-items: flex-start; gap: 10px;
@@ -415,8 +433,7 @@
   .event-row:last-child { border-bottom: none; padding-bottom: 0; }
   .event-date {
     font-size: 11px; color: var(--amber); font-weight: 500;
-    min-width: 56px; padding-top: 1px; letter-spacing: .02em;
-    flex-shrink: 0;
+    min-width: 52px; padding-top: 1px; letter-spacing: .02em; flex-shrink: 0;
   }
   .event-info { flex: 1; min-width: 0; }
   .event-name {
@@ -425,57 +442,62 @@
     text-decoration: none; display: block;
   }
   .event-name:hover { color: var(--sage-light); }
-  .event-meta { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+  .event-meta { font-size: 11px; color: var(--text-muted); margin-top: 2px; line-height: 1.5; }
   .event-tag {
     display: inline-block; font-size: 10px;
     background: rgba(107,127,168,.18); color: var(--dusk-light);
-    border-radius: 4px; padding: 1px 6px; margin-right: 4px;
+    border-radius: 4px; padding: 1px 5px; margin-right: 3px;
     text-transform: capitalize;
   }
   .event-urgency-today {
     display: inline-block; font-size: 9px; font-weight: 700;
     background: rgba(255,90,60,.22); color: #ff7055;
-    border-radius: 4px; padding: 1px 6px; margin-right: 4px;
-    letter-spacing: .04em; text-transform: uppercase;
+    border-radius: 4px; padding: 1px 6px; margin-right: 4px; letter-spacing: .04em;
   }
   .event-urgency-soon {
     display: inline-block; font-size: 9px; font-weight: 700;
     background: rgba(255,180,0,.18); color: #ffc840;
     border-radius: 4px; padding: 1px 6px; margin-right: 4px;
-    letter-spacing: .04em;
   }
   .event-urgency-week {
     display: inline-block; font-size: 9px;
     background: rgba(122,158,126,.15); color: var(--sage-light);
-    border-radius: 4px; padding: 1px 6px; margin-right: 4px;
-    letter-spacing: .04em;
+    border-radius: 4px; padding: 1px 5px; margin-right: 3px;
   }
   .events-empty { font-size: 13px; color: var(--text-muted); text-align: center; padding: 1rem 0; }
-  .events-footer { margin-top: .75rem; text-align: center; }
-  .events-more { font-size: 11px; color: var(--text-muted); cursor: pointer; background: none; border: none; font-family: 'DM Sans',sans-serif; }
+  .mp-footer { margin-top: .75rem; text-align: center; }
+  .events-more {
+    font-size: 11px; color: var(--text-muted); cursor: pointer;
+    background: none; border: none; font-family: 'DM Sans',sans-serif;
+  }
   .events-more:hover { color: var(--sage-light); }
-  /* ── Concierge panel ── */
+
+  /* ── Concierge section ── */
+  .mp-lead {
+    font-size: 12px; color: var(--text-muted); margin-bottom: .7rem;
+    line-height: 1.55;
+  }
   #ew-concierge-input {
     width: 100%; box-sizing: border-box;
-    background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.11);
+    background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.10);
     border-radius: 10px; padding: 9px 12px; color: var(--text); font-size: 13px;
-    font-family: 'DM Sans',sans-serif; outline: none; resize: none; min-height: 58px;
+    font-family: 'DM Sans',sans-serif; outline: none; resize: none; min-height: 54px;
   }
   #ew-concierge-input::placeholder { color: var(--text-muted); line-height: 1.4; }
-  .ew-concierge-examples {
-    display: flex; flex-wrap: wrap; gap: 5px; margin: .5rem 0;
-  }
+  .ew-cx-chips { display: flex; flex-wrap: wrap; gap: 5px; margin: .55rem 0; }
   .ew-cx-chip {
     font-size: 10px; padding: 3px 9px; border-radius: 20px; cursor: pointer;
     background: rgba(255,255,255,.05); color: var(--text-muted);
-    border: 1px solid rgba(255,255,255,.09); font-family: 'DM Sans',sans-serif;
+    border: 1px solid rgba(255,255,255,.08); font-family: 'DM Sans',sans-serif;
+    transition: background .15s;
   }
   .ew-cx-chip:hover { background: rgba(255,255,255,.10); color: var(--text); }
   #ew-concierge-reply {
-    font-size: 12px; color: var(--sage-light); margin: .6rem 0 .3rem;
-    display: none; line-height: 1.4;
+    font-size: 12px; color: var(--sage-light); margin: .7rem 0 .4rem;
+    display: none; line-height: 1.45;
   }
-  /* ── Alerts / Subscribe panel ── */
+
+  /* ── Alerts / subscribe section ── */
   .sub-tag {
     font-size: 11px; padding: 3px 9px; border-radius: 20px; cursor: pointer;
     background: rgba(255,255,255,.05); color: var(--text-muted);
@@ -486,21 +508,38 @@
     background: rgba(122,158,126,.22); color: var(--sage-light);
     border-color: rgba(122,158,126,.35);
   }
-  .ew-title-row {
-    display: flex; align-items: center; justify-content: space-between;
-    margin-bottom: .75rem;
+
+  /* ── Organizer coming-soon section ── */
+  .mp-coming-soon {
+    text-align: center; padding: .5rem 0 .8rem;
   }
-  .events-title {
-    font-size: 11px; letter-spacing: .1em; text-transform: uppercase;
-    color: var(--text-muted); font-weight: 500;
+  .mp-coming-soon .cs-icon { font-size: 32px; margin-bottom: .5rem; }
+  .mp-coming-soon h3 { font-size: 15px; font-weight: 600; color: var(--text); margin: 0 0 .4rem; }
+  .mp-coming-soon p { font-size: 12px; color: var(--text-muted); line-height: 1.55; margin-bottom: .85rem; }
+  .cs-features {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 6px; text-align: left; margin-bottom: .9rem;
   }
-  .events-alert-btn {
-    font-size: 11px; padding: 4px 12px; border-radius: 50px;
-    background: rgba(122,158,126,.15); color: var(--sage-light);
-    border: 1px solid rgba(122,158,126,.3); cursor: pointer;
-    font-family: 'DM Sans',sans-serif; text-decoration: none; transition: background .2s;
+  .cs-feat {
+    font-size: 11px; color: var(--text-muted); padding: 6px 10px;
+    background: rgba(255,255,255,.04); border-radius: 8px;
+    border: 1px solid rgba(255,255,255,.06);
   }
-  .events-alert-btn:hover { background: rgba(122,158,126,.28); }
+  .cs-feat strong { display: block; color: var(--text); margin-bottom: 2px; font-size: 11px; }
+  .mp-waitlist-row { display: flex; gap: 8px; align-items: center; }
+  #mp-waitlist-input {
+    flex: 1; background: rgba(255,255,255,.07);
+    border: 1px solid rgba(255,255,255,.12); border-radius: 8px;
+    padding: 7px 10px; color: var(--text); font-size: 12px;
+    font-family: 'DM Sans',sans-serif; outline: none;
+  }
+  #mp-waitlist-input::placeholder { color: var(--text-muted); }
+  #mp-waitlist-msg { font-size: 11px; margin-top: .4rem; display: none; }
+
+  /* ── Telegram alert link row ── */
+  .mp-tg-row {
+    margin-top: .9rem; font-size: 11px; color: var(--text-muted); line-height: 1.5;
+    border-top: 1px solid rgba(255,255,255,.06); padding-top: .7rem;
+  }
 </style>
 
 <link rel="stylesheet" href="/css/moat.css">
@@ -560,6 +599,119 @@
   </header>
 
   <div id="channel-tabs"></div>
+
+  <!-- ══ MOAT ACCORDION — slides open directly below the tabs ══ -->
+  <div id="moat-panel">
+    <div class="mp-card">
+      <div class="mp-head">
+        <span class="mp-title" id="mp-title">Discover</span>
+        <button class="mp-close" onclick="_moatClose()" title="Close">×</button>
+      </div>
+
+      <!-- ── Section 1: Browse events (Discover + Event tabs) ── -->
+      <div class="mp-section active" id="mp-browse">
+        <div class="ew-search-row">
+          <input id="ew-search" type="search" placeholder="Search events, venues…" oninput="_ewSearch(this.value)">
+          <a href="https://t.me/AceArtsAlertBot" target="_blank" rel="noopener"
+            style="font-size:11px;padding:5px 12px;border-radius:50px;white-space:nowrap;
+                   background:rgba(122,158,126,.14);color:var(--sage-light);
+                   border:1px solid rgba(122,158,126,.28);text-decoration:none">🔔 Alerts</a>
+        </div>
+        <div class="ew-cat-bar" id="ew-cats">
+          <button class="ew-cat-btn active" data-cat="" onclick="_ewCat(this,'')">All</button>
+          <button class="ew-cat-btn" data-cat="music"   onclick="_ewCat(this,'music')">🎵 Music</button>
+          <button class="ew-cat-btn" data-cat="art"     onclick="_ewCat(this,'art')">🎨 Art</button>
+          <button class="ew-cat-btn" data-cat="theatre" onclick="_ewCat(this,'theatre')">🎭 Theatre</button>
+          <button class="ew-cat-btn" data-cat="wellness" onclick="_ewCat(this,'wellness')">🌿 Wellness</button>
+          <button class="ew-cat-btn" data-cat="dance"   onclick="_ewCat(this,'dance')">💃 Dance</button>
+          <button class="ew-cat-btn" data-cat="family"  onclick="_ewCat(this,'family')">👨‍👩‍👧 Family</button>
+          <button class="ew-cat-btn" data-cat="food"    onclick="_ewCat(this,'food')">🍜 Food</button>
+        </div>
+        <div id="events-list"><div class="events-empty">Loading upcoming events…</div></div>
+        <div class="mp-footer" id="ew-browse-footer">
+          <button class="events-more" onclick="_eventsLoadMore()">Show more ↓</button>
+        </div>
+      </div>
+
+      <!-- ── Section 2: Wellness Concierge (Concierge tab) ── -->
+      <div class="mp-section" id="mp-concierge">
+        <p class="mp-lead">Tell me how you feel or what you're looking for — I'll curate experiences just for you.</p>
+        <textarea id="ew-concierge-input"
+          placeholder="e.g. I'm stressed and need to unwind…&#10;e.g. Family Saturday, budget $50…&#10;e.g. Japanese culture and tea ceremony…"></textarea>
+        <div class="ew-cx-chips">
+          <button class="ew-cx-chip" onclick="_ewCxFill('I\'m stressed and need to unwind')">😮‍💨 Stressed</button>
+          <button class="ew-cx-chip" onclick="_ewCxFill('family day out kids friendly saturday')">👨‍👩‍👧 Family day</button>
+          <button class="ew-cx-chip" onclick="_ewCxFill('romantic evening art or theatre')">🌹 Date night</button>
+          <button class="ew-cx-chip" onclick="_ewCxFill('japanese culture tea meditation')">🍵 Japanese</button>
+          <button class="ew-cx-chip" onclick="_ewCxFill('free or budget friendly outdoor festival')">💸 Free events</button>
+          <button class="ew-cx-chip" onclick="_ewCxFill('live music concert this week')">🎶 Live music</button>
+        </div>
+        <button onclick="_ewConcierge()" style="
+          width:100%;padding:9px;border-radius:10px;margin-top:.3rem;
+          background:rgba(122,158,126,.22);border:1px solid rgba(122,158,126,.35);
+          color:var(--sage-light);font-size:13px;font-family:'DM Sans',sans-serif;cursor:pointer;">
+          ✨ Find for me
+        </button>
+        <div id="ew-concierge-reply"></div>
+        <div id="ew-concierge-list"></div>
+      </div>
+
+      <!-- ── Section 3: My Alerts (Alerts tab) ── -->
+      <div class="mp-section" id="mp-alerts">
+        <p class="mp-lead">Get notified the moment events matching your taste are added — or when they're nearly sold out.</p>
+        <div style="font-size:11px;color:var(--text-muted);margin-bottom:.45rem;letter-spacing:.05em;text-transform:uppercase">Notify me about</div>
+        <div id="events-sub-tags" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:.7rem;">
+          <button class="sub-tag active" data-tag="art"      onclick="_toggleSubTag(this)">🎨 Art</button>
+          <button class="sub-tag active" data-tag="music"    onclick="_toggleSubTag(this)">🎵 Music</button>
+          <button class="sub-tag active" data-tag="theatre"  onclick="_toggleSubTag(this)">🎭 Theatre</button>
+          <button class="sub-tag"        data-tag="wellness" onclick="_toggleSubTag(this)">🌿 Wellness</button>
+          <button class="sub-tag"        data-tag="dance"    onclick="_toggleSubTag(this)">💃 Dance</button>
+          <button class="sub-tag"        data-tag="film"     onclick="_toggleSubTag(this)">🎬 Film</button>
+          <button class="sub-tag"        data-tag="food"     onclick="_toggleSubTag(this)">🍜 Food</button>
+          <button class="sub-tag"        data-tag="family"   onclick="_toggleSubTag(this)">👨‍👩‍👧 Family</button>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center;">
+          <input id="events-sub-input" type="text" placeholder="Telegram @username or email" style="
+            flex:1;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.12);
+            border-radius:8px;padding:7px 10px;color:var(--text);font-size:12px;
+            font-family:'DM Sans',sans-serif;outline:none;">
+          <button onclick="_submitEventsSub()" style="
+            background:rgba(122,158,126,.25);border:1px solid rgba(122,158,126,.35);
+            border-radius:8px;padding:7px 14px;color:var(--sage-light);font-size:12px;
+            font-family:'DM Sans',sans-serif;cursor:pointer;white-space:nowrap;">Save →</button>
+        </div>
+        <div id="events-sub-msg" style="font-size:11px;color:var(--sage-light);margin-top:.4rem;display:none;"></div>
+        <div class="mp-tg-row">
+          🔔 Or join <a href="https://t.me/AceArtsAlertBot" target="_blank" style="color:var(--sage-light)">@AceArtsAlertBot</a>
+          on Telegram for instant sell-out alerts.
+        </div>
+      </div>
+
+      <!-- ── Section 4: Organizer Intelligence (Organizer tab) ── -->
+      <div class="mp-section" id="mp-organizer">
+        <div class="mp-coming-soon">
+          <div class="cs-icon">🏢</div>
+          <h3>Organizer Intelligence Platform</h3>
+          <p>Advanced analytics and demand forecasting for event organisers, venues, and arts councils in Singapore.</p>
+          <div class="cs-features">
+            <div class="cs-feat"><strong>📊 Demand Forecasting</strong>Predict sell-out risk and optimal pricing windows</div>
+            <div class="cs-feat"><strong>👥 Audience Segments</strong>Who's attending — interests, age, repeat rate</div>
+            <div class="cs-feat"><strong>📈 Market Signals</strong>Category trends, competitor events, booking velocity</div>
+            <div class="cs-feat"><strong>🎯 Marketing Timing</strong>Best days to promote based on behavioural data</div>
+          </div>
+          <div class="mp-waitlist-row">
+            <input id="mp-waitlist-input" type="email" placeholder="your@organisation.com — join the waitlist">
+            <button onclick="_orgWaitlist()" style="
+              background:rgba(200,169,110,.2);border:1px solid rgba(200,169,110,.35);
+              border-radius:8px;padding:7px 14px;color:var(--amber);font-size:12px;
+              font-family:'DM Sans',sans-serif;cursor:pointer;white-space:nowrap;">Join waitlist →</button>
+          </div>
+          <div id="mp-waitlist-msg" style="font-size:11px;margin-top:.4rem"></div>
+        </div>
+      </div>
+    </div><!-- .mp-card -->
+  </div><!-- #moat-panel -->
+
   <div class="stats-strip">
     <div class="stat-card"><div class="stat-value" id="stat-listeners">—</div><div class="stat-label">Tuned In Now</div></div>
     <div class="stat-card"><div class="stat-value" id="stat-today">—</div><div class="stat-label">Unique Today</div></div>
@@ -650,101 +802,6 @@
       <span id="remaining-label">$5,680 to go</span>
     </div>
     <button class="btn-full btn-amber" style="margin-top:1rem" onclick="openModal('modal-donate')">♡ Support This Station</button>
-  </div>
-
-  <!-- ══ WHAT'S ON SG — Arts & Events Widget (shown in Outdoor mode) ══ -->
-  <div id="events-widget" style="display:none">
-    <!-- Header row -->
-    <div class="ew-title-row">
-      <span class="events-title">📅 What's On in Singapore</span>
-      <a class="events-alert-btn" href="https://t.me/AceArtsAlertBot" target="_blank" rel="noopener">🔔 Telegram alerts</a>
-    </div>
-
-    <!-- Tab bar -->
-    <div class="ew-tabs">
-      <button class="ew-tab active" onclick="_ewTab(this,'browse')">🗓 Browse</button>
-      <button class="ew-tab" onclick="_ewTab(this,'concierge')">✨ Concierge</button>
-      <button class="ew-tab" onclick="_ewTab(this,'alerts')">🔔 My Alerts</button>
-    </div>
-
-    <!-- ── Panel 1: Browse ────────────────────── -->
-    <div class="ew-panel active" id="ewp-browse">
-      <div class="ew-search-row">
-        <input id="ew-search" type="search" placeholder="Search events, venues…" oninput="_ewSearch(this.value)">
-      </div>
-      <div class="ew-cat-bar" id="ew-cats">
-        <button class="ew-cat-btn active" data-cat="" onclick="_ewCat(this,'')">All</button>
-        <button class="ew-cat-btn" data-cat="music" onclick="_ewCat(this,'music')">🎵 Music</button>
-        <button class="ew-cat-btn" data-cat="art" onclick="_ewCat(this,'art')">🎨 Art</button>
-        <button class="ew-cat-btn" data-cat="theatre" onclick="_ewCat(this,'theatre')">🎭 Theatre</button>
-        <button class="ew-cat-btn" data-cat="wellness" onclick="_ewCat(this,'wellness')">🌿 Wellness</button>
-        <button class="ew-cat-btn" data-cat="dance" onclick="_ewCat(this,'dance')">💃 Dance</button>
-        <button class="ew-cat-btn" data-cat="family" onclick="_ewCat(this,'family')">👨‍👩‍👧 Family</button>
-        <button class="ew-cat-btn" data-cat="food" onclick="_ewCat(this,'food')">🍜 Food</button>
-      </div>
-      <div id="events-list"><div class="events-empty">Loading upcoming events…</div></div>
-      <div class="events-footer" id="ew-browse-footer">
-        <button class="events-more" onclick="_eventsLoadMore()">Show more ↓</button>
-      </div>
-    </div>
-
-    <!-- ── Panel 2: Concierge AI ─────────────── -->
-    <div class="ew-panel" id="ewp-concierge">
-      <div style="font-size:12px;color:var(--text-muted);margin-bottom:.6rem;line-height:1.5">
-        Tell me what you're looking for and I'll curate the perfect experience.
-      </div>
-      <textarea id="ew-concierge-input"
-        placeholder="e.g. I'm stressed and need to recharge… or Family Saturday, budget $50… or Japanese culture and tea ceremony…"></textarea>
-      <div class="ew-concierge-examples">
-        <button class="ew-cx-chip" onclick="_ewCxFill('I\'m stressed and need to unwind')">😮‍💨 I\'m stressed</button>
-        <button class="ew-cx-chip" onclick="_ewCxFill('Family day out, kids friendly, Saturday')">👨‍👩‍👧 Family day</button>
-        <button class="ew-cx-chip" onclick="_ewCxFill('Romantic evening, art or theatre')">🌹 Date night</button>
-        <button class="ew-cx-chip" onclick="_ewCxFill('Japanese culture, tea, meditation')">🍵 Japanese</button>
-        <button class="ew-cx-chip" onclick="_ewCxFill('free or budget friendly outdoor festival')">💸 Free / budget</button>
-      </div>
-      <button onclick="_ewConcierge()" style="
-        margin-top:.5rem;width:100%;padding:9px;border-radius:10px;
-        background:rgba(122,158,126,.22);border:1px solid rgba(122,158,126,.35);
-        color:var(--sage-light);font-size:13px;font-family:'DM Sans',sans-serif;cursor:pointer;">
-        ✨ Find for me
-      </button>
-      <div id="ew-concierge-reply"></div>
-      <div id="ew-concierge-list"></div>
-    </div>
-
-    <!-- ── Panel 3: My Alerts ─────────────────── -->
-    <div class="ew-panel" id="ewp-alerts">
-      <div style="font-size:12px;color:var(--text-muted);margin-bottom:.75rem;line-height:1.5">
-        Get notified when events matching your interests are added or selling out.
-      </div>
-      <div class="events-title" style="margin-bottom:.45rem;">Notify me about</div>
-      <div id="events-sub-tags" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:.65rem;">
-        <button class="sub-tag active" data-tag="art" onclick="_toggleSubTag(this)">🎨 Art</button>
-        <button class="sub-tag active" data-tag="music" onclick="_toggleSubTag(this)">🎵 Music</button>
-        <button class="sub-tag active" data-tag="theatre" onclick="_toggleSubTag(this)">🎭 Theatre</button>
-        <button class="sub-tag active" data-tag="dance" onclick="_toggleSubTag(this)">💃 Dance</button>
-        <button class="sub-tag" data-tag="wellness" onclick="_toggleSubTag(this)">🌿 Wellness</button>
-        <button class="sub-tag" data-tag="film" onclick="_toggleSubTag(this)">🎬 Film</button>
-        <button class="sub-tag" data-tag="food" onclick="_toggleSubTag(this)">🍜 Food</button>
-        <button class="sub-tag" data-tag="family" onclick="_toggleSubTag(this)">👨‍👩‍👧 Family</button>
-      </div>
-      <div style="display:flex;gap:8px;align-items:center;">
-        <input id="events-sub-input" type="text" placeholder="Telegram @username or email" style="
-          flex:1;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.12);
-          border-radius:8px;padding:7px 10px;color:var(--text);font-size:12px;
-          font-family:'DM Sans',sans-serif;outline:none;">
-        <button onclick="_submitEventsSub()" style="
-          background:rgba(122,158,126,.25);border:1px solid rgba(122,158,126,.35);
-          border-radius:8px;padding:7px 14px;color:var(--sage-light);font-size:12px;
-          font-family:'DM Sans',sans-serif;cursor:pointer;white-space:nowrap;">Save →</button>
-      </div>
-      <div id="events-sub-msg" style="font-size:11px;color:var(--sage-light);margin-top:.4rem;display:none;"></div>
-      <div style="margin-top:.9rem;font-size:11px;color:var(--text-muted);line-height:1.5;
-        border-top:1px solid rgba(255,255,255,.06);padding-top:.75rem">
-        🔔 Also join <a href="https://t.me/AceArtsAlertBot" target="_blank" style="color:var(--sage-light)">@AceArtsAlertBot</a>
-        on Telegram for instant sell-out alerts and last-minute deals.
-      </div>
-    </div>
   </div>
 
   <!-- ══ USER ACCOUNT SECTION ══ -->
@@ -1304,17 +1361,6 @@ function switchScene(scene) {
   //   }, 30000);
   //   return;
   // }
-
-  // Show events widget only in outdoor mode
-  const ew = document.getElementById('events-widget');
-  if (ew) {
-    if (scene === 'outdoor') {
-      ew.style.display = '';
-      if (!ew.dataset.loaded) { _loadEvents(); ew.dataset.loaded = '1'; }
-    } else {
-      ew.style.display = 'none';
-    }
-  }
 
   _applyScene(scene);
 }
@@ -1888,13 +1934,6 @@ function toggleAmbient(btn) {
     _searchTimer = setTimeout(() => _loadEvents(true), 380);
   };
 
-  // ── Tab switching ─────────────────────────────────────────────────
-  window._ewTab = function(btn, panelId) {
-    document.querySelectorAll('.ew-tab').forEach(b => b.classList.remove('active'));
-    document.querySelectorAll('.ew-panel').forEach(p => p.classList.remove('active'));
-    btn.classList.add('active');
-    document.getElementById('ewp-' + panelId)?.classList.add('active');
-  };
 
   // ── Concierge AI ──────────────────────────────────────────────────
   window._ewCxFill = function(txt) {
@@ -1960,10 +1999,34 @@ function toggleAmbient(btn) {
   }
 
   // Auto-refresh if widget visible
+  // Auto-refresh browse events every 15 min while panel is open
   setInterval(() => {
-    const ew = document.getElementById('events-widget');
-    if (ew && ew.style.display !== 'none') _loadEvents();
+    const panel = document.getElementById('moat-panel');
+    if (panel?.classList.contains('open') &&
+        document.getElementById('mp-browse')?.classList.contains('active')) {
+      _loadEvents();
+    }
   }, 15 * 60 * 1000);
+
+  // ── Organizer waitlist ────────────────────────────────────────────
+  window._orgWaitlist = async function() {
+    const email = document.getElementById('mp-waitlist-input')?.value?.trim();
+    const msg   = document.getElementById('mp-waitlist-msg');
+    if (!email || !email.includes('@')) {
+      if (msg) { msg.textContent = 'Please enter a valid email.'; msg.style.color='var(--amber)'; msg.style.display='block'; }
+      return;
+    }
+    try {
+      await fetch('/api/events/subscribe', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ contact: email, categories: ['organizer-waitlist'] }),
+      });
+      if (msg) { msg.textContent = '✓ You\'re on the waitlist! We\'ll be in touch.'; msg.style.color='var(--sage-light)'; msg.style.display='block'; }
+      document.getElementById('mp-waitlist-input').value = '';
+    } catch(e) {
+      if (msg) { msg.textContent = 'Could not save — try again.'; msg.style.color='var(--amber)'; msg.style.display='block'; }
+    }
+  };
 })();
 </script>
 </body>

@@ -97,47 +97,94 @@ function renderChannelTabs() {
     </button>`).join('');
 }
 
+// ── Moat section each channel maps to ─────────────────────────
+const CHANNEL_SECTION = {
+  default: 'browse',
+  focus:   'organizer',
+  yoga:    'concierge',
+  sleep:   'alerts',
+  event:   'browse',
+};
+const SECTION_TITLE = {
+  browse:     '📅 What\'s On in Singapore',
+  concierge:  '✨ Wellness Concierge',
+  alerts:     '🔔 My Alerts',
+  organizer:  '🏢 Organizer Intelligence',
+};
+
+let _moatOpen = false;   // accordion state
+
 async function switchChannel(channelId) {
-  if (channelId === activeChannel && document.getElementById('ch-' + channelId)) return;
+  const chDef    = CHANNELS.find(c => c.id === channelId);
+  const section  = CHANNEL_SECTION[channelId] || 'browse';
+  const panel    = document.getElementById('moat-panel');
+  const wasActive = activeChannel === channelId;
+
+  // Toggle: click same tab while panel open → close
+  if (wasActive && _moatOpen && panel) {
+    panel.classList.remove('open');
+    _moatOpen = false;
+    document.body.classList.remove('moat-open');
+    return;
+  }
 
   activeChannel = channelId;
   localStorage.setItem('sr_channel', channelId);
 
-  // Update tab UI
+  // Update tab active highlight
   document.querySelectorAll('.ch-tab').forEach(t =>
     t.classList.toggle('active', t.textContent.trim().includes(
-      CHANNELS.find(c => c.id === channelId)?.emoji || ''
-    ))
+      chDef?.emoji || ''))
   );
 
-  const chDef = CHANNELS.find(c => c.id === channelId);
+  // ── Open accordion + show correct section ────────────────────
+  if (panel) {
+    // Switch visible section
+    document.querySelectorAll('.mp-section').forEach(s => s.classList.remove('active'));
+    const sec = document.getElementById('mp-' + section);
+    if (sec) sec.classList.add('active');
 
-  // 📅 Event tab — switch to sea scene + show events widget
-  if (chDef?.isSpecial) {
-    if (typeof switchScene === 'function') switchScene('outdoor');
-    showChannelToast(chDef);
-    return;
+    // Update panel heading
+    const titleEl = document.getElementById('mp-title');
+    if (titleEl) titleEl.textContent = SECTION_TITLE[section] || '';
+
+    panel.classList.add('open');
+    _moatOpen = true;
+    document.body.classList.add('moat-open');
+
+    // Load browse events when opening browse section for first time
+    if ((section === 'browse') && typeof _loadEvents === 'function') {
+      const list = document.getElementById('events-list');
+      if (list && list.querySelector('.events-empty')?.textContent.includes('Loading')) {
+        _loadEvents();
+      } else if (!list?.children.length) {
+        _loadEvents();
+      }
+    }
   }
 
-  // Channel only controls music — scene is controlled by the scene buttons
-  document.dispatchEvent(new CustomEvent('channel:changed', { detail: channelId }));
-
-  // Load channel tracks from API
-  try {
-    const res  = await fetch(`/api/playlist?channel=${channelId}`);
-    const data = await res.json();
-    if (data.tracks && data.tracks.length > 0) {
-      tracks       = data.tracks;
-      currentTrack = 0;
-      loadTrack(0);
-      if (typeof renderTrackList === 'function') renderTrackList(tracks);
-    }
-  } catch(e) { console.warn('Channel load failed:', e); }
-
-  // Show moat tier toast + feature blurb
-  const ch = CHANNELS.find(c => c.id === channelId);
-  showChannelToast(ch);
+  // ── Music: load playlist for non-special channels ─────────────
+  if (!chDef?.isSpecial) {
+    document.dispatchEvent(new CustomEvent('channel:changed', { detail: channelId }));
+    try {
+      const musicId = chDef?.isSpecial ? 'default' : channelId;
+      const res  = await fetch(`/api/playlist?channel=${musicId}`);
+      const data = await res.json();
+      if (data.tracks && data.tracks.length > 0) {
+        tracks = data.tracks; currentTrack = 0; loadTrack(0);
+        if (typeof renderTrackList === 'function') renderTrackList(tracks);
+      }
+    } catch(e) { console.warn('Channel load failed:', e); }
+  }
 }
+
+// Close panel (called by × button and _moatClose global)
+function _closeMoatPanel() {
+  const panel = document.getElementById('moat-panel');
+  if (panel) { panel.classList.remove('open'); _moatOpen = false; }
+  document.body.classList.remove('moat-open');
+}
+window._moatClose = _closeMoatPanel;
 
 function showChannelToast(ch) {
   document.getElementById('ch-toast')?.remove();
@@ -164,4 +211,5 @@ function showChannelToast(ch) {
 // Called by score.js after check-in
 window.switchChannel = switchChannel;
 
+// Expose _loadEvents once DOM is ready (populated by index.html IIFE)
 document.addEventListener('DOMContentLoaded', renderChannelTabs);
