@@ -1058,29 +1058,29 @@ const Aquarium3D = (() => {
     // Full WebGL Samples-style parameter set mapped to our Three.js impl
     const sliders = [
       // ── Fish Animation ──────────────────────────────────────────────
-      { id:'aq-spd',   label:'fishSpeed',     key:'speed',   min:0.05, max:5.0,  step:0.05, def:1.0,   grp:'Fish Animation' },
-      { id:'aq-tail',  label:'fishTailSpeed', key:'tail',    min:0.1,  max:5.0,  step:0.05, def:1.0,   grp:null },
+      { id:'aq-spd',   label:'fishSpeed',     key:'speed',   min:0.0,  max:5.0,  step:0.05, def:0.0,   grp:'Fish Animation' },
+      { id:'aq-tail',  label:'fishTailSpeed', key:'tail',    min:0.0,  max:5.0,  step:0.05, def:0.0,   grp:null },
       { id:'aq-bend',  label:'Tail Bend',     key:'bend',    min:0.1,  max:5.0,  step:0.05, def:1.0,   grp:null },
       { id:'aq-wave',  label:'Wave Freq',     key:'wave',    min:0.1,  max:5.0,  step:0.05, def:1.0,   grp:null },
       // ── Fish Orbits ─────────────────────────────────────────────────
-      { id:'aq-fht',   label:'fishHeight',    key:'fHt',     min:0.2,  max:3.0,  step:0.05, def:1.0,   grp:'Fish Orbits' },
-      { id:'aq-fhr',   label:'fishHtRange',   key:'fHtR',    min:0.2,  max:3.0,  step:0.05, def:1.0,   grp:null },
-      { id:'aq-fxck',  label:'fishXClock',    key:'fXCk',    min:0.2,  max:3.0,  step:0.05, def:1.0,   grp:null },
-      { id:'aq-fyck',  label:'fishYClock',    key:'fYCk',    min:0.1,  max:2.0,  step:0.05, def:1.0,   grp:null },
-      { id:'aq-fzck',  label:'fishZClock',    key:'fZCk',    min:0.2,  max:3.0,  step:0.05, def:1.0,   grp:null },
+      { id:'aq-fht',   label:'fishHeight',    key:'fHt',     min:0.2,  max:5.0,  step:0.05, def:3.0,   grp:'Fish Orbits' },
+      { id:'aq-fhr',   label:'fishHtRange',   key:'fHtR',    min:0.2,  max:5.0,  step:0.05, def:3.0,   grp:null },
+      { id:'aq-fxck',  label:'fishXClock',    key:'fXCk',    min:0.0,  max:5.0,  step:0.05, def:1.0,   grp:null },
+      { id:'aq-fyck',  label:'fishYClock',    key:'fYCk',    min:0.0,  max:2.0,  step:0.05, def:0.0,   grp:null },
+      { id:'aq-fzck',  label:'fishZClock',    key:'fZCk',    min:0.0,  max:5.0,  step:0.05, def:3.0,   grp:null },
       // ── Camera ─────────────────────────────────────────────────────
-      { id:'aq-fov',   label:'fieldOfView',   key:'fov',     min:30,   max:110,  step:1,    def:60,    grp:'Camera' },
-      { id:'aq-er',    label:'eyeRadius',     key:'eyeR',    min:0.5,  max:8.0,  step:0.1,  def:2.2,   grp:null },
-      { id:'aq-eh',    label:'eyeHeight',     key:'eyeH',    min:-2.0, max:6.0,  step:0.1,  def:1.5,   grp:null },
-      { id:'aq-cam',   label:'eyeSpeed',      key:'cam',     min:0.0,  max:4.0,  step:0.05, def:1.0,   grp:null },
+      { id:'aq-fov',   label:'fieldOfView',   key:'fov',     min:30,   max:110,  step:1,    def:70,    grp:'Camera' },
+      { id:'aq-er',    label:'eyeRadius',     key:'eyeR',    min:0.5,  max:15.0, step:0.1,  def:8.6,   grp:null },
+      { id:'aq-eh',    label:'eyeHeight',     key:'eyeH',    min:-2.0, max:8.0,  step:0.1,  def:6.0,   grp:null },
+      { id:'aq-cam',   label:'eyeSpeed',      key:'cam',     min:0.0,  max:6.0,  step:0.05, def:3.0,   grp:null },
       // ── Lighting ───────────────────────────────────────────────────
-      { id:'aq-lgt',   label:'Light Intens.', key:'light',   min:0.1,  max:3.0,  step:0.05, def:1.0,   grp:'Lighting' },
-      { id:'aq-ambr',  label:'ambientRed',    key:'ambR',    min:0.0,  max:1.0,  step:0.01, def:0.00,  grp:null },
-      { id:'aq-ambg',  label:'ambientGreen',  key:'ambG',    min:0.0,  max:1.0,  step:0.01, def:0.20,  grp:null },
-      { id:'aq-ambb',  label:'ambientBlue',   key:'ambB',    min:0.0,  max:1.0,  step:0.01, def:0.33,  grp:null },
+      { id:'aq-lgt',   label:'Light Intens.', key:'light',   min:0.1,  max:4.0,  step:0.05, def:2.0,   grp:'Lighting' },
+      { id:'aq-ambr',  label:'ambientRed',    key:'ambR',    min:0.0,  max:1.0,  step:0.01, def:1.00,  grp:null },
+      { id:'aq-ambg',  label:'ambientGreen',  key:'ambG',    min:0.0,  max:1.0,  step:0.01, def:0.71,  grp:null },
+      { id:'aq-ambb',  label:'ambientBlue',   key:'ambB',    min:0.0,  max:1.0,  step:0.01, def:0.72,  grp:null },
       // ── Fog ────────────────────────────────────────────────────────
-      { id:'aq-fn',    label:'fogPower(near)', key:'fogN',   min:1,    max:40,   step:0.5,  def:20,    grp:'Fog' },
-      { id:'aq-ff',    label:'fogMult(far)',   key:'fogF',   min:10,   max:100,  step:1,    def:46,    grp:null },
+      { id:'aq-fn',    label:'fogPower(near)', key:'fogN',   min:1,    max:60,   step:0.5,  def:35,    grp:'Fog' },
+      { id:'aq-ff',    label:'fogMult(far)',   key:'fogF',   min:10,   max:150,  step:1,    def:100,   grp:null },
       { id:'aq-fogr',  label:'fogRed',         key:'fogR',   min:0.0,  max:1.0,  step:0.01, def:0.00,  grp:null },
       { id:'aq-fogg',  label:'fogGreen',       key:'fogG',   min:0.0,  max:1.0,  step:0.01, def:0.165, grp:null },
       { id:'aq-fogb',  label:'fogBlue',        key:'fogB',   min:0.0,  max:1.0,  step:0.01, def:0.251, grp:null },
@@ -1188,14 +1188,15 @@ const Aquarium3D = (() => {
     _running = true;
     _canvas2d = canvas2dRef;
     // Don't hide bg-canvas — aquarium sits at z:1 (above bg:0, below UI:2)
-    _tuning = { speed: 1.0, bend: 1.0, wave: 1.0, tail: 1.0 };
-    _tuningLight = 1.0; _tuningCamSpd = 1.0; _specCountMult = 1.0;
-    _tuningEyeRadius = 2.2; _tuningEyeHeight = 1.5; _tuningFOV = 60;
-    _tuningFogNear = 20; _tuningFogFar = 46;
+    // ── Defaults tuned by user testing ─────────────────────────────
+    _tuning = { speed: 0, bend: 1.0, wave: 1.0, tail: 0 };   // fish frozen, no tail flap
+    _tuningLight = 2.0; _tuningCamSpd = 3.0; _specCountMult = 1.0;
+    _tuningEyeRadius = 8.6; _tuningEyeHeight = 6.0; _tuningFOV = 70;
+    _tuningFogNear = 35; _tuningFogFar = 100;
     _tuningFogR = 0.00; _tuningFogG = 0.165; _tuningFogB = 0.251;
-    _tuningAmbR = 0.00; _tuningAmbG = 0.20;  _tuningAmbB = 0.33;
-    _tuningFishHt = 1.0; _tuningFishHtRange = 1.0;
-    _tuningFishXCk = 1.0; _tuningFishYCk = 1.0; _tuningFishZCk = 1.0;
+    _tuningAmbR = 1.00; _tuningAmbG = 0.71;  _tuningAmbB = 0.72;
+    _tuningFishHt = 3.0; _tuningFishHtRange = 3.0;
+    _tuningFishXCk = 1.0; _tuningFishYCk = 0.0; _tuningFishZCk = 3.0;
     _ambientLight = null;
     _buildControls();
 

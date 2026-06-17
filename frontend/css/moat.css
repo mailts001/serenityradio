@@ -13,6 +13,8 @@
   border-radius: 20px; padding: 7px 16px; font-size: 13px;
   color: var(--text-muted); cursor: pointer;
   transition: all .2s; font-family: inherit;
+  display: inline-flex; align-items: center; gap: 5px;
+  flex-direction: column; line-height: 1.25; text-align: center;
 }
 .ch-tab:hover { border-color: var(--sage); color: var(--text); }
 .ch-tab.active {
@@ -20,6 +22,12 @@
   border-color: var(--sage);
   box-shadow: 0 0 14px rgba(122,158,126,.3);
 }
+/* Tier badge inside the channel tab */
+.ch-tier-badge {
+  font-size: 9px; letter-spacing: .06em; text-transform: uppercase;
+  opacity: .55; font-weight: 600;
+}
+.ch-tab.active .ch-tier-badge { opacity: .75; }
 /* Ambient toggle — sits left of channel tabs, slightly separated */
 .ch-ambient {
   margin-right: 6px;

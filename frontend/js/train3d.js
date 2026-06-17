@@ -23,9 +23,9 @@ const Train3D = (() => {
   const RD = 5.0;   // room half-depth  (Z: +RD … -RD)
   const WIN_Z   = -RD + 0.06;    // window wall Z
   const WIN_W   = 2.6;           // window opening half-width
-  const WIN_BOT = 0.58;          // window bottom Y
-  const WIN_TOP = 2.20;          // window top Y
-  const WIN_DIV = 1.38;          // divider bar Y
+  const WIN_BOT = 0.28;          // window bottom Y  (low sill)
+  const WIN_TOP = 2.72;          // window top Y  (near ceiling)
+  const WIN_DIV = 1.50;          // divider bar Y
   const FRAME_T = 0.11;          // frame bar thickness
 
   // ── State
@@ -39,8 +39,7 @@ const Train3D = (() => {
   let _swayT   = 0;
   let _lastNow = 0;
   let _carriageGroup = null;
-  let _bgCanvas  = null;  // reference to bg-canvas element (exterior animation)
-  let _bgTex     = null;  // THREE.CanvasTexture wrapping _bgCanvas
+  let _bgCanvas  = null;  // reference to bg-canvas (kept for compat but not used as texture)
 
   // ─────────────────────────────────────────────────────────────────
   //  PUBLIC API
@@ -88,7 +87,6 @@ const Train3D = (() => {
       });
       _scene = null;
     }
-    if (_bgTex)  { _bgTex.dispose();  _bgTex  = null; }
     if (_R)      { _R.dispose();      _R      = null; }
     _cam = null;
     _carriageGroup = null;
@@ -104,34 +102,32 @@ const Train3D = (() => {
   function _launch() {
     if (!_running || !_el) return;
 
-    // ── Renderer — opaque canvas; exterior shown via scene.background ──
+    // ── Renderer — alpha:true so window opening (no geometry) is transparent.
+    // bg-canvas (z-index:0) shows through the transparent pixels via CSS compositing.
+    // The canvas_scenes.js exterior animation is already shifted (translate -H*0.18)
+    // so the landscape/horizon appears in the correct screen Y band.
     _R = new THREE.WebGLRenderer({
       canvas:          _el,
       antialias:       true,
+      alpha:           true,   // transparent canvas — window area shows bg-canvas through
       powerPreference: 'high-performance',
     });
+    _R.setClearColor(0x000000, 0);  // fully transparent clear
     _R.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
     _R.shadowMap.enabled = false;
 
-    // ── Scene background — CanvasTexture from bg-canvas ──────────────
-    // canvas_scenes.js animates the exterior scenery onto bg-canvas each
-    // frame. We wrap it in a CanvasTexture so Three.js renders it as the
-    // scene background. The window opening (no 3D geometry) lets the
-    // background show through, giving a realistic exterior view.
+    // ── Scene — no background; transparent pixels reveal bg-canvas exterior ──
     _scene = new THREE.Scene();
-    if (_bgCanvas) {
-      _bgTex = new THREE.CanvasTexture(_bgCanvas);
-      _scene.background = _bgTex;
-    } else {
-      // Fallback: dark sky colour if bg-canvas not found
-      _scene.background = new THREE.Color(0x0a1520);
-    }
+    // scene.background intentionally NOT set — leave transparent
 
     // ── Camera ────────────────────────────────────────────────────
-    // Eye-level from passenger seat, looking toward the window wall
-    _cam = new THREE.PerspectiveCamera(56, 1, 0.05, 60);
-    _cam.position.set(0, 1.15, RD - 0.5);
-    _cam.lookAt(0, 1.02, WIN_Z);
+    // Narrow FOV + close to window → window fills ~70% of the vertical view.
+    // WIN_BOT=0.28, WIN_TOP=2.72 → window height=2.44 units.
+    // Camera at Z=0.5, looking at WIN_Z=-4.94 → distance=5.44.
+    // FOV=38° → half-angle 19° → vertical span=3.75 → window=65% of view.
+    _cam = new THREE.PerspectiveCamera(38, 1, 0.05, 60);
+    _cam.position.set(0, 1.0, 0.5);
+    _cam.lookAt(0, 1.5, WIN_Z);
 
     _buildLights();
     _buildCarriage();
@@ -667,15 +663,15 @@ const Train3D = (() => {
 
     // ── Camera gentle sway ────────────────────────────────────────
     _cam.position.x = Math.sin(_swayT * 1.1)  * 0.04;
-    _cam.position.y = 1.15 + Math.sin(_swayT * 2.2)  * 0.018
+    _cam.position.y = 1.0  + Math.sin(_swayT * 2.2)  * 0.018
                            + Math.sin(_swayT * 5.5)  * 0.004;
-    const lookY = 1.02 + Math.sin(_swayT * 0.7) * 0.008;
+    const lookY = 1.5 + Math.sin(_swayT * 0.7) * 0.008;
     _cam.lookAt(_cam.position.x * 0.08, lookY, WIN_Z);
 
     // ── Refresh exterior texture & render ────────────────────────
     // bg-canvas was redrawn this frame by canvas_scenes._trainFrame();
     // mark the CanvasTexture dirty so Three.js re-uploads it to the GPU.
-    if (_bgTex) _bgTex.needsUpdate = true;
+    // bg-canvas exterior shows through transparent window pixels via CSS compositing
     _R.render(_scene, _cam);
   }
 
