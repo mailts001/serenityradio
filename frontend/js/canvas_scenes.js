@@ -1810,7 +1810,7 @@ const CanvasScenes = (() => {
 
     // Vertical pan — look up reveals more sky/peaks, look down reveals snowfield
     const altShift = (_panAlt / 50) * h * 0.40;
-    const groundY  = h * 0.74 + altShift;
+    const groundY  = h * 0.62 + altShift;
 
     const isNight = hr < 6 || hr >= 20;
 

@@ -12,12 +12,13 @@ const Forest3D = (() => {
   const MAX_PER  = CHUNKS_N * TREES;      // 250 worst-case per type
 
   // Plant archetypes  [hMin, hRange, trunkW, crXZ, crY, hexColor, hexTrunk]
+  // hexColor range spans dark forest-green → bright lime for visual variety
   const PTYPES = [
-    [14, 26, 1.0, 0.65, 1.8,  0x2a6e18, 0x5c3010],  // tall conifer   dark green
-    [7,  12, 2.4, 1.7,  0.65, 0x3a8a20, 0x6a3a12],  // broad oak      medium green
-    [2,   4, 0.5, 2.4,  0.45, 0x4aa028, 0x4a2e0e],  // shrub          lime
-    [9,  14, 0.8, 1.0,  1.3,  0x228c1c, 0x5a3414],  // palm           tropical
-    [12, 14, 0.4, 0.65, 1.0,  0x7ab840, 0xc8b090],  // birch          light + pale trunk
+    [14, 26, 1.0, 0.65, 1.8,  0x1a5410, 0x4a2808],  // tall dark conifer
+    [7,  12, 2.4, 1.7,  0.65, 0x3a8c22, 0x7a3810],  // broad oak      mid green
+    [2,   4, 0.5, 2.4,  0.45, 0x5ec830, 0x4a2e0e],  // shrub          bright lime
+    [9,  14, 0.8, 1.0,  1.3,  0x208818, 0x5c3412],  // tropical palm  deep green
+    [12, 14, 0.4, 0.65, 1.0,  0x92d44a, 0xd0b888],  // birch          light + pale trunk
   ];
   const N = PTYPES.length;
 
@@ -122,6 +123,13 @@ const Forest3D = (() => {
           _dummy.rotation.set(0, 0, tr.lean);
           _dummy.updateMatrix();
           _trunkMeshes[pt].setMatrixAt(ti, _dummy.matrix);
+          // Per-trunk brightness variation
+          const tv = 0.82 + r2() * 0.36;
+          const tc = p[6];
+          _trunkMeshes[pt].setColorAt(ti, new THREE.Color(
+            Math.min(1, ((tc>>16&0xff)/255)*tv),
+            Math.min(1, ((tc>>8 &0xff)/255)*tv),
+            Math.min(1, ((tc    &0xff)/255)*tv)));
         }
 
         // Canopy: 3 blobs
@@ -138,6 +146,13 @@ const Forest3D = (() => {
             _dummy.rotation.set(0, r2()*Math.PI, 0);
             _dummy.updateMatrix();
             _canopyMeshes[pt].setMatrixAt(idx, _dummy.matrix);
+            // Per-canopy blob brightness + slight hue shift
+            const cv = 0.80 + r2() * 0.40;
+            const cc = p[5];
+            _canopyMeshes[pt].setColorAt(idx, new THREE.Color(
+              Math.min(1, ((cc>>16&0xff)/255) * cv * (0.95 + r2()*0.10)),
+              Math.min(1, ((cc>>8 &0xff)/255) * cv * (0.92 + r2()*0.16)),
+              Math.min(1, ((cc    &0xff)/255) * cv * (0.90 + r2()*0.10))));
           }
         }
       });
@@ -151,6 +166,8 @@ const Forest3D = (() => {
     for (let pt = 0; pt < N; pt++) {
       _trunkMeshes[pt].instanceMatrix.needsUpdate  = true;
       _canopyMeshes[pt].instanceMatrix.needsUpdate = true;
+      if (_trunkMeshes[pt].instanceColor)  _trunkMeshes[pt].instanceColor.needsUpdate  = true;
+      if (_canopyMeshes[pt].instanceColor) _canopyMeshes[pt].instanceColor.needsUpdate = true;
       _trunkMeshes[pt].count  = _tCount[pt];
       _canopyMeshes[pt].count = _cCount[pt];
     }
@@ -528,6 +545,7 @@ const Forest3D = (() => {
 
   // ── Per-frame resize ──────────────────────────────────────────
   function _checkResize() {
+    if (!_R || !_cam) return;
     const w=window.innerWidth, h=window.innerHeight;
     if (w!==_lastW || h!==_lastH) {
       _lastW=w; _lastH=h;
@@ -544,20 +562,26 @@ const Forest3D = (() => {
     const mushGeo   = new THREE.SphereGeometry(1, 5, 4);
     const flowGeo   = new THREE.SphereGeometry(1, 4, 3);
 
-    // Per-type solid-colour meshes — NO vertexColors, proven reliable
+    // Lambert materials respond to directional light → natural shading on each face
     _trunkMeshes  = PTYPES.map((p, i) =>
-      new THREE.InstancedMesh(trunkGeo,  new THREE.MeshBasicMaterial({ color: p[6] }), MAX_PER));
+      new THREE.InstancedMesh(trunkGeo,  new THREE.MeshLambertMaterial({ color: p[6] }), MAX_PER));
     _canopyMeshes = PTYPES.map((p, i) =>
-      new THREE.InstancedMesh(canopyGeo, new THREE.MeshBasicMaterial({ color: p[5] }), MAX_PER * 3));
+      new THREE.InstancedMesh(canopyGeo, new THREE.MeshLambertMaterial({ color: p[5] }), MAX_PER * 3));
 
     _cloudMesh = new THREE.InstancedMesh(cloudGeo,
-      new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.95 }), 12);
+      new THREE.MeshLambertMaterial({ color: 0xffffff, transparent: true, opacity: 0.95 }), 12);
     _fireMesh  = new THREE.InstancedMesh(fireGeo,
-      new THREE.MeshBasicMaterial({ color: 0xffd050 }), FIRE_N);
+      new THREE.MeshLambertMaterial({ color: 0xffd050 }), FIRE_N);
     _mushMeshes = MUSH_COLORS.map(c =>
-      new THREE.InstancedMesh(mushGeo,  new THREE.MeshBasicMaterial({ color: c }), MUSH_EACH));
+      new THREE.InstancedMesh(mushGeo,  new THREE.MeshLambertMaterial({ color: c }), MUSH_EACH));
     _flowMeshes = FLOW_COLORS.map(c =>
-      new THREE.InstancedMesh(flowGeo,  new THREE.MeshBasicMaterial({ color: c }), FLOW_EACH));
+      new THREE.InstancedMesh(flowGeo,  new THREE.MeshLambertMaterial({ color: c }), FLOW_EACH));
+
+    // Directional sunlight — gives each face a different brightness, removing the flat look
+    const _sun = new THREE.DirectionalLight(0xfff4d8, 1.6);
+    _sun.position.set(0.6, 1.0, 0.4);
+    _scene.add(_sun);
+    _scene.add(new THREE.AmbientLight(0xc8dff8, 0.55));
 
     const all = [..._trunkMeshes, ..._canopyMeshes,
                  _cloudMesh, _fireMesh, ..._mushMeshes, ..._flowMeshes];

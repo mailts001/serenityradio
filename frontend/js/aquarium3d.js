@@ -1058,8 +1058,8 @@ const Aquarium3D = (() => {
     // Full WebGL Samples-style parameter set mapped to our Three.js impl
     const sliders = [
       // ── Fish Animation ──────────────────────────────────────────────
-      { id:'aq-spd',   label:'fishSpeed',     key:'speed',   min:0.0,  max:5.0,  step:0.05, def:0.0,   grp:'Fish Animation' },
-      { id:'aq-tail',  label:'fishTailSpeed', key:'tail',    min:0.0,  max:5.0,  step:0.05, def:0.0,   grp:null },
+      { id:'aq-spd',   label:'fishSpeed',     key:'speed',   min:0.0,  max:5.0,  step:0.05, def:0.3,   grp:'Fish Animation' },
+      { id:'aq-tail',  label:'fishTailSpeed', key:'tail',    min:0.0,  max:5.0,  step:0.05, def:0.4,   grp:null },
       { id:'aq-bend',  label:'Tail Bend',     key:'bend',    min:0.1,  max:5.0,  step:0.05, def:1.0,   grp:null },
       { id:'aq-wave',  label:'Wave Freq',     key:'wave',    min:0.1,  max:5.0,  step:0.05, def:1.0,   grp:null },
       // ── Fish Orbits ─────────────────────────────────────────────────
@@ -1079,8 +1079,8 @@ const Aquarium3D = (() => {
       { id:'aq-ambg',  label:'ambientGreen',  key:'ambG',    min:0.0,  max:1.0,  step:0.01, def:0.71,  grp:null },
       { id:'aq-ambb',  label:'ambientBlue',   key:'ambB',    min:0.0,  max:1.0,  step:0.01, def:0.72,  grp:null },
       // ── Fog ────────────────────────────────────────────────────────
-      { id:'aq-fn',    label:'fogPower(near)', key:'fogN',   min:1,    max:60,   step:0.5,  def:35,    grp:'Fog' },
-      { id:'aq-ff',    label:'fogMult(far)',   key:'fogF',   min:10,   max:150,  step:1,    def:100,   grp:null },
+      { id:'aq-fn',    label:'fogPower(near)', key:'fogN',   min:1,    max:100,  step:0.5,  def:50,    grp:'Fog' },
+      { id:'aq-ff',    label:'fogMult(far)',   key:'fogF',   min:10,   max:300,  step:1,    def:150,   grp:null },
       { id:'aq-fogr',  label:'fogRed',         key:'fogR',   min:0.0,  max:1.0,  step:0.01, def:0.00,  grp:null },
       { id:'aq-fogg',  label:'fogGreen',       key:'fogG',   min:0.0,  max:1.0,  step:0.01, def:0.165, grp:null },
       { id:'aq-fogb',  label:'fogBlue',        key:'fogB',   min:0.0,  max:1.0,  step:0.01, def:0.251, grp:null },
@@ -1189,10 +1189,10 @@ const Aquarium3D = (() => {
     _canvas2d = canvas2dRef;
     // Don't hide bg-canvas — aquarium sits at z:1 (above bg:0, below UI:2)
     // ── Defaults tuned by user testing ─────────────────────────────
-    _tuning = { speed: 0, bend: 1.0, wave: 1.0, tail: 0 };   // fish frozen, no tail flap
+    _tuning = { speed: 0.3, bend: 1.0, wave: 1.0, tail: 0.4 };
     _tuningLight = 2.0; _tuningCamSpd = 3.0; _specCountMult = 1.0;
     _tuningEyeRadius = 8.6; _tuningEyeHeight = 6.0; _tuningFOV = 70;
-    _tuningFogNear = 35; _tuningFogFar = 100;
+    _tuningFogNear = 50; _tuningFogFar = 150;
     _tuningFogR = 0.00; _tuningFogG = 0.165; _tuningFogB = 0.251;
     _tuningAmbR = 1.00; _tuningAmbG = 0.71;  _tuningAmbB = 0.72;
     _tuningFishHt = 3.0; _tuningFishHtRange = 3.0;

@@ -102,6 +102,9 @@ const Train3D = (() => {
   function _launch() {
     if (!_running || !_el) return;
 
+    // Force resize to recalculate on every launch (prevents stretch after scene switch)
+    _W = 0; _H = 0;
+
     // ── Renderer — alpha:true so window opening (no geometry) is transparent.
     // bg-canvas (z-index:0) shows through the transparent pixels via CSS compositing.
     // The canvas_scenes.js exterior animation is already shifted (translate -H*0.18)
@@ -483,13 +486,6 @@ const Train3D = (() => {
       );
       back.rotation.z = backAng;
       _carriageGroup.add(back);
-
-      // Seat back stitching
-      for (let sz = -seatLength / 2 + 0.35; sz < seatLength / 2 - 0.15; sz += 0.38) {
-        const seam = new THREE.Mesh(new THREE.BoxGeometry(0.008, backH * 0.9, 0.012), seamMat);
-        seam.position.set(sx - (side < 0 ? -1 : 1) * backT * 0.52, seatY + seatH / 2 + backH / 2, seatZ + sz);
-        _carriageGroup.add(seam);
-      }
 
       // Brass tack rail at top of seat back
       const tackRail = new THREE.Mesh(
