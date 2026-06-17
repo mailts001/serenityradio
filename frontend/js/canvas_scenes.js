@@ -19,6 +19,8 @@ const CanvasScenes = (() => {
   let _fireflies  = [];
   let _petals     = [];
   let _stars      = null;   // generated once
+  let _shootingStars = [];  // space scene: active shooting stars
+  let _nextShoot  = 0;      // space scene: t-value for next shooting star spawn
 
   function init(canvasEl) {
     _canvas = canvasEl;
@@ -1405,6 +1407,85 @@ const CanvasScenes = (() => {
       _ctx.fill();
     });
 
+    // ── Aurora borealis — subtle curtain near lower-middle of sky ──────────
+    {
+      const aBase  = h * 0.55;   // curtain centred here
+      const aWave  = Math.sin(t * 0.00018) * 0.05;  // slow vertical drift
+      const aC     = h * (0.55 + aWave);
+      const aAlpha = 0.11 + 0.04 * Math.sin(t * 0.00014);  // gentle pulse
+      const colors = [
+        { r:0,  g:220, b:130, a: aAlpha },        // green
+        { r:60, g:120, b:255, a: aAlpha * 0.55 }, // blue-violet
+        { r:180,g:30,  b:255, a: aAlpha * 0.30 }, // purple accent
+      ];
+      colors.forEach((col, ci) => {
+        const shift = w * (ci * 0.33 + 0.04 * Math.sin(t * 0.00011 + ci));
+        for (let xi = 0; xi < w; xi += 4) {
+          // Vertical ribbon: amplitude varies with position and time
+          const waveY = Math.sin((xi + shift) * 0.010 + t * 0.00020 + ci * 2.1) * h * 0.055
+                      + Math.sin((xi + shift) * 0.026 + t * 0.00031 + ci * 1.3) * h * 0.020;
+          const top  = aC + waveY - h * 0.055;
+          const bot  = aC + waveY + h * 0.055;
+          const ray  = _ctx.createLinearGradient(xi, top, xi, bot);
+          ray.addColorStop(0,   `rgba(${col.r},${col.g},${col.b},0)`);
+          ray.addColorStop(0.4, `rgba(${col.r},${col.g},${col.b},${(col.a).toFixed(3)})`);
+          ray.addColorStop(0.6, `rgba(${col.r},${col.g},${col.b},${(col.a * 0.6).toFixed(3)})`);
+          ray.addColorStop(1,   `rgba(${col.r},${col.g},${col.b},0)`);
+          _ctx.fillStyle = ray;
+          _ctx.fillRect(xi, top, 4, bot - top);
+        }
+      });
+    }
+
+    // ── Shooting stars ──────────────────────────────────────────────────
+    {
+      // Spawn a new shooting star every 4–9 seconds (staggered)
+      if (t > _nextShoot) {
+        const angle = Math.PI * (0.14 + Math.random() * 0.22); // downward-right streak
+        const speed = 0.38 + Math.random() * 0.28;   // px per ms
+        _shootingStars.push({
+          x:   w * (0.05 + Math.random() * 0.80),
+          y:   h * (0.04 + Math.random() * 0.28),
+          dx:  Math.cos(angle) * speed,
+          dy:  Math.sin(angle) * speed,
+          len: 80 + Math.random() * 140,     // trail length px
+          life: 0,
+          maxLife: 600 + Math.random() * 400, // ms
+          bright: 0.7 + Math.random() * 0.3,
+        });
+        _nextShoot = t + 4000 + Math.random() * 5000;
+      }
+      // Update & draw
+      _shootingStars = _shootingStars.filter(ss => ss.life < ss.maxLife);
+      _shootingStars.forEach(ss => {
+        const prog  = ss.life / ss.maxLife;
+        // Fade in first 15%, bright middle, fade out last 20%
+        const alpha = ss.bright * (
+          prog < 0.15 ? prog / 0.15 :
+          prog > 0.80 ? (1 - prog) / 0.20 : 1.0
+        );
+        const cx = ss.x + ss.dx * ss.life;
+        const cy = ss.y + ss.dy * ss.life;
+        const tx = cx - ss.dx * ss.len;
+        const ty = cy - ss.dy * ss.len;
+        const grad = _ctx.createLinearGradient(tx, ty, cx, cy);
+        grad.addColorStop(0,   `rgba(255,255,255,0)`);
+        grad.addColorStop(0.6, `rgba(230,245,255,${(alpha * 0.4).toFixed(3)})`);
+        grad.addColorStop(1,   `rgba(255,255,255,${alpha.toFixed(3)})`);
+        _ctx.beginPath();
+        _ctx.strokeStyle = grad;
+        _ctx.lineWidth   = 1.5;
+        _ctx.moveTo(tx, ty); _ctx.lineTo(cx, cy);
+        _ctx.stroke();
+        // Tiny bright head
+        _ctx.beginPath();
+        _ctx.arc(cx, cy, 1.5, 0, Math.PI * 2);
+        _ctx.fillStyle = `rgba(255,255,255,${alpha.toFixed(3)})`;
+        _ctx.fill();
+        ss.life += 16; // ~60fps increment
+      });
+    }
+
     // Slow-moving distant galaxy smear
     const gx = w * (0.55 + 0.04 * Math.sin(t * 0.0002));
     const gy = h * 0.25;
@@ -2772,9 +2853,9 @@ const CanvasScenes = (() => {
       sg.addColorStop(0.25,sunCol+'0.50)');
       sg.addColorStop(1,   sunCol+'0)');
       c.fillStyle=sg; c.fillRect(0,0,W,H);
-      // Clouds
+      // Clouds — scroll LEFT with landscape (negate _tX so direction matches hills/trees)
       for (let ci=0;ci<4;ci++) {
-        const cx = ((ci*W*0.28 + _tX*0.04 + ci*120)%(W*1.3))-W*0.1;
+        const cx = (((ci*W*0.28 - _tX*0.04 + ci*120) % (W*1.3) + W*1.3) % (W*1.3)) - W*0.1;
         const cy = H*(0.08 + ci*0.05);
         const cw = W*(0.12+ci*0.04);
         c.fillStyle='rgba(255,255,255,0.55)';
@@ -3099,6 +3180,12 @@ const CanvasScenes = (() => {
       aquarium: 'aquarium',
     };
     _activeSceneType = sceneMap[channel] || 'sea';
+
+    // Reset space-scene transient state when switching to/from space
+    if (_activeSceneType === 'space') {
+      _shootingStars = [];
+      _nextShoot = 0;  // spawn first star almost immediately
+    }
 
     // Persist scene choice (decoupled from channel/music choice)
     localStorage.setItem('sr_scene', _activeSceneType);
