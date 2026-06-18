@@ -547,7 +547,7 @@ def _fmt_event_row(r, json_loads):
         'date':       date_s,
         'venue':      r['venue'] or '',
         'categories': cats[:3],
-        'price':      f'SGD {pmin:.0f}' if pmin else 'Free / Check site',
+        'price':      'Free' if pmin == 0 else (f'SGD {pmin:.0f}' if pmin else 'Check site'),
         'source':     r['source'] or '',
         'urgency':    _urgency(date_s),
     }

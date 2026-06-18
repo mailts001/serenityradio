@@ -1411,7 +1411,11 @@ const CanvasScenes = (() => {
       _ctx.fill();
     });
 
-    // ── Aurora borealis — natural flowing curtain with rounded Bezier bands ──
+    // ── Aurora borealis — skip if WebGL Aurora3D is active ──────────────
+    // Aurora3D renders its own fullscreen canvas at z-index 0 (behind the page)
+    // so we skip the canvas-2D version to avoid drawing aurora twice.
+    if (typeof Aurora3D === 'undefined') {
+    // ── Aurora borealis — canvas-2D fallback (rounded Bezier bands) ──
     {
       const aAlpha = 0.14 + 0.06 * Math.sin(t * 0.00052);  // pulse
       const bands = [
@@ -1511,6 +1515,7 @@ const CanvasScenes = (() => {
         ss.life += 16; // ~60fps increment
       });
     }
+    } // end if(typeof Aurora3D === 'undefined') — canvas-2D aurora fallback
 
     // Slow-moving distant galaxy smear
     const gx = w * (0.55 + 0.04 * Math.sin(t * 0.0002));
@@ -2930,7 +2935,7 @@ const CanvasScenes = (() => {
         const y  = baseY
           - Math.sin(wx*freq + ph)            * H * amp
           - Math.sin(wx*freq*1.73 + ph*0.62)  * H * amp * 0.38
-          - Math.sin(wx*freq*0.53 + ph*1.41)  * H * amp * 0.22;
+          - Math.sin(wx*freq*2.51 + ph*1.41)  * H * amp * 0.22;
         x===-4 ? c.moveTo(x,y) : c.lineTo(x,y);
       }
       c.lineTo(W+4,H); c.closePath(); c.fill();
@@ -3320,6 +3325,11 @@ const CanvasScenes = (() => {
     if (_activeSceneType === 'space') {
       _shootingStars = [];
       _nextShoot = 0;  // spawn first star almost immediately
+      // Launch WebGL aurora overlay (fullscreen canvas behind page content)
+      if (typeof Aurora3D !== 'undefined') Aurora3D.start();
+    } else {
+      // Stop aurora if we're leaving space
+      if (typeof Aurora3D !== 'undefined') Aurora3D.stop();
     }
 
     // Persist scene choice (decoupled from channel/music choice)

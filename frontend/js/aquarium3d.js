@@ -953,6 +953,37 @@ const Aquarium3D = (() => {
       _cam.updateProjectionMatrix();
     }
 
+    // Time-of-day lighting (uses real clock, like the sea theme)
+    {
+      const hr = new Date().getHours() + new Date().getMinutes() / 60;
+      // Dawn 5-7, day 8-17, dusk 17-20, night 21-4
+      let brightness, tint;
+      if (hr >= 8 && hr <= 17) {
+        // Day — bright blue-green
+        const t = Math.min((hr - 8) / 2, 1) * Math.min((17 - hr) / 2, 1);
+        brightness = 0.8 + 0.2 * t;
+        tint = new THREE.Color(0.10, 0.28, 0.55);
+      } else if (hr >= 5 && hr < 8) {
+        // Dawn — blue-purple
+        const t = (hr - 5) / 3;
+        brightness = 0.4 + 0.4 * t;
+        tint = new THREE.Color(0.15, 0.18, 0.48);
+      } else if (hr > 17 && hr <= 20) {
+        // Dusk — amber-blue
+        const t = (hr - 17) / 3;
+        brightness = 0.8 - 0.4 * t;
+        tint = new THREE.Color(0.25, 0.18, 0.45);
+      } else {
+        // Night — deep dark blue
+        brightness = 0.25;
+        tint = new THREE.Color(0.04, 0.06, 0.18);
+      }
+      if (_ambientLight) {
+        _ambientLight.color.lerp(tint, 0.01);
+        _ambientLight.intensity += (brightness - _ambientLight.intensity) * 0.01;
+      }
+    }
+
     _updateWater(_clock);
     _updateBubbles();
     _updateFish(_clock);
@@ -1253,12 +1284,12 @@ const Aquarium3D = (() => {
       _lastNow = performance.now();
       _clock = 0; _causticFrame = 0;
 
-      // Force-upload all canvas textures to GPU before the animation loop starts.
-      // Without this, Three.js defers texture upload to the first render() call,
-      // which means frame-0 may show fish as solid colours while the GPU catches up.
-      // One synchronous render here warms up all shader programs and uploads textures.
-      // (Note: caustics are disabled, so _updateCaustics is NOT called here)
-      _R.render(_scene, _cam);
+      // Pre-compile all shaders and upload textures to GPU synchronously.
+      // _R.compile() walks the scene graph, compiles every ShaderProgram, and
+      // uploads all textures — so frame-0 never shows solid-colour fish.
+      // (Note: caustics are disabled, _updateCaustics is NOT called here)
+      _R.compile(_scene, _cam);
+      _R.render(_scene, _cam);   // also warm up the framebuffer
 
       _raf   = requestAnimationFrame(_loop);
     }
