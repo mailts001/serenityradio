@@ -1415,74 +1415,18 @@ const CanvasScenes = (() => {
       _ctx.fill();
     });
 
-    // ── Aurora borealis ──────────────────────────────────────────────────
+    // ── Aurora borealis — DEBUG: solid bright bands to confirm canvas is live ──
     {
-      // t is a frame counter (~60fps). Use t*0.016 ≈ elapsed seconds
-      const T = t * 0.016;
+      // TEMP: solid colored bands — if these aren't visible the canvas draw path
+      // itself is broken (wrong canvas, caching, or context lost)
+      _ctx.fillStyle = 'rgba(0,255,100,0.35)';
+      _ctx.fillRect(0, h * 0.28, w, h * 0.08);
 
-      // 4 bands: [r, g, b, centerY as fraction, bandwidth, speed, huePhase]
-      const bands = [
-        [0,   230, 120, 0.38, 0.11, 0.22, 0.00],   // green  — dominant
-        [0,   200, 220, 0.32, 0.07, 0.17, 0.80],   // teal   — upper
-        [80,  60,  255, 0.45, 0.07, 0.28, 2.10],   // blue   — lower
-        [200, 40,  180, 0.27, 0.05, 0.13, 4.20],   // pink   — accent, faint
-      ];
+      _ctx.fillStyle = 'rgba(0,200,255,0.25)';
+      _ctx.fillRect(0, h * 0.22, w, h * 0.07);
 
-      _ctx.save();
-      _ctx.globalCompositeOperation = 'screen';
-
-      bands.forEach(([r, g, b, cyF, bwF, spd, ph], bi) => {
-        const cy = h * cyF;
-        const bw = h * bwF;
-
-        // Breathing pulse per band
-        const pulse = 0.80 + 0.20 * Math.sin(T * 0.41 + ph);
-
-        // Draw 2 passes: wide glow + tight core
-        [[bw * 2.5, 0.22], [bw, 0.55]].forEach(([halfH, baseAlpha]) => {
-          const alpha = baseAlpha * pulse;
-          const STEPS = 48;
-
-          // Build top and bottom edges of the aurora ribbon
-          const topPts = [], botPts = [];
-          for (let si = 0; si <= STEPS; si++) {
-            const x = (si / STEPS) * (w + 40) - 20;
-            // Two overlapping waves for organic shape
-            const wave = Math.sin(x * 0.008 + T * spd + ph)          * h * 0.055
-                       + Math.sin(x * 0.019 + T * spd * 1.7 + ph * 1.3) * h * 0.022
-                       + Math.cos(x * 0.041 + T * spd * 0.8)             * h * 0.009;
-            topPts.push([x, cy - halfH * 0.5 + wave]);
-            botPts.push([x, cy + halfH * 0.5 + wave]);
-          }
-
-          // Trace path: top edge left→right, bottom edge right→left
-          _ctx.beginPath();
-          _ctx.moveTo(topPts[0][0], topPts[0][1]);
-          for (let si = 1; si <= STEPS; si++) {
-            const [cpx, cpy] = topPts[si - 1];
-            const [px,  py ] = topPts[si];
-            _ctx.quadraticCurveTo(cpx, cpy, (cpx + px) / 2, (cpy + py) / 2);
-          }
-          _ctx.lineTo(topPts[STEPS][0], topPts[STEPS][1]);
-          for (let si = STEPS; si >= 1; si--) {
-            const [cpx, cpy] = botPts[si];
-            const [px,  py ] = botPts[si - 1];
-            _ctx.quadraticCurveTo(cpx, cpy, (cpx + px) / 2, (cpy + py) / 2);
-          }
-          _ctx.closePath();
-
-          // Vertical gradient fades to transparent at ribbon edges
-          const grad = _ctx.createLinearGradient(0, cy - halfH, 0, cy + halfH);
-          grad.addColorStop(0,    `rgba(${r},${g},${b},0)`);
-          grad.addColorStop(0.30, `rgba(${r},${g},${b},${alpha.toFixed(3)})`);
-          grad.addColorStop(0.70, `rgba(${r},${g},${b},${alpha.toFixed(3)})`);
-          grad.addColorStop(1,    `rgba(${r},${g},${b},0)`);
-          _ctx.fillStyle = grad;
-          _ctx.fill();
-        });
-      });
-
-      _ctx.restore();  // restores globalCompositeOperation = 'source-over'
+      _ctx.fillStyle = 'rgba(120,60,255,0.20)';
+      _ctx.fillRect(0, h * 0.35, w, h * 0.06);
     }
 
 
