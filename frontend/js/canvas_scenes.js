@@ -1415,18 +1415,58 @@ const CanvasScenes = (() => {
       _ctx.fill();
     });
 
-    // ── Aurora borealis — DEBUG: solid bright bands to confirm canvas is live ──
+    // ── Aurora borealis ──────────────────────────────────────────────────
     {
-      // TEMP: solid colored bands — if these aren't visible the canvas draw path
-      // itself is broken (wrong canvas, caching, or context lost)
-      _ctx.fillStyle = 'rgba(0,255,100,0.35)';
-      _ctx.fillRect(0, h * 0.28, w, h * 0.08);
+      // t is frame counter at ~60fps
+      const T = t * 0.016; // approximate seconds
 
-      _ctx.fillStyle = 'rgba(0,200,255,0.25)';
-      _ctx.fillRect(0, h * 0.22, w, h * 0.07);
+      // [r, g, b, centerY%, halfHeight%, speed, phaseOffset]
+      const bands = [
+        [0,   230, 110, 0.30, 0.10, 0.18, 0.00],  // green — dominant
+        [0,   200, 210, 0.24, 0.07, 0.14, 1.50],  // teal
+        [80,  60,  255, 0.37, 0.07, 0.23, 3.00],  // blue/purple
+        [210, 40,  170, 0.20, 0.04, 0.10, 5.00],  // pink accent
+      ];
 
-      _ctx.fillStyle = 'rgba(120,60,255,0.20)';
-      _ctx.fillRect(0, h * 0.35, w, h * 0.06);
+      bands.forEach(([r, g, b, cyF, hwF, spd, ph]) => {
+        const cy  = h * cyF;
+        const hw  = h * hwF;  // half-height of ribbon
+
+        // Breathing pulse
+        const pulse = 0.75 + 0.25 * Math.sin(T * 0.37 + ph);
+
+        // Wide glow pass then tight core pass
+        [[hw * 2.8, 0.18], [hw, 0.50]].forEach(([passHW, baseA]) => {
+          const a = (baseA * pulse).toFixed(3);
+          const N = 40;
+
+          // Build wavy ribbon: top edge then bottom edge reversed
+          _ctx.beginPath();
+          for (let i = 0; i <= N; i++) {
+            const x   = (i / N) * w;
+            const wave = Math.sin(x * 0.007 + T * spd + ph) * h * 0.045
+                       + Math.sin(x * 0.018 + T * spd * 1.6 + ph * 1.2) * h * 0.018;
+            const y = cy - passHW + wave;
+            i === 0 ? _ctx.moveTo(x, y) : _ctx.lineTo(x, y);
+          }
+          for (let i = N; i >= 0; i--) {
+            const x   = (i / N) * w;
+            const wave = Math.sin(x * 0.007 + T * spd + ph) * h * 0.045
+                       + Math.sin(x * 0.018 + T * spd * 1.6 + ph * 1.2) * h * 0.018;
+            _ctx.lineTo(x, cy + passHW + wave);
+          }
+          _ctx.closePath();
+
+          // Gradient fades to transparent at top and bottom of ribbon
+          const grad = _ctx.createLinearGradient(0, cy - passHW, 0, cy + passHW);
+          grad.addColorStop(0,    `rgba(${r},${g},${b},0)`);
+          grad.addColorStop(0.35, `rgba(${r},${g},${b},${a})`);
+          grad.addColorStop(0.65, `rgba(${r},${g},${b},${a})`);
+          grad.addColorStop(1,    `rgba(${r},${g},${b},0)`);
+          _ctx.fillStyle = grad;
+          _ctx.fill();
+        });
+      });
     }
 
 
