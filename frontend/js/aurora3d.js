@@ -163,14 +163,14 @@ function _loop(now){
   _setAll('seconds',_t);
   if(_stars) _stars.material.uniforms.seconds.value=_t;
 
-  // Layer 1 — lower arc
+  // Layer 1 — lower arc  (shifted down so bottom curve sits near screen centre)
   if(_group){
-    _group.position.y  = 5.5 + 0.35*Math.sin(_t*0.09);
+    _group.position.y  = 1.5 + 0.35*Math.sin(_t*0.09);
     _group.scale.setScalar(8.0 + 0.3*Math.sin(_t*0.11));
   }
   // Layer 2 — higher, taller body, different hue
   if(_group2){
-    _group2.position.y = 9.5 + 0.5*Math.sin(_t*0.07+1.2);
+    _group2.position.y = 5.5 + 0.5*Math.sin(_t*0.07+1.2);
     _group2.scale.setScalar(9.0 + 0.4*Math.sin(_t*0.09+0.8));
     _group2.children.forEach(m=>{
       if(m.material?.uniforms.seconds!==undefined)
@@ -183,7 +183,7 @@ function _loop(now){
   _cam.position.x = -5 + Math.sin(_t * 0.025) * 2;
   _cam.position.y = -1.5 + Math.sin(_t * 0.018) * 0.5;
   _cam.position.z =  6  + Math.cos(_t * 0.025) * 2;
-  _cam.lookAt(0, 2.0, 0);
+  _cam.lookAt(0, -0.5, 0);
 
   const W=window.innerWidth,H=window.innerHeight,pr=_R.getPixelRatio();
   if(Math.abs(_R.domElement.width-W*pr)>4||Math.abs(_R.domElement.height-H*pr)>4){
@@ -211,24 +211,24 @@ function _build(){
 
   _scene=new THREE.Scene();
   _cam=new THREE.PerspectiveCamera(35,W/H,0.1,200);
-  _cam.position.set(-5,-1.5,6); _cam.lookAt(0,2,0);
+  _cam.position.set(-5,-1.5,6); _cam.lookAt(0,-0.5,0);
 
   // Stars (same as CodePen)
   _stars=_makeStars(); _scene.add(_stars);
 
   // ── Layer 1: lower arc, standard tube ──────────────────────────────
   _group=new THREE.Group();
-  _group.position.set(0,5.5,0.3);
+  _group.position.set(0,1.5,0.3);
   _group.scale.setScalar(8.0);
   _scene.add(_group);
-  _group.add(_makeRibbon(2,    0,    2,0.50,0,    false, 0.9));
-  _group.add(_makeRibbon(2.01, 0.05, 2,0.50,0,    true,  0.9));
-  _group.add(_makeRibbon(3.5,  0,    3,0.75,0.4,  false, 0.9));
-  _group.add(_makeRibbon(3.51, 0,    3,0.75,0.45, true,  0.9));
+  _group.add(_makeRibbon(2,    0,    2,0.70,0,    false, 0.9));
+  _group.add(_makeRibbon(2.01, 0.05, 2,0.70,0,    true,  0.9));
+  _group.add(_makeRibbon(3.5,  0,    3,1.00,0.4,  false, 0.9));
+  _group.add(_makeRibbon(3.51, 0,    3,1.00,0.45, true,  0.9));
 
   // ── Layer 2: higher arc, taller body (bigger tube radius) ──────────
   _group2=new THREE.Group();
-  _group2.position.set(0,9.5,0.3);
+  _group2.position.set(0,5.5,0.3);
   _group2.scale.setScalar(9.0);
   _scene.add(_group2);
   // Offset hue shift for colour differentiation from layer 1
