@@ -653,9 +653,10 @@ def api_events_concierge():
         return '', 204
     data      = request.get_json(silent=True) or {}
     query     = (data.get('query') or '').strip().lower()[:300]
-    date_from = (data.get('date_from') or '').strip()[:10]   # YYYY-MM-DD
-    date_to   = (data.get('date_to')   or '').strip()[:10]
-    budget    = data.get('budget')                            # numeric or None
+    date_from  = (data.get('date_from') or '').strip()[:10]   # YYYY-MM-DD
+    date_to    = (data.get('date_to')   or '').strip()[:10]
+    budget     = data.get('budget')                           # numeric or None
+    free_only  = bool(data.get('free_only', False))           # True = filter price_min=0
     if len(query) < 3:
         return jsonify({'ok': False, 'error': 'Tell me a bit more about what you\'re looking for'}), 400
 
@@ -716,8 +717,11 @@ def api_events_concierge():
         if date_to:
             where_clauses.append("date_start <= ?")
             params.append(date_to)
+        # Free-only filter
+        if free_only:
+            where_clauses.append("(price_min IS NULL OR price_min = 0)")
         # Budget filter (price_min = 0 counts as free)
-        if budget is not None:
+        elif budget is not None:
             try:
                 bval = float(budget)
                 where_clauses.append("(price_min IS NULL OR price_min <= ?)")

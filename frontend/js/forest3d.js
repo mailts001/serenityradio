@@ -23,7 +23,7 @@ const Forest3D = (() => {
   const N = PTYPES.length;
 
   // ── Module state ─────────────────────────────────────────────
-  let _R, _scene, _cam, _raf;
+  let _R, _scene, _cam, _raf, _tod_interval = null;
   // Per-archetype instanced meshes (trunk + canopy × N types)
   let _trunkMeshes = [], _canopyMeshes = [];
   let _cloudMesh, _fireMesh, _mushMeshes = [], _flowMeshes = [];
@@ -603,7 +603,8 @@ const Forest3D = (() => {
     _initFlowers();
     _initBirds();
     _applyTimeOfDay();
-    setInterval(_applyTimeOfDay, 60000);
+    if (_tod_interval) clearInterval(_tod_interval);
+    _tod_interval = setInterval(_applyTimeOfDay, 60000);
   }
 
   // ── Loop ─────────────────────────────────────────────────────
@@ -677,6 +678,7 @@ const Forest3D = (() => {
   // ── Public: stop ─────────────────────────────────────────────
   function stop() {
     cancelAnimationFrame(_raf);
+    if (_tod_interval) { clearInterval(_tod_interval); _tod_interval = null; }
     if (_el) { _el.remove(); _el = null; }
     if (_R)  { _R.dispose(); _R = null; }
     _trunkMeshes=[]; _canopyMeshes=[]; _birdMeshes=[];

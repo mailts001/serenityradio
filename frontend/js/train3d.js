@@ -41,6 +41,8 @@ const Train3D = (() => {
   let _carriageGroup = null;
   let _bgCanvas  = null;  // reference to bg-canvas element (exterior scenery source)
   let _bgTex     = null;  // CanvasTexture wrapping _bgCanvas → set as scene.background
+  let _bgTexW    = 0;     // last known bg-canvas width (detect resize for texture recreation)
+  let _bgTexH    = 0;
 
   // ─────────────────────────────────────────────────────────────────
   //  PUBLIC API
@@ -125,7 +127,9 @@ const Train3D = (() => {
     // ── Scene — background = live exterior canvas texture ─────────
     _scene = new THREE.Scene();
     if (_bgCanvas) {
-      _bgTex = new THREE.CanvasTexture(_bgCanvas);
+      _bgTex  = new THREE.CanvasTexture(_bgCanvas);
+      _bgTexW = _bgCanvas.width;
+      _bgTexH = _bgCanvas.height;
       _scene.background = _bgTex;
     }
 
@@ -638,9 +642,18 @@ const Train3D = (() => {
 
     // ── Refresh exterior background texture & render ─────────────
     // bg-canvas was just redrawn by canvas_scenes._trainFrame() for this frame.
-    // Marking needsUpdate=true re-uploads the canvas pixels to the GPU texture,
-    // so the scene.background shows the freshly animated exterior landscape.
-    if (_bgTex) _bgTex.needsUpdate = true;
+    // If bg-canvas dimensions changed (window resize), recreate the CanvasTexture
+    // to avoid GL_INVALID_VALUE: Offset overflows texture dimensions.
+    if (_bgCanvas && _bgTex) {
+      if (_bgCanvas.width !== _bgTexW || _bgCanvas.height !== _bgTexH) {
+        _bgTex.dispose();
+        _bgTex = new THREE.CanvasTexture(_bgCanvas);
+        _scene.background = _bgTex;
+        _bgTexW = _bgCanvas.width;
+        _bgTexH = _bgCanvas.height;
+      }
+      _bgTex.needsUpdate = true;
+    }
     _R.render(_scene, _cam);
   }
 

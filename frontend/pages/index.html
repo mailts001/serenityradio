@@ -639,20 +639,43 @@
             Instead of listing 137 events, the Scout surfaces your <strong style="color:var(--text)">top 10</strong> — scored by interest match, budget fit, proximity, popularity and availability. Not just what's happening. <em>What's right for you.</em>
           </div>
         </div>
-        <div class="mp-coming-soon" style="padding:.85rem 1rem;text-align:left;">
-          <div style="font-size:12px;font-weight:600;color:var(--sage-light);margin-bottom:.3rem">📡 Scout is in development</div>
-          <p style="font-size:11px;color:var(--text-muted);margin:.3rem 0 .7rem">Be first to access social event radar — enter your Telegram or email:</p>
-          <div style="display:flex;gap:8px;">
-            <input id="scout-waitlist-input" type="text" placeholder="@TelegramUsername or email"
-              style="flex:1;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.12);
+        <!-- ── Scout Live Search (Phase 1: local DB, Phase 2: social channels) ── -->
+        <div style="margin-top:.5rem;">
+          <div style="display:flex;gap:7px;margin-bottom:.5rem;">
+            <input id="scout-search" type="text" placeholder="What are you looking for today?"
+              style="flex:1;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.13);
               border-radius:8px;padding:7px 10px;color:var(--text);font-size:12px;
+              font-family:'DM Sans',sans-serif;outline:none;" onkeydown="if(event.key==='Enter')_scoutSearch()">
+            <button onclick="_scoutSearch()" style="
+              background:rgba(122,158,126,.25);border:1px solid rgba(122,158,126,.38);
+              border-radius:8px;padding:7px 14px;color:var(--sage-light);font-size:12px;
+              font-family:'DM Sans',sans-serif;cursor:pointer;white-space:nowrap;">Scout →</button>
+          </div>
+          <div style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:.6rem;">
+            <button class="ew-cx-chip" onclick="_scoutFill('music concert')">🎵 Concerts</button>
+            <button class="ew-cx-chip" onclick="_scoutFill('art exhibition gallery')">🎨 Exhibitions</button>
+            <button class="ew-cx-chip" onclick="_scoutFill('free outdoor community')">💸 Free</button>
+            <button class="ew-cx-chip" onclick="_scoutFill('wellness yoga meditation')">🌿 Wellness</button>
+            <button class="ew-cx-chip" onclick="_scoutFill('family children weekend')">👨‍👩‍👧 Family</button>
+            <button class="ew-cx-chip" onclick="_scoutFill('food festival market')">🍜 Food</button>
+          </div>
+          <div id="scout-results" style="min-height:40px;"></div>
+        </div>
+        <div style="margin-top:.8rem;padding:.6rem .75rem;background:rgba(122,158,126,.07);
+          border:1px solid rgba(122,158,126,.18);border-radius:10px;font-size:11px;color:var(--text-muted);">
+          <strong style="color:var(--sage-light)">Phase 1 live</strong> — searching curated SG events database.
+          <span style="opacity:.7"> Social channel scanning (Instagram · Telegram · Facebook) arriving next.</span>
+          <div style="margin-top:.4rem;display:flex;gap:8px;align-items:center;">
+            <input id="scout-waitlist-input" type="text" placeholder="@TelegramUsername or email for social radar"
+              style="flex:1;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.10);
+              border-radius:7px;padding:5px 8px;color:var(--text);font-size:11px;
               font-family:'DM Sans',sans-serif;outline:none;">
             <button onclick="_scoutWaitlist()" style="
-              background:rgba(122,158,126,.25);border:1px solid rgba(122,158,126,.35);
-              border-radius:8px;padding:7px 14px;color:var(--sage-light);font-size:12px;
-              font-family:'DM Sans',sans-serif;cursor:pointer;white-space:nowrap;">Notify me →</button>
+              background:none;border:1px solid rgba(122,158,126,.3);
+              border-radius:7px;padding:5px 10px;color:var(--sage-light);font-size:11px;
+              font-family:'DM Sans',sans-serif;cursor:pointer;white-space:nowrap;">Notify →</button>
           </div>
-          <div id="scout-waitlist-msg" style="font-size:11px;color:var(--sage-light);margin-top:.4rem;display:none;"></div>
+          <div id="scout-waitlist-msg" style="font-size:10px;color:var(--sage-light);margin-top:.3rem;display:none;"></div>
         </div>
       </div>
 
@@ -712,13 +735,23 @@
               font-family:'DM Sans',sans-serif;outline:none;box-sizing:border-box;">
           </div>
         </div>
+        <!-- Free toggle -->
+        <div style="display:flex;align-items:center;gap:8px;margin:.35rem 0 .1rem;">
+          <button id="cx-free-btn" onclick="_ewToggleFree(this)" style="
+            padding:5px 13px;border-radius:20px;font-size:12px;font-family:'DM Sans',sans-serif;
+            background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.14);
+            color:var(--text-muted);cursor:pointer;transition:all .2s;" data-active="0">
+            💸 Free only
+          </button>
+          <span style="font-size:11px;color:var(--text-muted);opacity:.6">Toggle to show only free events</span>
+        </div>
         <div class="ew-cx-chips">
           <button class="ew-cx-chip" onclick="_ewCxFill('I\'m stressed and need to unwind')">😮‍💨 Stressed</button>
           <button class="ew-cx-chip" onclick="_ewCxFill('family day out kids friendly')">👨‍👩‍👧 Family day</button>
           <button class="ew-cx-chip" onclick="_ewCxFill('romantic evening art or theatre')">🌹 Date night</button>
           <button class="ew-cx-chip" onclick="_ewCxFill('japanese culture tea meditation')">🍵 Japanese</button>
-          <button class="ew-cx-chip" onclick="_ewCxFill('free or budget outdoor festival')">💸 Free events</button>
           <button class="ew-cx-chip" onclick="_ewCxFill('live music concert this week')">🎶 Live music</button>
+          <button class="ew-cx-chip" onclick="_ewCxFill('outdoor heritage walk community')">🚶 Heritage</button>
         </div>
         <button onclick="_ewConcierge()" style="
           width:100%;padding:9px;border-radius:10px;margin-top:.3rem;
@@ -2027,10 +2060,12 @@ function toggleAmbient(btn) {
     repl.textContent = '✨ Planning your experience…'; repl.style.display = 'block';
     list.innerHTML = '';
     try {
+      const freeOnly = document.getElementById('cx-free-btn')?.dataset.active === '1';
       const body = { query: q };
       if (dateFrom) body.date_from = dateFrom;
       if (dateTo)   body.date_to   = dateTo;
       if (budget != null && !isNaN(budget)) body.budget = budget;
+      if (freeOnly) body.free_only = true;
       const res  = await fetch('/api/events/concierge', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -2091,6 +2126,48 @@ function toggleAmbient(btn) {
   }, 15 * 60 * 1000);
 
   // ── Organizer waitlist ────────────────────────────────────────────
+  // ── Free-only toggle ──────────────────────────────────────────────
+  window._ewToggleFree = function(btn) {
+    const active = btn.dataset.active === '1';
+    btn.dataset.active = active ? '0' : '1';
+    Object.assign(btn.style, active
+      ? { background:'rgba(255,255,255,.07)', borderColor:'rgba(255,255,255,.14)', color:'var(--text-muted)' }
+      : { background:'rgba(122,158,126,.28)', borderColor:'rgba(122,158,126,.5)',  color:'var(--sage-light)' });
+  };
+
+  // ── Scout search ──────────────────────────────────────────────────
+  window._scoutFill = function(txt) {
+    const el = document.getElementById('scout-search');
+    if (el) { el.value = txt; el.focus(); }
+  };
+
+  window._scoutSearch = async function() {
+    const q    = document.getElementById('scout-search')?.value?.trim();
+    const out  = document.getElementById('scout-results');
+    if (!out) return;
+    if (!q || q.length < 2) { out.innerHTML = '<div class="events-empty">Enter what you\'re looking for ✦</div>'; return; }
+    out.innerHTML = '<div class="events-empty">📡 Scouting events…</div>';
+    try {
+      // Reuse concierge endpoint — Scout is the same engine, different UI framing
+      const res  = await fetch('/api/events/concierge', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query: q }),
+      });
+      const data = await res.json();
+      if (data.events && data.events.length) {
+        // Show up to 6 results (Scout shows more than Concierge's 4)
+        _renderEvents(data.events.slice(0,6), 'scout-results', false);
+        const note = document.createElement('div');
+        note.style.cssText = 'font-size:10px;color:var(--text-muted);margin-top:.4rem;opacity:.6';
+        note.textContent = `Matched ${data.events.length} events from local database · Social channel scanning coming soon`;
+        out.appendChild(note);
+      } else {
+        out.innerHTML = '<div class="events-empty">No matches — try different keywords ✦</div>';
+      }
+    } catch(e) { out.innerHTML = '<div class="events-empty">Network error — try again</div>'; }
+  };
+
   window._scoutWaitlist = async function() {
     const contact = document.getElementById('scout-waitlist-input')?.value?.trim();
     const msg     = document.getElementById('scout-waitlist-msg');

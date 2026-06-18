@@ -1411,34 +1411,55 @@ const CanvasScenes = (() => {
       _ctx.fill();
     });
 
-    // ── Aurora borealis — flowing curtain with visible ripple movement ────
+    // ── Aurora borealis — natural flowing curtain with rounded Bezier bands ──
     {
-      const aAlpha = 0.13 + 0.05 * Math.sin(t * 0.00045);  // pulse
-      const colors = [
-        { r:0,  g:220, b:130, a: aAlpha },        // green (dominant)
-        { r:40, g:100, b:255, a: aAlpha * 0.60 }, // blue-violet
-        { r:160,g:20,  b:255, a: aAlpha * 0.32 }, // purple accent
+      const aAlpha = 0.14 + 0.06 * Math.sin(t * 0.00052);  // pulse
+      const bands = [
+        { r:0,   g:230, b:120, a: aAlpha,         cy: h*0.46, speed: 0.042 },   // green (dominant)
+        { r:20,  g:90,  b:255, a: aAlpha * 0.65,  cy: h*0.50, speed: 0.028 },   // blue
+        { r:150, g:15,  b:240, a: aAlpha * 0.35,  cy: h*0.43, speed: 0.055 },   // purple accent
       ];
-      colors.forEach((col, ci) => {
-        // Each colour layer has its own horizontal drift offset
-        const hDrift = t * (0.035 + ci * 0.018);  // noticeable horizontal drift
-        for (let xi = 0; xi < w; xi += 3) {
-          // Multi-frequency wave for organic curtain shape — higher freq for ripple effect
-          const wx   = xi + hDrift;
-          const waveY = Math.sin(wx * 0.014 + ci * 2.1) * h * 0.090   // slow large wave
-                      + Math.sin(wx * 0.035 + t*0.00065 + ci) * h * 0.040  // medium ripple
-                      + Math.sin(wx * 0.072 + t*0.00120) * h * 0.018;  // fast shimmer
-          const aC   = h * (0.48 + ci * 0.04);  // each color band at slightly different height
-          const top  = aC + waveY - h * 0.07;
-          const bot  = aC + waveY + h * 0.07;
-          const ray  = _ctx.createLinearGradient(xi, top, xi, bot);
-          ray.addColorStop(0,   `rgba(${col.r},${col.g},${col.b},0)`);
-          ray.addColorStop(0.35,`rgba(${col.r},${col.g},${col.b},${col.a.toFixed(3)})`);
-          ray.addColorStop(0.65,`rgba(${col.r},${col.g},${col.b},${(col.a*0.55).toFixed(3)})`);
-          ray.addColorStop(1,   `rgba(${col.r},${col.g},${col.b},0)`);
-          _ctx.fillStyle = ray;
-          _ctx.fillRect(xi, top, 3, bot - top);
+      // Draw each band as a filled Bezier path for natural rounded curtain shape
+      bands.forEach((bd, bi) => {
+        const drift = t * bd.speed;
+        const SEGS  = 14;   // number of bezier segments across width
+        const segW  = w / SEGS;
+        // Build top edge as a smooth Bezier curve
+        _ctx.save();
+        _ctx.beginPath();
+        _ctx.moveTo(-10, h);
+        _ctx.lineTo(-10, bd.cy);
+        // Bezier curve across the top: each segment has a control point shaped by waves
+        for (let si = 0; si <= SEGS; si++) {
+          const px = si * segW;
+          const wx = px + drift;
+          const waveY = Math.sin(wx * 0.012 + bi * 1.9)   * h * 0.100   // large arch
+                      + Math.sin(wx * 0.032 + t*0.00055)  * h * 0.045   // medium ripple
+                      + Math.cos(wx * 0.068 + t*0.00140 + bi) * h * 0.018; // shimmer
+          if (si === 0) {
+            _ctx.lineTo(px, bd.cy + waveY);
+          } else {
+            // Control point halfway between prev and current for smooth curve
+            const cpx = (si - 0.5) * segW;
+            const cpwx = cpx + drift;
+            const cpwaveY = Math.sin(cpwx * 0.012 + bi * 1.9)   * h * 0.100
+                          + Math.sin(cpwx * 0.032 + t*0.00055)  * h * 0.045
+                          + Math.cos(cpwx * 0.068 + t*0.00140 + bi) * h * 0.018;
+            _ctx.quadraticCurveTo(cpx, bd.cy + cpwaveY, px, bd.cy + waveY);
+          }
         }
+        _ctx.lineTo(w + 10, h);
+        _ctx.closePath();
+        // Fill with vertical gradient for curtain translucency
+        const curtainH = h * 0.18;
+        const grad = _ctx.createLinearGradient(0, bd.cy - curtainH*0.4, 0, bd.cy + curtainH*0.8);
+        grad.addColorStop(0,   `rgba(${bd.r},${bd.g},${bd.b},0)`);
+        grad.addColorStop(0.25,`rgba(${bd.r},${bd.g},${bd.b},${(bd.a).toFixed(3)})`);
+        grad.addColorStop(0.55,`rgba(${bd.r},${bd.g},${bd.b},${(bd.a*0.6).toFixed(3)})`);
+        grad.addColorStop(1,   `rgba(${bd.r},${bd.g},${bd.b},0)`);
+        _ctx.fillStyle = grad;
+        _ctx.fill();
+        _ctx.restore();
       });
     }
 
@@ -2888,19 +2909,31 @@ const CanvasScenes = (() => {
       const amp  = _lerp(h.amp,   hl.amp,  bl);
       const freq = _lerp(h.freq,  hl.freq, bl);
       const spd  = _lerp(h.spd,   hl.spd,  bl);
-      const ph   = _lerp(h.ph,    hl.ph,   bl);
+      // CRITICAL: do NOT lerp phase (ph) between biomes.
+      // Lerping ph causes the hill pattern to shift during transitions, which
+      // visually looks like the mountain moving in the wrong direction.
+      // Instead, use a FIXED per-layer phase offset (only depends on layer index)
+      // so the wave shape is consistent and only _tX drives the scroll.
+      const ph   = li * 1.57;  // fixed 90° offset per layer — no biome lerp
       const baseY = H * (0.62 - li*0.025);
       c.fillStyle = _rgb(col);
-      c.beginPath(); c.moveTo(0,H);
-      for (let x=0;x<=W+4;x+=3) {
+      // ── 3D depth: add a darker shadow gradient below each hill ridge ──
+      const shadowCol = col.map(v => Math.max(0, v * 0.72));
+      const grad = c.createLinearGradient(0, baseY - H*amp*1.2, 0, baseY + H*0.08);
+      grad.addColorStop(0,   _rgb(col));
+      grad.addColorStop(0.7, _rgb(col.map(v => v * 0.88)));
+      grad.addColorStop(1,   _rgb(shadowCol));
+      c.fillStyle = grad;
+      c.beginPath(); c.moveTo(-4, H);
+      for (let x=-4; x<=W+4; x+=3) {
         const wx = x + _tX * spd;
         const y  = baseY
-          - Math.sin(wx*freq+ph)         * H * amp
-          - Math.sin(wx*freq*1.73+ph*1.4)* H * amp * 0.38
-          - Math.sin(wx*freq*0.53+ph*0.7)* H * amp * 0.22;
-        x===0 ? c.moveTo(x,y) : c.lineTo(x,y);
+          - Math.sin(wx*freq + ph)            * H * amp
+          - Math.sin(wx*freq*1.73 + ph*0.62)  * H * amp * 0.38
+          - Math.sin(wx*freq*0.53 + ph*1.41)  * H * amp * 0.22;
+        x===-4 ? c.moveTo(x,y) : c.lineTo(x,y);
       }
-      c.lineTo(W,H); c.closePath(); c.fill();
+      c.lineTo(W+4,H); c.closePath(); c.fill();
     }
   }
 
@@ -2998,54 +3031,82 @@ const CanvasScenes = (() => {
   function _drawDetails(c, W, H, details, t, grndC, fogC) {
     if (!details || !details.length) return;
 
-    // Telegraph / power poles — random spacing and height, not uniform
+    // Telegraph / power poles — truly irregular spacing via accumulated world positions
     if (details.includes('poles')) {
-      const poleSpd = 0.55;
-      // Each pole 'pi' has a seeded random spacing offset so gaps are irregular
-      // We accumulate world positions rather than using a fixed grid
-      const BASE_SP = 105;  // base spacing (wider than before)
-      // Gather all pole world-x positions visible on screen
+      const poleSpd  = 0.55;
       const poleViewX = _tX * poleSpd;
-      // Build poles lazily using seeded offsets: world_x[pi] = sum of spacings up to pi
-      // Approximate range: how many poles could span 3× screen width at BASE_SP
-      const approxCount = Math.ceil(W * 3 / BASE_SP) + 4;
-      const startEst = Math.max(0, Math.floor(poleViewX / BASE_SP) - 2);
-      // Collect visible poles
+      // Precompute a table of world-x positions using accumulated spacing
+      // (pole[i].worldX = sum of spacings for poles 0..i-1)
+      // To find visible poles efficiently: scan forward from an estimated start
+      const WORLD_RANGE = 20000;   // large enough for any session
+      const MIN_SP = 70, EXTRA_SP = 120;  // spacing: 70 to 190px
+      // Find approximate starting pole index (estimate via average spacing ~130px)
+      const AVG_SP = MIN_SP + EXTRA_SP * 0.5;
+      let estStart = Math.max(0, Math.floor(poleViewX / AVG_SP) - 3);
+      // Walk forward accumulating positions until we reach poleViewX - 1 screen width
+      let accX = 0;
+      for (let pi = 0; pi < estStart; pi++) {
+        const rp = _srng(pi * 7919 + 31); rp(); // consume seed
+        accX += MIN_SP + rp() * EXTRA_SP;
+      }
+      // Now collect poles visible on screen
       const polesToDraw = [];
-      for (let pi = startEst; pi < startEst + approxCount; pi++) {
-        const rp = _srng(pi * 6571 + 13);
-        const spacing = BASE_SP + rp() * 80 - 20;  // 85px–165px spacing
-        const worldX = pi * BASE_SP + rp() * 40;   // jitter world position
-        const screenX = worldX - poleViewX;
-        if (screenX < -20 || screenX > W + 20) continue;
-        polesToDraw.push({ pi, screenX, spacing });
+      for (let pi = estStart; pi < estStart + 60 && accX < poleViewX + W + 200; pi++) {
+        const rp  = _srng(pi * 7919 + 31);
+        const rp2 = _srng(pi * 4481 + 97);  // second seed for visual properties
+        const sp  = MIN_SP + rp() * EXTRA_SP;
+        const wx  = accX;
+        accX += sp;
+        const screenX = wx - poleViewX;
+        if (screenX < -60 || screenX > W + 60) continue;
+        polesToDraw.push({ pi, screenX, rp2 });
       }
       // Draw poles + wires
       for (let di = 0; di < polesToDraw.length; di++) {
-        const { pi, screenX } = polesToDraw[di];
-        const rp = _srng(pi * 6571 + 13); rp(); // advance past spacing draw
-        const heightFrac = 0.28 + rp() * 0.10;   // pole height varies
-        const pTop = H * (0.40 - heightFrac);
-        const pBot = H * 0.695;
-        const thick = 1.8 + rp() * 1.2;
-        c.strokeStyle = 'rgba(50,40,30,0.85)';
+        const { pi, screenX, rp2 } = polesToDraw[di];
+        const heightFrac = 0.20 + rp2() * 0.08;   // pole top ranges: H*0.20 to H*0.28 above pBot
+        const pBot = H * 0.688;
+        const pTop = pBot - H * heightFrac;
+        const thick = 1.6 + rp2() * 0.9;
+        // ── Pole body with 3D shade (lit left, shadow right) ──
+        const polGrad = c.createLinearGradient(screenX-thick, 0, screenX+thick*2, 0);
+        polGrad.addColorStop(0,   'rgba(80,62,45,0.90)');
+        polGrad.addColorStop(0.4, 'rgba(58,44,32,0.90)');
+        polGrad.addColorStop(1,   'rgba(30,22,14,0.85)');
+        c.strokeStyle = polGrad;
         c.lineWidth = thick;
         c.beginPath(); c.moveTo(screenX, pTop); c.lineTo(screenX, pBot); c.stroke();
         // Crossbar
-        const cbW = 12 + rp() * 10;
-        c.lineWidth = 1;
-        c.beginPath(); c.moveTo(screenX-cbW, pTop+H*0.03); c.lineTo(screenX+cbW, pTop+H*0.03); c.stroke();
-        // Wires to next visible pole (catenary sag)
+        const cbW = 10 + rp2() * 8;
+        c.strokeStyle = 'rgba(55,42,28,0.88)';
+        c.lineWidth = 1.5;
+        c.beginPath(); c.moveTo(screenX-cbW, pTop+H*0.028); c.lineTo(screenX+cbW, pTop+H*0.028); c.stroke();
+        // Insulator dots on crossbar ends
+        c.fillStyle = 'rgba(80,70,55,0.75)';
+        [-cbW, cbW].forEach(xo => {
+          c.beginPath(); c.arc(screenX+xo, pTop+H*0.028, 2, 0, Math.PI*2); c.fill();
+        });
+        // Ground shadow (ellipse below pole base)
+        const shGrad = c.createRadialGradient(screenX, pBot+4, 0, screenX, pBot+4, thick*3);
+        shGrad.addColorStop(0, 'rgba(0,0,0,0.18)');
+        shGrad.addColorStop(1, 'rgba(0,0,0,0)');
+        c.fillStyle = shGrad;
+        c.beginPath(); c.ellipse(screenX, pBot+4, thick*3, thick*1.2, 0, 0, Math.PI*2); c.fill();
+        // Catenary wire to next pole
         if (di + 1 < polesToDraw.length) {
           const nx = polesToDraw[di+1].screenX;
+          const nTop = polesToDraw[di+1].rp2();  // consume one value from next rp2
+          // actually use next pole's same pTop offset (rough but avoids mismatch)
+          const nPoleTop = pBot - H * 0.24;
           const midX = (screenX + nx) * 0.5;
-          c.strokeStyle = 'rgba(40,35,28,0.42)';
-          c.lineWidth = 0.8;
-          for (let w = 0; w < 2; w++) {
-            const wOff = w * 9 - 4;
+          const sagY = Math.max(pTop, nPoleTop) + H * 0.022;  // catenary sag
+          c.strokeStyle = 'rgba(35,28,20,0.40)';
+          c.lineWidth = 0.9;
+          for (let wi = 0; wi < 2; wi++) {
+            const wOff = (wi - 0.5) * 9;
             c.beginPath();
-            c.moveTo(screenX + wOff, pTop + H*0.025);
-            c.quadraticCurveTo(midX, pTop + H*0.035 + H*0.008, nx + wOff, pTop + H*0.025);
+            c.moveTo(screenX + wOff, pTop + H*0.022);
+            c.quadraticCurveTo(midX, sagY + wi*H*0.006, nx + wOff, pTop + H*0.022);
             c.stroke();
           }
         }
@@ -3198,7 +3259,10 @@ const CanvasScenes = (() => {
 
   // ── Rain on glass ─────────────────────────────────────────
   function _drawGlassRain(c, W, H, t, biome, bl) {
-    const intensity = biome.name==='highland'||biome.name==='forest' ? 0.85 : 0.20;
+    // Only show glass rain in rainy biomes — skip entirely for dry/clear biomes
+    const isRainy = biome.name==='highland' || biome.name==='forest';
+    const intensity = isRainy ? (0.70 + 0.15 * (1-bl)) : 0;
+    if (intensity < 0.05) return;  // nothing to draw
     if (!_tGlassDrops.length) _initGlass(W, H);
 
     _tGlassDrops.forEach(d => {
