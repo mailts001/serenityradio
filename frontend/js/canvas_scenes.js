@@ -1415,8 +1415,8 @@ const CanvasScenes = (() => {
       _ctx.fill();
     });
 
-    // ── Aurora borealis ──────────────────────────────────────────────────
-    {
+    // ── Aurora borealis — canvas-2D fallback (skipped when Aurora3D WebGL active)
+    if (typeof Aurora3D === 'undefined') {
       // t is frame counter at ~60fps
       const T = t * 0.016; // approximate seconds
 
@@ -1467,7 +1467,7 @@ const CanvasScenes = (() => {
           _ctx.fill();
         });
       });
-    }
+    } // end canvas-2D aurora fallback
 
 
     // ── Shooting stars ──────────────────────────────────────────────────
@@ -3326,7 +3326,10 @@ const CanvasScenes = (() => {
     // Reset space-scene transient state when switching to/from space
     if (_activeSceneType === 'space') {
       _shootingStars = [];
-      _nextShoot = 0;  // spawn first star almost immediately
+      _nextShoot = 0;
+      if (typeof Aurora3D !== 'undefined') Aurora3D.start();
+    } else {
+      if (typeof Aurora3D !== 'undefined') Aurora3D.stop();
     }
 
     // Persist scene choice (decoupled from channel/music choice)

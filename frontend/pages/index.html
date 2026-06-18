@@ -2,7 +2,16 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<!-- Preload Three.js so train / aquarium activates without CDN lag -->
+<!-- Three.js importmap — required for aurora3d.js ES module and jsm addons -->
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://unpkg.com/three@0.172.0/build/three.module.js",
+    "three/addons/": "https://unpkg.com/three@0.172.0/examples/jsm/"
+  }
+}
+</script>
+<!-- Preload Three.js UMD for train / aquarium (non-module) -->
 <link rel="preload" href="https://cdn.jsdelivr.net/npm/three@0.149.0/build/three.min.js" as="script">
 <script defer src="https://cdn.jsdelivr.net/npm/three@0.149.0/build/three.min.js"></script>
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
@@ -1740,6 +1749,7 @@ setInterval(() => {
 <script src="/js/forest3d.js"></script>
 <script src="/js/aquarium3d.js"></script>
 <script src="/js/train3d.js"></script>
+<script type="module" src="/js/aurora3d.js"></script>
 <script src="/js/canvas_scenes.js"></script>
 <script src="/js/ambient_audio.js"></script>
 <script src="/js/wellness.js"></script>
