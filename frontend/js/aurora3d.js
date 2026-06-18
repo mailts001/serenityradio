@@ -1,9 +1,8 @@
 /**
- * Aurora3D — ES module
- * Ultra-realistic Aurora Borealis: viewed from ground, looking toward the horizon.
- * Wide vertical curtain planes (PlaneGeometry) span horizon-to-horizon in X,
- * wave in Z (depth), sinusoidal bottom edges, vertical traveling pillars.
- * Multiple layers at different Z distances give volumetric depth.
+ * Aurora3D — ES module, based on CodePen reference.
+ * Ring TubeGeometry with radialSegments=2 (flat ribbon) viewed from oblique angle.
+ * Camera inside ring at (-5,-1.5,6) looking at origin — ring at y=6 above camera.
+ * Two stacked groups for depth/layers.
  */
 import * as THREE from 'three';
 import { EffectComposer }  from 'three/addons/postprocessing/EffectComposer.js';
@@ -36,68 +35,22 @@ const STAR_FRAG = `
   }
 `;
 
-// ── Aurora curtain shaders ────────────────────────────────────────────────────
-// PlaneGeometry in XY facing camera (+Z).
-// Vertex shader:  ripples curtain in Z (3D depth flutter)
-//                 waves bottom edge in Y (sinusoidal base)
-//                 computes per-vertex pillar brightness (traveling bright columns)
-// Fragment shader: simplex-noise shimmer, hue gradient by height,
-//                  alpha envelope (fade at top, sharp bottom edge)
-const CURTAIN_VERT = `
-  uniform float uTime;
-  uniform float uFreq;   // spatial frequency of curtain waves
-  uniform float uAmp;    // Z-wave amplitude
-  uniform float uSpeed;  // animation speed multiplier
-  varying vec2  vUv;
-  varying float vBright; // vertical pillar brightness, 0-1
-  void main(){
-    vUv = uv;
-    vec3 p = position;
-
-    // ── Curtain depth ripple (Z axis) ──────────────────────────────────────
-    float w1 = sin(p.x * uFreq        + uTime * uSpeed       ) * uAmp;
-    float w2 = sin(p.x * uFreq * 1.73 - uTime * uSpeed * 0.61 + 2.09) * uAmp * 0.42;
-    float w3 = sin(p.x * uFreq * 0.47 + uTime * uSpeed * 0.28 + 4.71) * uAmp * 0.28;
-    p.z += w1 + w2 + w3;
-
-    // ── Sinusoidal bottom edge (Y, strongest at base, fades toward top) ────
-    float bottomT = (1.0 - uv.y) * (1.0 - uv.y);  // squared: most at base
-    float ey = sin(p.x * uFreq * 1.31 + uTime * 0.43) * 2.2
-             + sin(p.x * uFreq * 2.17 - uTime * 0.31 + 1.57) * 0.9
-             + sin(p.x * uFreq * 3.41 + uTime * 0.19 + 3.14) * 0.4;
-    p.y += ey * bottomT;
-
-    // ── Vertical traveling pillars (bright columns moving across curtain) ──
-    float pillar = 0.5 + 0.5 * pow(
-      max(0.0, sin(p.x * uFreq * 2.9 + uTime * 0.38)),
-      1.6
-    );
-    // Second pillar wave for richness
-    pillar = max(pillar, 0.35 + 0.65 * pow(
-      max(0.0, sin(p.x * uFreq * 1.8 - uTime * 0.27 + 1.05)),
-      2.0
-    ));
-    vBright = pillar;
-
-    gl_Position = projectionMatrix * modelViewMatrix * vec4(p, 1.0);
-  }
+// ── Aurora ribbon shader — identical to CodePen ───────────────────────────────
+const AUR_VERT = `
+  varying vec2 vUv;
+  void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }
 `;
-
-const CURTAIN_FRAG = `
+const AUR_FRAG = `
   precision highp float;
-  uniform float uTime;
-  uniform float uHue;       // base hue: 0.33=green, 0.48=cyan, 0.72=violet
-  uniform float uIntensity; // overall brightness
-  varying vec2  vUv;
-  varying float vBright;
+  uniform float uIntensity, uColor, uHueShift, uHueSpread, uHueSat, seconds;
+  varying vec2 vUv;
 
   vec3 hsv2rgb(vec3 c){
-    vec4 K = vec4(1.0, 2.0/3.0, 1.0/3.0, 3.0);
-    vec3 p = abs(fract(c.xxx + K.xyz)*6.0 - K.www);
-    return c.z * mix(K.xxx, clamp(p-K.xxx,0.0,1.0), c.y);
+    vec4 K=vec4(1.0,2.0/3.0,1.0/3.0,3.0);
+    vec3 p=abs(fract(c.xxx+K.xyz)*6.0-K.www);
+    return c.z*mix(K.xxx,clamp(p-K.xxx,0.0,1.0),c.y);
   }
-
-  vec3 permute(vec3 x){ return mod(((x*34.0)+1.0)*x, 289.0); }
+  vec3 permute(vec3 x){return mod(((x*34.0)+1.0)*x,289.0);}
   float snoise(vec2 v){
     const vec4 C=vec4(0.211324865405187,0.366025403784439,-0.577350269189626,0.024390243902439);
     vec2 i=floor(v+dot(v,C.yy)); vec2 x0=v-i+dot(i,C.xx);
@@ -115,57 +68,48 @@ const CURTAIN_FRAG = `
   }
 
   void main(){
-    // ── Alpha envelope ──────────────────────────────────────────────────────
-    // Top: aurora dissipates gently
-    float fadeTop = 1.0 - smoothstep(0.50, 0.97, vUv.y);
-    // Bottom: sharp sinusoidal lower boundary (tight fade over bottom 6%)
-    float fadeBot = smoothstep(0.0, 0.06, vUv.y);
-
-    // ── Shimmer noise (large scale slow + fine scale fast) ─────────────────
-    float n1 = 0.5+0.5*snoise(vec2(vUv.x*5.0 + uTime*0.11, vUv.y*3.0 - uTime*0.07));
-    float n2 = 0.5+0.5*snoise(vec2(vUv.x*16.0 - uTime*0.19, vUv.y*8.0 + uTime*0.13));
-    float shimmer = 0.55 + 0.30*n1 + 0.15*n2;
-
-    // ── Color: hue shifts upward (green→cyan→white tips) ──────────────────
-    float hue = uHue + vUv.y * 0.13 + n1 * 0.05;
-    // Saturation drops toward top (real aurora whitens at altitude)
-    float sat = clamp(0.90 - vUv.y * 0.35, 0.0, 1.0);
-    // Brightness: slightly brighter at mid-height (realistic intensity band)
-    float bri = 0.75 + 0.25 * smoothstep(0.0, 0.3, vUv.y) * (1.0 - smoothstep(0.6, 1.0, vUv.y));
-    vec3 color = hsv2rgb(vec3(fract(hue), sat, bri));
-
-    // ── Final alpha ─────────────────────────────────────────────────────────
-    float alpha = fadeTop * fadeBot * uIntensity * vBright * shimmer;
-
-    gl_FragColor = vec4(color, alpha);
+    float grad=fract(vUv.y*2.0); if(vUv.y>0.5) grad=1.0-grad;
+    float a=vUv.x*6.28318530718; vec2 dir=vec2(cos(a),sin(a));
+    float k50=50.0/6.28318530718, k30=30.0/6.28318530718, k40=40.0/6.28318530718;
+    vec2 d1=vec2(seconds*0.10, seconds*0.07);
+    vec2 d2=vec2(seconds*0.05,-seconds*0.04);
+    vec2 d3=vec2(-seconds*0.11,seconds*0.08);
+    float noise =0.5+0.5*(0.5*snoise(dir*k50+d1)+0.5*snoise(dir*k30+d2));
+    float noise1=0.5+0.5*snoise(dir*k40+d3);
+    float bottomFill=smoothstep(0.6,1.0,grad);
+    float fadeTop   =smoothstep(0.0,0.8,grad-0.3*noise1);
+    float fadeBottom=smoothstep(1.0,0.9,grad);
+    vec3 base=(uColor>0.5)?vec3(0.306,0.471,0.462):vec3(0.385,0.50,0.861);
+    float alpha=fadeBottom*fadeTop*uIntensity;
+    float hue=(vUv.y*1.05+noise*0.28)*uHueSpread+uHueShift;
+    vec3 rainbow=hsv2rgb(vec3(fract(hue),clamp(uHueSat,0.0,1.0),1.0));
+    vec3 color=mix(base*0.18,rainbow,smoothstep(0.02,0.55,vUv.y))*(noise+bottomFill)*1.45;
+    gl_FragColor=vec4(color,alpha);
   }
 `;
 
-// ── Factory ───────────────────────────────────────────────────────────────────
-// width, height: world-unit dimensions of the curtain plane
-// wSeg, hSeg:   mesh subdivision (more = smoother waves)
-// zPos, yBase:  position (yBase = bottom of curtain)
-// freq, amp, speed: wave parameters
-// hue: base color hue (HSV)
-// intensity: brightness multiplier
-function _makeCurtain(width, height, wSeg, hSeg, zPos, yBase, freq, amp, speed, hue, intensity){
-  const geo = new THREE.PlaneGeometry(width, height, wSeg, hSeg);
-  const mat = new THREE.ShaderMaterial({
+// ── Helpers ───────────────────────────────────────────────────────────────────
+function _noise(x,y,o){ return Math.sin(x*1.7+o*13.1)*Math.cos(y*2.3+o*7.7)*Math.sin(x*0.7+y*1.3+o*3.3); }
+
+// Flat ribbon ring — radialSegments=2 matches CodePen exactly.
+// Radius noise on XZ (same as CodePen). Flat ribbon viewed obliquely = aurora band, not petal.
+function _makeRibbon(radius, zOff, nScale, nAmp, nOff, isRed){
+  const pts=[];
+  for(let e=0;e<=100;e++){
+    const a=(e/100)*Math.PI*2, n=nAmp*_noise(nScale*a,e/100,nOff);
+    const r=radius+n;
+    pts.push(new THREE.Vector3(Math.sin(a)*r, zOff, Math.cos(a)*r));
+  }
+  const geo=new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts),200,0.9,2,true);
+  const mat=new THREE.ShaderMaterial({
     uniforms:{
-      uTime:     {value:0},
-      uFreq:     {value:freq},
-      uAmp:      {value:amp},
-      uSpeed:    {value:speed},
-      uHue:      {value:hue},
-      uIntensity:{value:intensity},
+      uIntensity:{value:0.009}, uColor:{value:isRed?1:0},
+      uHueShift:{value:0.16}, uHueSpread:{value:0.42}, uHueSat:{value:1.0}, seconds:{value:0},
     },
-    vertexShader:CURTAIN_VERT, fragmentShader:CURTAIN_FRAG,
-    side:THREE.DoubleSide, transparent:true,
-    blending:THREE.AdditiveBlending, depthWrite:false,
+    vertexShader:AUR_VERT, fragmentShader:AUR_FRAG,
+    side:THREE.DoubleSide, transparent:true, blending:THREE.AdditiveBlending, depthWrite:false,
   });
-  const mesh = new THREE.Mesh(geo, mat);
-  mesh.position.set(0, yBase + height*0.5, zPos);
-  return mesh;
+  return new THREE.Mesh(geo,mat);
 }
 
 function _makeStars(){
@@ -197,23 +141,51 @@ function _makeStars(){
   const pts=new THREE.Points(g,m); pts.renderOrder=-1; return pts;
 }
 
+// ── Drifting uniform animation ────────────────────────────────────────────────
+const _D=[
+  {u:'uIntensity',base:0.009,amp:0.002,rate:0.13},
+  {u:'uHueShift', base:0.16, amp:0.08, rate:0.07},
+  {u:'uHueSpread',base:0.42, amp:0.10, rate:0.05},
+];
+
 // ── State ─────────────────────────────────────────────────────────────────────
 let _R=null,_composer=null,_scene=null,_cam=null,_stars=null;
-let _curtains=[],_el=null,_raf=null,_running=false,_t=0,_last=0;
+let _group=null,_group2=null,_el=null,_raf=null,_running=false,_t=0,_last=0;
+
+function _setAll(k,v){
+  [_group,_group2].forEach(grp=>grp&&grp.children.forEach(m=>{
+    if(m.material?.uniforms[k]!==undefined) m.material.uniforms[k].value=v;
+  }));
+}
 
 function _loop(now){
   _raf=requestAnimationFrame(_loop);
-  if(!_composer) return;
+  if(!_composer||!_group) return;
   const dt=Math.min(now-_last,50); _last=now; _t+=dt*0.001;
 
-  _curtains.forEach(m=>{ if(m.material?.uniforms?.uTime) m.material.uniforms.uTime.value=_t; });
+  _D.forEach(d=>_setAll(d.u, d.base+d.amp*Math.sin(_t*d.rate)));
+  _setAll('seconds',_t);
   if(_stars) _stars.material.uniforms.seconds.value=_t;
 
-  // Subtle sway — feel like standing on the ground watching
-  _cam.position.x =  Math.sin(_t*0.038)*1.2;
-  _cam.position.y =  3.5 + Math.sin(_t*0.022)*0.3;
-  _cam.position.z = 22 + Math.cos(_t*0.028)*0.6;
-  _cam.lookAt(Math.sin(_t*0.019)*0.8, 11, 0);
+  // Gentle float — group drifts slightly, matches CodePen feel
+  if(_group){
+    _group.position.y  = 6.0 + 0.3*Math.sin(_t*0.09);
+    _group.scale.setScalar(8.0 + 0.25*Math.sin(_t*0.11));
+  }
+  if(_group2){
+    _group2.position.y = 9.5 + 0.4*Math.sin(_t*0.07+1.2);
+    _group2.scale.setScalar(9.0 + 0.3*Math.sin(_t*0.09+0.8));
+    _group2.children.forEach(m=>{
+      if(m.material?.uniforms.seconds!==undefined)
+        m.material.uniforms.seconds.value=_t;
+    });
+  }
+
+  // Camera — CodePen position, very gentle drift so it doesn't feel static
+  _cam.position.x = -5 + Math.sin(_t*0.018)*0.6;
+  _cam.position.y = -1.5 + Math.sin(_t*0.013)*0.3;
+  _cam.position.z =  6   + Math.cos(_t*0.016)*0.4;
+  _cam.lookAt(0,0,0);
 
   const W=window.innerWidth,H=window.innerHeight,pr=_R.getPixelRatio();
   if(Math.abs(_R.domElement.width-W*pr)>4||Math.abs(_R.domElement.height-H*pr)>4){
@@ -234,48 +206,47 @@ function _build(){
   _R=new THREE.WebGLRenderer({canvas:_el,antialias:true});
   _R.setPixelRatio(Math.min(devicePixelRatio,2));
   _R.setSize(W,H,false);
-  _R.setClearColor(0x000308,1);   // deep blue-black night sky
+  _R.setClearColor(0x000000,1);
   _R.toneMapping=THREE.ACESFilmicToneMapping;
-  _R.toneMappingExposure=1.35;
+  _R.toneMappingExposure=1.26;
 
   _scene=new THREE.Scene();
 
-  // Camera: standing on ground, looking toward aurora on the horizon
-  // FOV 60° — wide enough to see full curtain span, not fisheye
-  _cam=new THREE.PerspectiveCamera(60,W/H,0.1,300);
-  _cam.position.set(0,3.5,22); _cam.lookAt(0,11,0);
+  // Camera: CodePen exact position — oblique view inside ring, ring visible as aurora bands
+  _cam=new THREE.PerspectiveCamera(35,W/H,0.1,200);
+  _cam.position.set(-5,-1.5,6); _cam.lookAt(0,0,0);
 
   _stars=_makeStars(); _scene.add(_stars);
-  _curtains=[];
 
-  // ── Aurora layers — far to near so additive blending stacks correctly ──
-  //
-  // _makeCurtain(width, height, wSeg, hSeg, zPos, yBase, freq, amp, speed, hue, intensity)
-  //
-  // Hue guide: 0.72=violet, 0.50=cyan, 0.48=cyan-green, 0.38=green-cyan, 0.33=green
-  // zPos: negative = further from camera (camera at z=22 looking toward z=0)
+  // ── Group 1: CodePen exact setup — y=6, scale=8 ─────────────────────────
+  _group=new THREE.Group();
+  _group.position.set(0,6.0,0.3);
+  _group.scale.setScalar(8.0);
+  _scene.add(_group);
+  _group.add(_makeRibbon(2,    0,    2, 0.2, 0,    false));
+  _group.add(_makeRibbon(2.01, 0.05, 2, 0.2, 0,    true));
+  _group.add(_makeRibbon(3.5,  0,    3, 0.4, 0.4,  false));
+  _group.add(_makeRibbon(3.51, 0,    3, 0.4, 0.45, true));
 
-  // Layer 3 — far (z=-10), violet/purple, wide faint glow
-  const c3a=_makeCurtain(75,22, 70,40, -10, 3, 0.17,2.2,0.21, 0.72,0.55);
-  const c3b=_makeCurtain(75,14, 70,30, -11, 14,0.22,1.8,0.26, 0.68,0.38);
-  _scene.add(c3a); _scene.add(c3b); _curtains.push(c3a,c3b);
-
-  // Layer 2 — mid (z=-4), cyan, medium brightness
-  const c2a=_makeCurtain(72,24, 70,45,  -4, 2, 0.21,2.8,0.29, 0.50,0.68);
-  const c2b=_makeCurtain(72,16, 70,35,  -5, 13,0.27,2.2,0.24, 0.46,0.52);
-  _scene.add(c2a); _scene.add(c2b); _curtains.push(c2a,c2b);
-
-  // Layer 1 — near (z=0..2), main emerald green, brightest
-  const c1a=_makeCurtain(68,26, 70,50,   0, 2, 0.25,3.2,0.34, 0.33,0.88);
-  const c1b=_makeCurtain(68,18, 70,40,   1, 12,0.31,2.6,0.29, 0.36,0.72);
-  // High thin band — faint magenta/violet at upper edge
-  const c1c=_makeCurtain(68,10, 70,25,   2, 22,0.19,1.8,0.18, 0.30,0.42);
-  _scene.add(c1a); _scene.add(c1b); _scene.add(c1c); _curtains.push(c1a,c1b,c1c);
+  // ── Group 2: second layer, higher + slightly larger ──────────────────────
+  _group2=new THREE.Group();
+  _group2.position.set(0,9.5,0.3);
+  _group2.scale.setScalar(9.0);
+  _scene.add(_group2);
+  const mkR2=(r,z,ns,na,no,ir)=>{
+    const m=_makeRibbon(r,z,ns,na,no,ir);
+    if(m.material?.uniforms.uHueShift)  m.material.uniforms.uHueShift.value=0.36;
+    if(m.material?.uniforms.uIntensity) m.material.uniforms.uIntensity.value=0.007;
+    return m;
+  };
+  _group2.add(mkR2(2,    0,    2, 0.25, 0.6,  false));
+  _group2.add(mkR2(2.01, 0.06, 2, 0.25, 0.6,  true));
+  _group2.add(mkR2(3.5,  0,    3, 0.45, 1.0,  false));
+  _group2.add(mkR2(3.51, 0,    3, 0.45, 1.05, true));
 
   _composer=new EffectComposer(_R);
   _composer.addPass(new RenderPass(_scene,_cam));
-  // Bloom: strength, radius, threshold — glow without blowing out
-  _composer.addPass(new UnrealBloomPass(new THREE.Vector2(W,H),0.75,0.55,0.08));
+  _composer.addPass(new UnrealBloomPass(new THREE.Vector2(W,H),0.34,0.5,0.15));
   _composer.addPass(new OutputPass());
 
   _last=performance.now();
@@ -292,10 +263,8 @@ function stop(){
   _running=false;
   cancelAnimationFrame(_raf); _raf=null;
   _el?.remove(); _el=null;
-  _curtains.forEach(m=>{ m.geometry?.dispose(); m.material?.dispose(); });
-  _curtains=[];
   _R?.dispose(); _R=null;
-  _composer=_scene=_cam=_stars=null;
+  _composer=_scene=_cam=_group=_group2=_stars=null;
 }
 
 window.Aurora3D={start,stop};
