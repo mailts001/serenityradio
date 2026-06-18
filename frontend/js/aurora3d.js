@@ -96,7 +96,7 @@ function _makeRibbon(radius, zOff, nScale, nAmp, nOff, isRed, tubeR){
     const a=(e/100)*Math.PI*2, n=nAmp*_noise(nScale*a,e/100,nOff);
     pts.push(new THREE.Vector3(Math.sin(a)*(radius+n), zOff, Math.cos(a)*(radius+n)));
   }
-  const geo=new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts),200,tubeR??0.9,6,true);
+  const geo=new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts),200,tubeR??0.9,16,true);
   const mat=new THREE.ShaderMaterial({
     uniforms:{
       uIntensity:{value:0.009}, uColor:{value:isRed?1:0},

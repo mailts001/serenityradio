@@ -2689,16 +2689,54 @@ const CanvasScenes = (() => {
     const fogA  = _lerp(ba.fogAmt,   bb.fogAmt, bl);
     const grndC = _lerpRGB(ba.ground,bb.ground, bl);
 
+    // ── Time-of-day sky override ──────────────────────────────
+    const _nowD = new Date();
+    const hr = _nowD.getHours() + _nowD.getMinutes()/60;
+    const isNight = hr < 6 || hr >= 20;
+
+    // Blend biome colours toward time-of-day palette
+    // night=0-6, dawn=6-8, day=8-18, dusk=18-20, night=20-24
+    // _tdT/_tdB are [r,g,b] arrays (matching _lerpRGB output format)
+    let _tdT=null, _tdB=null, _tdA=0;
+    if(hr >= 22 || hr < 5){
+      _tdT=[5,5,18];  _tdB=[8,8,30];  _tdA=0.93;
+    } else if(hr < 6){
+      const f=(hr-5)/1;
+      _tdT=[_lerp(5,60,f),  _lerp(5,20,f),  _lerp(18,55,f)];
+      _tdB=[_lerp(8,160,f), _lerp(8,70,f),  _lerp(30,55,f)]; _tdA=0.88;
+    } else if(hr < 7.5){
+      const f=(hr-6)/1.5;
+      _tdT=[_lerp(60,50,f),  _lerp(20,90,f),  _lerp(55,190,f)];
+      _tdB=[_lerp(160,130,f),_lerp(70,190,f), _lerp(55,255,f)]; _tdA=0.80;
+    } else if(hr >= 19){
+      const f=(hr-19)/3;
+      _tdT=[_lerp(60,5,f),   _lerp(30,5,f),   _lerp(120,18,f)];
+      _tdB=[_lerp(200,8,f),  _lerp(90,8,f),   _lerp(60,30,f)]; _tdA=Math.min(0.92,f*1.5+0.55);
+    } else if(hr >= 18){
+      const f=(hr-18)/1;
+      _tdT=[_lerp(50,60,f),  _lerp(90,30,f),  _lerp(190,120,f)];
+      _tdB=[_lerp(130,200,f),_lerp(190,90,f), _lerp(255,60,f)]; _tdA=0.65;
+    }
+    // else: daytime 7.5-18 — use biome colours as-is (_tdA=0)
+
+    let _stT=skyT, _stB=skyB;
+    if(_tdA>0 && _tdT){
+      _stT=[Math.round(skyT[0]*(1-_tdA)+_tdT[0]*_tdA),
+            Math.round(skyT[1]*(1-_tdA)+_tdT[1]*_tdA),
+            Math.round(skyT[2]*(1-_tdA)+_tdT[2]*_tdA)];
+      _stB=[Math.round(skyB[0]*(1-_tdA)+_tdB[0]*_tdA),
+            Math.round(skyB[1]*(1-_tdA)+_tdB[1]*_tdA),
+            Math.round(skyB[2]*(1-_tdA)+_tdB[2]*_tdA)];
+    }
+
     // ── Sky ───────────────────────────────────────────────────
     const skyG = c.createLinearGradient(0,0,0,H*0.70);
-    skyG.addColorStop(0, _rgb(skyT));
-    skyG.addColorStop(1, _rgb(skyB));
+    skyG.addColorStop(0, _rgb(_stT));
+    skyG.addColorStop(1, _rgb(_stB));
     c.fillStyle = skyG;
     c.fillRect(0,0,W,H);
 
     // ── Sun / moon / stars ────────────────────────────────────
-    const hr = new Date().getHours();
-    const isNight = hr < 6 || hr >= 20;
     _drawSkyObjects(c, W, H, t, isNight);
 
     // ── Shift ALL landscape elements UP so they show through the 3D train window.
