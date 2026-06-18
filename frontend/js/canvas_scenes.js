@@ -3323,13 +3323,18 @@ const CanvasScenes = (() => {
     };
     _activeSceneType = sceneMap[channel] || 'sea';
 
-    // Reset space-scene transient state when switching to/from space
+    // Space: hand off entirely to Aurora3D (owns bg + stars + aurora)
+    if (_activeSceneType === 'space' && typeof Aurora3D !== 'undefined') {
+      cancelAnimationFrame(_raf);
+      Aurora3D.start();
+      return;   // skip canvas-2D loop entirely
+    } else {
+      if (typeof Aurora3D !== 'undefined') Aurora3D.stop();
+    }
+    // Canvas-2D space fallback state
     if (_activeSceneType === 'space') {
       _shootingStars = [];
       _nextShoot = 0;
-      if (typeof Aurora3D !== 'undefined') Aurora3D.start();
-    } else {
-      if (typeof Aurora3D !== 'undefined') Aurora3D.stop();
     }
 
     // Persist scene choice (decoupled from channel/music choice)
