@@ -1362,6 +1362,10 @@ const CanvasScenes = (() => {
   function _spaceFrame(t) {
     const w = _canvas.width, h = _canvas.height;
 
+    // Reset any compositing state left by other scenes
+    _ctx.globalAlpha = 1;
+    _ctx.globalCompositeOperation = 'source-over';
+
     // Deep space background — very dark, slight blue-purple gradient
     const bg = _ctx.createLinearGradient(0, 0, 0, h);
     bg.addColorStop(0,   '#00000f');
@@ -1411,117 +1415,74 @@ const CanvasScenes = (() => {
       _ctx.fill();
     });
 
-    // ── Aurora borealis — silky multi-layer canvas-2D curtains ──────────
+    // ── Aurora borealis ──────────────────────────────────────────────────
     {
-      // Each band has: colour, vertical centre, vertical half-height,
-      // three independent wave layers (speed, freq, amplitude) that layer
-      // on top of each other for organic, non-repeating curtain motion.
-      // All time values are in ms → divided to slow/smooth everything right down.
-      const T   = t * 0.001;  // seconds
+      // t is a frame counter (~60fps). Use t*0.016 ≈ elapsed seconds
+      const T = t * 0.016;
+
+      // 4 bands: [r, g, b, centerY as fraction, bandwidth, speed, huePhase]
       const bands = [
-        // Green — dominant oxygen band, wide and bright
-        {
-          r:30,  g:225, b:115,
-          baseA: 0.17,
-          cy: h * 0.44,
-          waves: [
-            { spd:0.038, freq:0.0090, amp: h*0.095 },  // large slow arch
-            { spd:0.061, freq:0.0220, amp: h*0.038 },  // medium ripple
-            { spd:0.095, freq:0.0510, amp: h*0.016 },  // fine shimmer
-          ],
-          pulse: { spd:0.31, amp:0.055 },
-        },
-        // Teal/cyan — softer layer just above green
-        {
-          r:0,   g:200, b:200,
-          baseA: 0.10,
-          cy: h * 0.38,
-          waves: [
-            { spd:0.028, freq:0.0080, amp: h*0.080 },
-            { spd:0.052, freq:0.0190, amp: h*0.032 },
-            { spd:0.110, freq:0.0580, amp: h*0.012 },
-          ],
-          pulse: { spd:0.19, amp:0.040 },
-        },
-        // Blue/purple — nitrogen, lower, slower
-        {
-          r:60,  g:80,  b:255,
-          baseA: 0.09,
-          cy: h * 0.50,
-          waves: [
-            { spd:0.022, freq:0.0075, amp: h*0.070 },
-            { spd:0.044, freq:0.0210, amp: h*0.028 },
-            { spd:0.088, freq:0.0490, amp: h*0.010 },
-          ],
-          pulse: { spd:0.24, amp:0.035 },
-        },
-        // Pink/magenta accent — rare high-altitude, very faint
-        {
-          r:220, g:60,  b:160,
-          baseA: 0.055,
-          cy: h * 0.33,
-          waves: [
-            { spd:0.017, freq:0.0065, amp: h*0.060 },
-            { spd:0.039, freq:0.0180, amp: h*0.022 },
-            { spd:0.072, freq:0.0420, amp: h*0.008 },
-          ],
-          pulse: { spd:0.14, amp:0.025 },
-        },
+        [0,   230, 120, 0.38, 0.11, 0.22, 0.00],   // green  — dominant
+        [0,   200, 220, 0.32, 0.07, 0.17, 0.80],   // teal   — upper
+        [80,  60,  255, 0.45, 0.07, 0.28, 2.10],   // blue   — lower
+        [200, 40,  180, 0.27, 0.05, 0.13, 4.20],   // pink   — accent, faint
       ];
 
-      // Helper: compute waveY for a given world-x position from three wave layers
-      function _auroraY(wx, waves, bi, T) {
-        return waves[0].amp * Math.sin(wx * waves[0].freq + T * waves[0].spd + bi * 2.10)
-             + waves[1].amp * Math.sin(wx * waves[1].freq + T * waves[1].spd + bi * 1.37)
-             + waves[2].amp * Math.cos(wx * waves[2].freq + T * waves[2].spd + bi * 0.83);
-      }
+      _ctx.save();
+      _ctx.globalCompositeOperation = 'screen';
 
-      bands.forEach((bd, bi) => {
-        // Per-band breathing alpha
-        const alpha = bd.baseA + bd.pulse.amp * Math.sin(T * bd.pulse.spd + bi * 1.57);
+      bands.forEach(([r, g, b, cyF, bwF, spd, ph], bi) => {
+        const cy = h * cyF;
+        const bw = h * bwF;
 
-        // Draw multiple thin passes (globalAlpha stacking) to build up soft glow
-        // Pass 1: wide diffuse glow (tall gradient, low alpha)
-        // Pass 2: tighter core curtain (normal height, full alpha)
-        const passes = [
-          { hMult: 2.2, aMult: 0.35 },
-          { hMult: 1.0, aMult: 1.00 },
-          { hMult: 0.4, aMult: 0.60 },  // bright inner core
-        ];
+        // Breathing pulse per band
+        const pulse = 0.80 + 0.20 * Math.sin(T * 0.41 + ph);
 
-        passes.forEach(pass => {
-          const SEGS = 22;
-          const segW = (w + 40) / SEGS;
-          _ctx.save();
-          _ctx.beginPath();
-          _ctx.moveTo(-20, h + 10);
-          _ctx.lineTo(-20, bd.cy + _auroraY(-20, bd.waves, bi, T));
+        // Draw 2 passes: wide glow + tight core
+        [[bw * 2.5, 0.22], [bw, 0.55]].forEach(([halfH, baseAlpha]) => {
+          const alpha = baseAlpha * pulse;
+          const STEPS = 48;
 
-          for (let si = 0; si <= SEGS; si++) {
-            const px  = si * segW - 20;
-            const cpx = (si - 0.5) * segW - 20;
-            const py  = bd.cy + _auroraY(px,  bd.waves, bi, T);
-            const cpy = bd.cy + _auroraY(cpx, bd.waves, bi, T);
-            _ctx.quadraticCurveTo(cpx, cpy, px, py);
+          // Build top and bottom edges of the aurora ribbon
+          const topPts = [], botPts = [];
+          for (let si = 0; si <= STEPS; si++) {
+            const x = (si / STEPS) * (w + 40) - 20;
+            // Two overlapping waves for organic shape
+            const wave = Math.sin(x * 0.008 + T * spd + ph)          * h * 0.055
+                       + Math.sin(x * 0.019 + T * spd * 1.7 + ph * 1.3) * h * 0.022
+                       + Math.cos(x * 0.041 + T * spd * 0.8)             * h * 0.009;
+            topPts.push([x, cy - halfH * 0.5 + wave]);
+            botPts.push([x, cy + halfH * 0.5 + wave]);
           }
-          _ctx.lineTo(w + 20, h + 10);
+
+          // Trace path: top edge left→right, bottom edge right→left
+          _ctx.beginPath();
+          _ctx.moveTo(topPts[0][0], topPts[0][1]);
+          for (let si = 1; si <= STEPS; si++) {
+            const [cpx, cpy] = topPts[si - 1];
+            const [px,  py ] = topPts[si];
+            _ctx.quadraticCurveTo(cpx, cpy, (cpx + px) / 2, (cpy + py) / 2);
+          }
+          _ctx.lineTo(topPts[STEPS][0], topPts[STEPS][1]);
+          for (let si = STEPS; si >= 1; si--) {
+            const [cpx, cpy] = botPts[si];
+            const [px,  py ] = botPts[si - 1];
+            _ctx.quadraticCurveTo(cpx, cpy, (cpx + px) / 2, (cpy + py) / 2);
+          }
           _ctx.closePath();
 
-          // Vertical gradient — transparent top, colour core, transparent bottom
-          const coreH = h * 0.14 * pass.hMult;
-          const peakY = bd.cy;  // gradient centred on mean curtain height
-          const grad  = _ctx.createLinearGradient(0, peakY - coreH * 0.45, 0, peakY + coreH * 0.85);
-          const a1 = (alpha * pass.aMult).toFixed(3);
-          const a2 = (alpha * pass.aMult * 0.55).toFixed(3);
-          grad.addColorStop(0,    `rgba(${bd.r},${bd.g},${bd.b},0)`);
-          grad.addColorStop(0.20, `rgba(${bd.r},${bd.g},${bd.b},${a1})`);
-          grad.addColorStop(0.52, `rgba(${bd.r},${bd.g},${bd.b},${a2})`);
-          grad.addColorStop(1,    `rgba(${bd.r},${bd.g},${bd.b},0)`);
+          // Vertical gradient fades to transparent at ribbon edges
+          const grad = _ctx.createLinearGradient(0, cy - halfH, 0, cy + halfH);
+          grad.addColorStop(0,    `rgba(${r},${g},${b},0)`);
+          grad.addColorStop(0.30, `rgba(${r},${g},${b},${alpha.toFixed(3)})`);
+          grad.addColorStop(0.70, `rgba(${r},${g},${b},${alpha.toFixed(3)})`);
+          grad.addColorStop(1,    `rgba(${r},${g},${b},0)`);
           _ctx.fillStyle = grad;
           _ctx.fill();
-          _ctx.restore();
         });
       });
+
+      _ctx.restore();  // restores globalCompositeOperation = 'source-over'
     }
 
 
