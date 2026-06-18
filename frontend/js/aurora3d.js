@@ -90,24 +90,22 @@ const AUR_FRAG = `
 // ── Helpers ──────────────────────────────────────────────────────────────────
 function _noise(x,y,o){ return Math.sin(x*1.7+o*13.1)*Math.cos(y*2.3+o*7.7)*Math.sin(x*0.7+y*1.3+o*3.3); }
 
-// Build an open arch (≈200° arc) in the XY plane.
-// Camera is at z=+16 looking at z=0 — sees the arch as a rainbow arch spanning the sky.
-// Noise deforms Y (height), NOT radius — no more petal shapes, sinusoidal bottom edge instead.
-function _makeRibbon(radius, yOff, nScale, nAmp, nOff, isRed, tubeR){
+// Full 360° horizontal ring in the XZ plane — camera is INSIDE looking upward.
+// From inside, the ring reads as a wide aurora band spanning the full screen left-to-right.
+// Noise deforms Y (up/down), NOT the XZ radius — eliminates petal shapes,
+// gives a sinusoidal wavy bottom edge instead.
+function _makeRibbon(radius, yBase, nScale, nAmp, nOff, isRed, tubeR){
   const pts=[];
-  const span = Math.PI + 0.35;          // ~220° — endpoints dip just below horizon
-  const start = -0.175;                  // start slightly right-of-right-horizon
-  for(let i=0; i<=120; i++){
-    const a = start + (i/120)*span;
-    const ny = nAmp * _noise(nScale*a, i/120, nOff);
-    const nz = nAmp*0.18 * _noise(nScale*a+9, i/120, nOff+3); // tiny depth wobble
+  for(let e=0; e<=100; e++){
+    const a=(e/100)*Math.PI*2;
+    const ny = nAmp * _noise(nScale*a, e/100, nOff);
     pts.push(new THREE.Vector3(
-      Math.cos(a) * radius,
-      Math.sin(a) * radius + yOff + ny,  // Y-deformed → sinusoidal bottom edge
-      nz
+      Math.sin(a)*radius,
+      yBase + ny,           // Y-deformed: sinusoidal waves, no petal lobes
+      Math.cos(a)*radius
     ));
   }
-  const geo=new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts),200,tubeR??0.8,16,false);
+  const geo=new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts),200,tubeR??0.9,16,true);
   const mat=new THREE.ShaderMaterial({
     uniforms:{
       uIntensity:{value:0.009}, uColor:{value:isRed?1:0},
@@ -174,24 +172,26 @@ function _loop(now){
   _setAll('seconds',_t);
   if(_stars) _stars.material.uniforms.seconds.value=_t;
 
-  // Layer 1 — arch, gently breathing
+  // Layer 1 — lower band, gentle breathing
   if(_group){
-    _group.position.y = 0 + 0.25*Math.sin(_t*0.09);
+    _group.position.y  = 0 + 0.3*Math.sin(_t*0.09);
+    _group.scale.setScalar(8.0 + 0.3*Math.sin(_t*0.11));
   }
-  // Layer 2 — wider arch behind layer 1
+  // Layer 2 — upper band, slightly out of phase
   if(_group2){
-    _group2.position.y = 0 + 0.35*Math.sin(_t*0.07+1.2);
+    _group2.position.y = 0 + 0.4*Math.sin(_t*0.07+1.2);
+    _group2.scale.setScalar(9.0 + 0.35*Math.sin(_t*0.09+0.8));
     _group2.children.forEach(m=>{
       if(m.material?.uniforms.seconds!==undefined)
         m.material.uniforms.seconds.value=_t;
     });
   }
 
-  // Camera: below and in front of the arch, looking up — classic aurora from ground view
-  _cam.position.x =  Math.sin(_t * 0.022) * 1.5;
-  _cam.position.y = -2 + Math.sin(_t * 0.016) * 0.4;
-  _cam.position.z = 16 + Math.cos(_t * 0.022) * 1;
-  _cam.lookAt(0, 3, 0);
+  // Camera: INSIDE the ring looking upward — ring reads as wide aurora bands spanning screen
+  _cam.position.x = Math.sin(_t*0.020) * 0.6;
+  _cam.position.y = -1 + Math.sin(_t*0.015) * 0.3;
+  _cam.position.z = Math.cos(_t*0.018) * 0.6;
+  _cam.lookAt(0, 6, 0);
 
   const W=window.innerWidth,H=window.innerHeight,pr=_R.getPixelRatio();
   if(Math.abs(_R.domElement.width-W*pr)>4||Math.abs(_R.domElement.height-H*pr)>4){
@@ -218,36 +218,39 @@ function _build(){
   _R.toneMappingExposure=1.26;
 
   _scene=new THREE.Scene();
-  // Wide FOV — see full arch span edge to edge
-  _cam=new THREE.PerspectiveCamera(70,W/H,0.1,300);
-  _cam.position.set(0,-2,16); _cam.lookAt(0,3,0);
+  // Wide FOV — inside the ring, bands span full screen left-to-right
+  _cam=new THREE.PerspectiveCamera(75,W/H,0.1,300);
+  _cam.position.set(0,-1,0); _cam.lookAt(0,6,0);
 
-  // Stars (same as CodePen)
+  // Stars
   _stars=_makeStars(); _scene.add(_stars);
 
-  // ── Layer 1: inner arch (radius 8-9.5, direct world units, no scale) ──
+  // ── Layer 1: inner ring (radius 2-3.5 local × scale 8 = 16-28 world) ──
+  // yBase in local space; noise amplitude in local space
   _group=new THREE.Group();
   _group.position.set(0,0,0);
+  _group.scale.setScalar(8.0);
   _scene.add(_group);
-  _group.add(_makeRibbon(8,    0,    2, 0.40, 0,    false, 0.8));
-  _group.add(_makeRibbon(8,    0.12, 2, 0.40, 0,    true,  0.8));
-  _group.add(_makeRibbon(9.5,  0,    3, 0.55, 0.4,  false, 0.8));
-  _group.add(_makeRibbon(9.5,  0.12, 3, 0.55, 0.45, true,  0.8));
+  _group.add(_makeRibbon(2,    0.30, 2, 0.35, 0,    false, 0.9));
+  _group.add(_makeRibbon(2.01, 0.35, 2, 0.35, 0,    true,  0.9));
+  _group.add(_makeRibbon(3.5,  0.55, 3, 0.50, 0.4,  false, 0.9));
+  _group.add(_makeRibbon(3.51, 0.60, 3, 0.50, 0.45, true,  0.9));
 
-  // ── Layer 2: outer arch (radius 10.5-12), slightly behind ──────────
+  // ── Layer 2: outer ring, taller tube (tubeR=1.6 local) ────────────
   _group2=new THREE.Group();
-  _group2.position.set(0,0,-1.5);
+  _group2.position.set(0,0,0);
+  _group2.scale.setScalar(9.0);
   _scene.add(_group2);
   const mkR2=(r,y,ns,na,no,ir)=>{
-    const m=_makeRibbon(r,y,ns,na,no,ir,1.1);
+    const m=_makeRibbon(r,y,ns,na,no,ir,1.6);
     if(m.material?.uniforms.uHueShift) m.material.uniforms.uHueShift.value=0.36;
     if(m.material?.uniforms.uIntensity) m.material.uniforms.uIntensity.value=0.007;
     return m;
   };
-  _group2.add(mkR2(10.5, 0,    2, 0.40, 0.6,  false));
-  _group2.add(mkR2(10.5, 0.18, 2, 0.40, 0.6,  true));
-  _group2.add(mkR2(12,   0,    3, 0.55, 1.0,  false));
-  _group2.add(mkR2(12,   0.18, 3, 0.55, 1.05, true));
+  _group2.add(mkR2(2,    0.70, 2, 0.35, 0.6,  false));
+  _group2.add(mkR2(2.01, 0.76, 2, 0.35, 0.6,  true));
+  _group2.add(mkR2(3.5,  0.95, 3, 0.50, 1.0,  false));
+  _group2.add(mkR2(3.51, 1.00, 3, 0.50, 1.05, true));
 
   _composer=new EffectComposer(_R);
   _composer.addPass(new RenderPass(_scene,_cam));
