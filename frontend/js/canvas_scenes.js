@@ -1411,7 +1411,8 @@ const CanvasScenes = (() => {
       _ctx.fill();
     });
 
-    // ── Aurora borealis — silky multi-layer curtains ─────────────────────
+    // ── Aurora borealis — canvas-2D fallback (skipped when Aurora3D WebGL is active)
+    if (typeof Aurora3D === 'undefined') {
     {
       // Each band has: colour, vertical centre, vertical half-height,
       // three independent wave layers (speed, freq, amplitude) that layer
@@ -1573,6 +1574,7 @@ const CanvasScenes = (() => {
         ss.life += 16; // ~60fps increment
       });
     }
+    } // end canvas-2D aurora fallback
 
     // Slow-moving distant galaxy smear
     const gx = w * (0.55 + 0.04 * Math.sin(t * 0.0002));
@@ -3382,6 +3384,10 @@ const CanvasScenes = (() => {
     if (_activeSceneType === 'space') {
       _shootingStars = [];
       _nextShoot = 0;  // spawn first star almost immediately
+      // Launch WebGL aurora overlay (transparent — sits above bg-canvas stars)
+      if (typeof Aurora3D !== 'undefined') Aurora3D.start();
+    } else {
+      if (typeof Aurora3D !== 'undefined') Aurora3D.stop();
     }
 
     // Persist scene choice (decoupled from channel/music choice)
