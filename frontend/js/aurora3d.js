@@ -12,12 +12,13 @@ import { OutputPass }      from 'three/addons/postprocessing/OutputPass.js';
 // ── Shaders ─────────────────────────────────────────────────────────────────
 const STAR_VERT = `
   attribute float aSize;
+  attribute float aIdx;      // per-star unique index (replaces gl_VertexID)
   varying vec3  vColor;
   varying float vTwink;
   uniform float seconds;
   void main(){
     vColor  = color;
-    vTwink  = 0.55 + 0.45 * sin(seconds * 1.7 + float(gl_VertexID) * 1.31);
+    vTwink  = 0.55 + 0.45 * sin(seconds * 1.7 + aIdx * 1.31);
     vec4 mv = modelViewMatrix * vec4(position, 1.0);
     gl_Position  = projectionMatrix * mv;
     gl_PointSize = aSize * (300.0 / -mv.z);
@@ -109,7 +110,8 @@ function _makeRibbon(radius, zOff, nScale, nAmp, nOff, isRed){
 
 function _makeStars(){
   const N=2500;
-  const pos=new Float32Array(N*3), col=new Float32Array(N*3), sz=new Float32Array(N);
+  const pos=new Float32Array(N*3), col=new Float32Array(N*3),
+        sz=new Float32Array(N),    idx=new Float32Array(N);
   for(let i=0;i<N;i++){
     const u=Math.random(), v=Math.random();
     const theta=2*Math.PI*u, phi=Math.acos(2*v-1), r=80+Math.random()*40;
@@ -120,11 +122,13 @@ function _makeStars(){
     if(warm){col[i*3]=b; col[i*3+1]=b*0.85; col[i*3+2]=b*0.7;}
     else    {col[i*3]=b*0.85; col[i*3+1]=b*0.92; col[i*3+2]=b;}
     sz[i]=(Math.random()<0.05)?2.5:1.0+Math.random()*0.8;
+    idx[i]=i;
   }
   const g=new THREE.BufferGeometry();
   g.setAttribute('position',new THREE.BufferAttribute(pos,3));
   g.setAttribute('color',   new THREE.BufferAttribute(col,3));
   g.setAttribute('aSize',   new THREE.BufferAttribute(sz,1));
+  g.setAttribute('aIdx',    new THREE.BufferAttribute(idx,1));
   const m=new THREE.ShaderMaterial({
     uniforms:{seconds:{value:0}},
     vertexShader:STAR_VERT, fragmentShader:STAR_FRAG,
@@ -160,6 +164,13 @@ function _loop(now){
   if(_stars) _stars.material.uniforms.seconds.value=_t;
   _group.position.y =6.0+0.4*Math.sin(_t*0.09);
   _group.scale.setScalar(8.0+0.3*Math.sin(_t*0.11));
+
+  // Slow camera orbit — gives the convex undulating view of the ribbon bottoms
+  const orbitR = 7.5;
+  _cam.position.x = Math.sin(_t * 0.04) * orbitR;
+  _cam.position.y = -1.5 + Math.sin(_t * 0.027) * 0.8;
+  _cam.position.z = Math.cos(_t * 0.04) * orbitR;
+  _cam.lookAt(0, 1.5, 0);
 
   const W=window.innerWidth,H=window.innerHeight,pr=_R.getPixelRatio();
   if(Math.abs(_R.domElement.width-W*pr)>4||Math.abs(_R.domElement.height-H*pr)>4){
@@ -197,10 +208,11 @@ function _build(){
   _group.position.set(0,6.0,0.3);
   _group.scale.setScalar(8.0);
   _scene.add(_group);
-  _group.add(_makeRibbon(2,    0,    2,0.2,0,   false));
-  _group.add(_makeRibbon(2.01, 0.05, 2,0.2,0,   true));
-  _group.add(_makeRibbon(3.5,  0,    3,0.4,0.4, false));
-  _group.add(_makeRibbon(3.51, 0,    3,0.4,0.45,true));
+  // Higher nAmp (0.45 / 0.7) = more pronounced sine-wave undulation on bottom
+  _group.add(_makeRibbon(2,    0,    2,0.45,0,    false));
+  _group.add(_makeRibbon(2.01, 0.05, 2,0.45,0,    true));
+  _group.add(_makeRibbon(3.5,  0,    3,0.70,0.4,  false));
+  _group.add(_makeRibbon(3.51, 0,    3,0.70,0.45, true));
 
   _composer=new EffectComposer(_R);
   _composer.addPass(new RenderPass(_scene,_cam));
