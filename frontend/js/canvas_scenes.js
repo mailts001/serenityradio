@@ -1411,61 +1411,119 @@ const CanvasScenes = (() => {
       _ctx.fill();
     });
 
-    // ── Aurora borealis — skip if WebGL Aurora3D is active ──────────────
-    // Aurora3D renders its own fullscreen canvas at z-index 0 (behind the page)
-    // so we skip the canvas-2D version to avoid drawing aurora twice.
-    if (typeof Aurora3D === 'undefined') {
-    // ── Aurora borealis — canvas-2D fallback (rounded Bezier bands) ──
+    // ── Aurora borealis — silky multi-layer curtains ─────────────────────
     {
-      const aAlpha = 0.14 + 0.06 * Math.sin(t * 0.00052);  // pulse
+      // Each band has: colour, vertical centre, vertical half-height,
+      // three independent wave layers (speed, freq, amplitude) that layer
+      // on top of each other for organic, non-repeating curtain motion.
+      // All time values are in ms → divided to slow/smooth everything right down.
+      const T   = t * 0.001;  // seconds
       const bands = [
-        { r:0,   g:230, b:120, a: aAlpha,         cy: h*0.46, speed: 0.042 },   // green (dominant)
-        { r:20,  g:90,  b:255, a: aAlpha * 0.65,  cy: h*0.50, speed: 0.028 },   // blue
-        { r:150, g:15,  b:240, a: aAlpha * 0.35,  cy: h*0.43, speed: 0.055 },   // purple accent
+        // Green — dominant oxygen band, wide and bright
+        {
+          r:30,  g:225, b:115,
+          baseA: 0.17,
+          cy: h * 0.44,
+          waves: [
+            { spd:0.038, freq:0.0090, amp: h*0.095 },  // large slow arch
+            { spd:0.061, freq:0.0220, amp: h*0.038 },  // medium ripple
+            { spd:0.095, freq:0.0510, amp: h*0.016 },  // fine shimmer
+          ],
+          pulse: { spd:0.31, amp:0.055 },
+        },
+        // Teal/cyan — softer layer just above green
+        {
+          r:0,   g:200, b:200,
+          baseA: 0.10,
+          cy: h * 0.38,
+          waves: [
+            { spd:0.028, freq:0.0080, amp: h*0.080 },
+            { spd:0.052, freq:0.0190, amp: h*0.032 },
+            { spd:0.110, freq:0.0580, amp: h*0.012 },
+          ],
+          pulse: { spd:0.19, amp:0.040 },
+        },
+        // Blue/purple — nitrogen, lower, slower
+        {
+          r:60,  g:80,  b:255,
+          baseA: 0.09,
+          cy: h * 0.50,
+          waves: [
+            { spd:0.022, freq:0.0075, amp: h*0.070 },
+            { spd:0.044, freq:0.0210, amp: h*0.028 },
+            { spd:0.088, freq:0.0490, amp: h*0.010 },
+          ],
+          pulse: { spd:0.24, amp:0.035 },
+        },
+        // Pink/magenta accent — rare high-altitude, very faint
+        {
+          r:220, g:60,  b:160,
+          baseA: 0.055,
+          cy: h * 0.33,
+          waves: [
+            { spd:0.017, freq:0.0065, amp: h*0.060 },
+            { spd:0.039, freq:0.0180, amp: h*0.022 },
+            { spd:0.072, freq:0.0420, amp: h*0.008 },
+          ],
+          pulse: { spd:0.14, amp:0.025 },
+        },
       ];
-      // Draw each band as a filled Bezier path for natural rounded curtain shape
+
+      // Helper: compute waveY for a given world-x position from three wave layers
+      function _auroraY(wx, waves, bi, T) {
+        return waves[0].amp * Math.sin(wx * waves[0].freq + T * waves[0].spd + bi * 2.10)
+             + waves[1].amp * Math.sin(wx * waves[1].freq + T * waves[1].spd + bi * 1.37)
+             + waves[2].amp * Math.cos(wx * waves[2].freq + T * waves[2].spd + bi * 0.83);
+      }
+
       bands.forEach((bd, bi) => {
-        const drift = t * bd.speed;
-        const SEGS  = 14;   // number of bezier segments across width
-        const segW  = w / SEGS;
-        // Build top edge as a smooth Bezier curve
-        _ctx.save();
-        _ctx.beginPath();
-        _ctx.moveTo(-10, h);
-        _ctx.lineTo(-10, bd.cy);
-        // Bezier curve across the top: each segment has a control point shaped by waves
-        for (let si = 0; si <= SEGS; si++) {
-          const px = si * segW;
-          const wx = px + drift;
-          const waveY = Math.sin(wx * 0.012 + bi * 1.9)   * h * 0.100   // large arch
-                      + Math.sin(wx * 0.032 + t*0.00055)  * h * 0.045   // medium ripple
-                      + Math.cos(wx * 0.068 + t*0.00140 + bi) * h * 0.018; // shimmer
-          if (si === 0) {
-            _ctx.lineTo(px, bd.cy + waveY);
-          } else {
-            // Control point halfway between prev and current for smooth curve
-            const cpx = (si - 0.5) * segW;
-            const cpwx = cpx + drift;
-            const cpwaveY = Math.sin(cpwx * 0.012 + bi * 1.9)   * h * 0.100
-                          + Math.sin(cpwx * 0.032 + t*0.00055)  * h * 0.045
-                          + Math.cos(cpwx * 0.068 + t*0.00140 + bi) * h * 0.018;
-            _ctx.quadraticCurveTo(cpx, bd.cy + cpwaveY, px, bd.cy + waveY);
+        // Per-band breathing alpha
+        const alpha = bd.baseA + bd.pulse.amp * Math.sin(T * bd.pulse.spd + bi * 1.57);
+
+        // Draw multiple thin passes (globalAlpha stacking) to build up soft glow
+        // Pass 1: wide diffuse glow (tall gradient, low alpha)
+        // Pass 2: tighter core curtain (normal height, full alpha)
+        const passes = [
+          { hMult: 2.2, aMult: 0.35 },
+          { hMult: 1.0, aMult: 1.00 },
+          { hMult: 0.4, aMult: 0.60 },  // bright inner core
+        ];
+
+        passes.forEach(pass => {
+          const SEGS = 22;
+          const segW = (w + 40) / SEGS;
+          _ctx.save();
+          _ctx.beginPath();
+          _ctx.moveTo(-20, h + 10);
+          _ctx.lineTo(-20, bd.cy + _auroraY(-20, bd.waves, bi, T));
+
+          for (let si = 0; si <= SEGS; si++) {
+            const px  = si * segW - 20;
+            const cpx = (si - 0.5) * segW - 20;
+            const py  = bd.cy + _auroraY(px,  bd.waves, bi, T);
+            const cpy = bd.cy + _auroraY(cpx, bd.waves, bi, T);
+            _ctx.quadraticCurveTo(cpx, cpy, px, py);
           }
-        }
-        _ctx.lineTo(w + 10, h);
-        _ctx.closePath();
-        // Fill with vertical gradient for curtain translucency
-        const curtainH = h * 0.18;
-        const grad = _ctx.createLinearGradient(0, bd.cy - curtainH*0.4, 0, bd.cy + curtainH*0.8);
-        grad.addColorStop(0,   `rgba(${bd.r},${bd.g},${bd.b},0)`);
-        grad.addColorStop(0.25,`rgba(${bd.r},${bd.g},${bd.b},${(bd.a).toFixed(3)})`);
-        grad.addColorStop(0.55,`rgba(${bd.r},${bd.g},${bd.b},${(bd.a*0.6).toFixed(3)})`);
-        grad.addColorStop(1,   `rgba(${bd.r},${bd.g},${bd.b},0)`);
-        _ctx.fillStyle = grad;
-        _ctx.fill();
-        _ctx.restore();
+          _ctx.lineTo(w + 20, h + 10);
+          _ctx.closePath();
+
+          // Vertical gradient — transparent top, colour core, transparent bottom
+          const coreH = h * 0.14 * pass.hMult;
+          const peakY = bd.cy;  // gradient centred on mean curtain height
+          const grad  = _ctx.createLinearGradient(0, peakY - coreH * 0.45, 0, peakY + coreH * 0.85);
+          const a1 = (alpha * pass.aMult).toFixed(3);
+          const a2 = (alpha * pass.aMult * 0.55).toFixed(3);
+          grad.addColorStop(0,    `rgba(${bd.r},${bd.g},${bd.b},0)`);
+          grad.addColorStop(0.20, `rgba(${bd.r},${bd.g},${bd.b},${a1})`);
+          grad.addColorStop(0.52, `rgba(${bd.r},${bd.g},${bd.b},${a2})`);
+          grad.addColorStop(1,    `rgba(${bd.r},${bd.g},${bd.b},0)`);
+          _ctx.fillStyle = grad;
+          _ctx.fill();
+          _ctx.restore();
+        });
       });
     }
+
 
     // ── Shooting stars ──────────────────────────────────────────────────
     {
@@ -1515,7 +1573,6 @@ const CanvasScenes = (() => {
         ss.life += 16; // ~60fps increment
       });
     }
-    } // end if(typeof Aurora3D === 'undefined') — canvas-2D aurora fallback
 
     // Slow-moving distant galaxy smear
     const gx = w * (0.55 + 0.04 * Math.sin(t * 0.0002));
@@ -3325,11 +3382,6 @@ const CanvasScenes = (() => {
     if (_activeSceneType === 'space') {
       _shootingStars = [];
       _nextShoot = 0;  // spawn first star almost immediately
-      // Launch WebGL aurora overlay (fullscreen canvas behind page content)
-      if (typeof Aurora3D !== 'undefined') Aurora3D.start();
-    } else {
-      // Stop aurora if we're leaving space
-      if (typeof Aurora3D !== 'undefined') Aurora3D.stop();
     }
 
     // Persist scene choice (decoupled from channel/music choice)
