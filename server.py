@@ -346,6 +346,18 @@ def api_upload():
 def admin_page():
     return send_from_directory(os.path.join(FRONTEND_DIR, 'pages'), 'admin.html')
 
+@app.route('/train-view')
+def train_view():
+    """Cesium 3D world flythrough for the train/sightseeing scene."""
+    import re as _re
+    page_path = os.path.join(FRONTEND_DIR, 'pages', 'train-view.html')
+    with open(page_path, 'r') as f:
+        html = f.read()
+    # Inject Google Maps API key from environment (never hardcoded in HTML)
+    google_key = os.environ.get('GOOGLE_MAPS_KEY', '')
+    html = html.replace('%%GOOGLE_MAPS_KEY%%', google_key)
+    return html, 200, {'Content-Type': 'text/html; charset=utf-8'}
+
 @app.route('/api/heartbeat', methods=['POST'])
 def api_heartbeat(): return handle_heartbeat()
 

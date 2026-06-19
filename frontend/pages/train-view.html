@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Train View</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html, body { width:100%; height:100%; overflow:hidden; background:#000; }
+  #cesiumContainer { width:100%; height:100%; }
+
+  /* Hide ALL Cesium UI chrome — we only want the 3D world */
+  .cesium-widget-credits,
+  .cesium-infoBox,
+  .cesium-selection-wrapper,
+  .cesium-viewer-toolbar,
+  .cesium-viewer-animationContainer,
+  .cesium-viewer-timelineContainer,
+  .cesium-viewer-bottom { display:none !important; }
+</style>
+
+<!-- Cesium from CDN -->
+<script src="https://cesium.com/downloads/cesiumjs/releases/1.122/Build/Cesium/Cesium.js"></script>
+<link  href="https://cesium.com/downloads/cesiumjs/releases/1.122/Build/Cesium/Widgets/widgets.css" rel="stylesheet">
+</head>
+<body>
+<div id="cesiumContainer"></div>
+
+<script>
+// ── Tokens ─────────────────────────────────────────────────────────────────
+Cesium.Ion.defaultAccessToken =
+  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiI5NjgyMGZmMC01NTdlLTQxZjQtODIyMy00YWZlZGY1ZWU2ODgiLCJpZCI6NDQ2NDg3LCJpc3MiOiJodHRwczovL2FwaS5jZXNpdW0uY29tIiwiYXVkIjoidW5kZWZpbmVkX2RlZmF1bHQiLCJpYXQiOjE3ODE4NTAyMDF9.F9eYt0I4a44zm1zFRYyzJFfnLsytQJ8hP6He5yi8zAc';
+
+// Google Maps API key — injected by server from env var GOOGLE_MAPS_KEY
+// Falls back to placeholder so page doesn't crash if key missing
+Cesium.GoogleMaps.defaultApiKey = '%%GOOGLE_MAPS_KEY%%';
+
+// ── Viewer — all UI disabled ────────────────────────────────────────────────
+const viewer = new Cesium.Viewer('cesiumContainer', {
+  timeline:         false,
+  animation:        false,
+  sceneModePicker:  false,
+  baseLayerPicker:  false,
+  navigationHelpButton: false,
+  homeButton:       false,
+  geocoder:         false,
+  fullscreenButton: false,
+  infoBox:          false,
+  selectionIndicator: false,
+  globe:            false,   // hidden — 3D tiles include terrain + ground
+});
+
+viewer.scene.skyAtmosphere.show = true;
+viewer.scene.fog.enabled = true;
+viewer.scene.fog.density = 0.00015;
+
+// ── Google Photorealistic 3D Tiles ─────────────────────────────────────────
+(async () => {
+  try {
+    const tileset = await Cesium.createGooglePhotorealistic3DTileset();
+    viewer.scene.primitives.add(tileset);
+  } catch (e) {
+    console.warn('[CesiumTrain] 3D Tiles failed:', e.message);
+    // Fallback: show Cesium World Terrain + Bing imagery
+    viewer.terrainProvider = await Cesium.createWorldTerrainAsync();
+    viewer.globe.show = true;
+  }
+
+  // ── Singapore MRT East–West line camera waypoints ───────────────────────
+  // Each waypoint: [lon, lat, altitude(m), heading°, pitch°, duration(s)]
+  // Route: Jurong East → Queenstown → Raffles Place → Marina Bay (west→east)
+  const WP = [
+    // Jurong East hub — wide establishing shot
+    { lon:103.7420, lat:1.3330, alt:380, h:85,  p:-22, dur:6  },
+    // Clementi — suburban stretch
+    { lon:103.7653, lat:1.3151, alt:220, h:78,  p:-18, dur:5  },
+    // Buona Vista — near NUS, elevated view
+    { lon:103.7898, lat:1.3067, alt:180, h:72,  p:-15, dur:5  },
+    // Commonwealth — HDB heartland
+    { lon:103.8082, lat:1.3025, alt:160, h:80,  p:-14, dur:4  },
+    // Queenstown — mature estate
+    { lon:103.8056, lat:1.2942, alt:150, h:88,  p:-13, dur:4  },
+    // Tiong Bahru — heritage shophouses low pass
+    { lon:103.8272, lat:1.2862, alt:120, h:90,  p:-10, dur:5  },
+    // Outram Park — MRT interchange, lower
+    { lon:103.8397, lat:1.2802, alt:100, h:92,  p:-9,  dur:4  },
+    // Tanjong Pagar — CBD skyscrapers
+    { lon:103.8464, lat:1.2762, alt:200, h:85,  p:-16, dur:5  },
+    // Raffles Place — heart of CBD
+    { lon:103.8514, lat:1.2840, alt:280, h:60,  p:-20, dur:6  },
+    // Marina Bay — Gardens by the Bay, Supertrees
+    { lon:103.8644, lat:1.2797, alt:350, h:50,  p:-25, dur:6  },
+    // Marina Bay Sands — iconic establishing shot
+    { lon:103.8598, lat:1.2839, alt:420, h:300, p:-28, dur:7  },
+    // Esplanade / Merlion waterfront
+    { lon:103.8554, lat:1.2896, alt:180, h:250, p:-15, dur:5  },
+  ];
+
+  let wpIdx = 0;
+  let looping = true;
+
+  function flyToWaypoint(i) {
+    if (!looping) return;
+    const w = WP[i % WP.length];
+    const isLast = (i % WP.length) === WP.length - 1;
+
+    viewer.camera.flyTo({
+      destination: Cesium.Cartesian3.fromDegrees(w.lon, w.lat, w.alt),
+      orientation: {
+        heading: Cesium.Math.toRadians(w.h),
+        pitch:   Cesium.Math.toRadians(w.p),
+        roll:    0,
+      },
+      duration: w.dur,
+      easingFunction: Cesium.EasingFunction.SINUSOIDAL_IN_OUT,
+      complete: () => {
+        // Pause briefly at key landmark shots
+        const pause = isLast ? 2000 : 300;
+        setTimeout(() => flyToWaypoint(i + 1), pause);
+      },
+    });
+  }
+
+  // Brief pause then start the journey
+  setTimeout(() => flyToWaypoint(0), 1200);
+
+  // ── Time-of-day: sync Cesium sun to real Singapore clock ────────────────
+  function syncSunToRealTime() {
+    // Singapore is UTC+8
+    const now = new Date();
+    viewer.clock.currentTime = Cesium.JulianDate.fromDate(now);
+    viewer.clock.multiplier  = 1;   // real-time (not accelerated)
+    viewer.scene.globe.enableLighting = true;
+  }
+  syncSunToRealTime();
+
+  // Allow parent page to send messages to control the view
+  window.addEventListener('message', e => {
+    if (e.data?.type === 'cesium-pause') {
+      looping = false;
+      viewer.camera.cancelFlight();
+    } else if (e.data?.type === 'cesium-resume') {
+      looping = true;
+      flyToWaypoint(wpIdx);
+    } else if (e.data?.type === 'cesium-speed' && e.data.multiplier) {
+      // Speed up / slow down the fly duration — re-trigger current waypoint
+      // (future enhancement)
+    }
+  });
+
+})();
+</script>
+</body>
+</html>
