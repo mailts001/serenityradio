@@ -307,6 +307,19 @@
   }
   body.scene-train #train-frame-canvas { display: block; }
 
+  /* ── Player floats above canvas in train scene ── */
+  body.scene-train .player-card {
+    position: fixed;
+    bottom: 0; left: 0; right: 0;
+    z-index: 5;
+    margin: 0;
+    border-radius: 20px 20px 0 0;
+    padding: 1.2rem 1.5rem 1.5rem;
+    background: rgba(6,10,18,0.92);
+    backdrop-filter: blur(18px);
+    border-top: 1px solid rgba(100,160,230,0.15);
+  }
+
   /* ── Location picker panel ── */
   /* ── Location picker — mobile-first collapsible drawer ── */
   #lp-toggle {
