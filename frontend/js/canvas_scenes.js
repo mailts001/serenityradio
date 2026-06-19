@@ -2653,16 +2653,107 @@ const CanvasScenes = (() => {
   // The window area is LEFT TRANSPARENT so the Cesium iframe below
   // shows through — creating the illusion of looking out a train window.
   let _trainIntCtx = null;
+
+  // ── Cesium interaction forwarding ──────────────────────────────────────────
+  // Scroll over the window area → zoom Cesium. Click-drag → pan Cesium.
+  // These are set up once when entering train mode and torn down on exit.
+  let _trainInteractBound = false;
+  let _trainDrag = null; // {startX, startY} while dragging
+
+  function _cesiumPost(msg) {
+    const iframe = document.getElementById('cesium-train');
+    if (iframe && iframe.contentWindow) iframe.contentWindow.postMessage(msg, '*');
+  }
+
+  function _trainWinHit(ex, ey) {
+    // The canvas is 110% of viewport, offset –5% so the interior is centred.
+    // Window proportions (0.09/0.10/0.82/0.62) are of the 110%-canvas,
+    // so in CSS-viewport coords we subtract 5% offset first.
+    const VW = window.innerWidth, VH = window.innerHeight;
+    const CW = VW * 1.10, CH = VH * 1.10;  // canvas CSS size
+    const offsetX = VW * 0.05, offsetY = VH * 0.05;
+    // canvas-local coords
+    const cx = ex + offsetX, cy = ey + offsetY;
+    const wx = CW * 0.09, wy = CH * 0.10, ww = CW * 0.82, wh = CH * 0.62;
+    return cx >= wx && cx <= wx + ww && cy >= wy && cy <= wy + wh;
+  }
+
+  function _trainScrollHandler(e) {
+    if (!_trainWinHit(e.clientX, e.clientY)) return;
+    e.preventDefault();
+    // Positive deltaY = scroll down = zoom out (increase altitude)
+    _cesiumPost({ type: 'zoom', delta: e.deltaY });
+  }
+  function _trainMousedownHandler(e) {
+    if (!_trainWinHit(e.clientX, e.clientY)) return;
+    _trainDrag = { x: e.clientX, y: e.clientY };
+  }
+  function _trainMousemoveHandler(e) {
+    if (!_trainDrag) return;
+    const dx = e.clientX - _trainDrag.x;
+    const dy = e.clientY - _trainDrag.y;
+    _trainDrag = { x: e.clientX, y: e.clientY };
+    _cesiumPost({ type: 'pan', dx, dy });
+  }
+  function _trainMouseupHandler() { _trainDrag = null; }
+
+  // Touch support
+  function _trainTouchstartHandler(e) {
+    if (e.touches.length !== 1) return;
+    const t0 = e.touches[0];
+    if (!_trainWinHit(t0.clientX, t0.clientY)) return;
+    _trainDrag = { x: t0.clientX, y: t0.clientY };
+  }
+  function _trainTouchmoveHandler(e) {
+    if (!_trainDrag || e.touches.length !== 1) return;
+    e.preventDefault();
+    const t0 = e.touches[0];
+    const dx = t0.clientX - _trainDrag.x;
+    const dy = t0.clientY - _trainDrag.y;
+    _trainDrag = { x: t0.clientX, y: t0.clientY };
+    _cesiumPost({ type: 'pan', dx, dy });
+  }
+  function _trainTouchendHandler() { _trainDrag = null; }
+
+  function _bindTrainInteract() {
+    if (_trainInteractBound) return;
+    _trainInteractBound = true;
+    window.addEventListener('wheel',      _trainScrollHandler,    { passive: false });
+    window.addEventListener('mousedown',  _trainMousedownHandler);
+    window.addEventListener('mousemove',  _trainMousemoveHandler);
+    window.addEventListener('mouseup',    _trainMouseupHandler);
+    window.addEventListener('touchstart', _trainTouchstartHandler, { passive: true });
+    window.addEventListener('touchmove',  _trainTouchmoveHandler,  { passive: false });
+    window.addEventListener('touchend',   _trainTouchendHandler);
+  }
+  function _unbindTrainInteract() {
+    if (!_trainInteractBound) return;
+    _trainInteractBound = false;
+    window.removeEventListener('wheel',      _trainScrollHandler);
+    window.removeEventListener('mousedown',  _trainMousedownHandler);
+    window.removeEventListener('mousemove',  _trainMousemoveHandler);
+    window.removeEventListener('mouseup',    _trainMouseupHandler);
+    window.removeEventListener('touchstart', _trainTouchstartHandler);
+    window.removeEventListener('touchmove',  _trainTouchmoveHandler);
+    window.removeEventListener('touchend',   _trainTouchendHandler);
+  }
+
   function _trainInteriorFrame(t) {
-    // Lazy-init the interior canvas context
+    // ── Lazy-init: draw at 110% viewport so rocking never exposes edges ──
     if (!_trainIntCtx) {
       const el = document.getElementById('train-frame-canvas');
       if (!el) return;
-      el.width  = window.innerWidth  * (window.devicePixelRatio || 1);
-      el.height = window.innerHeight * (window.devicePixelRatio || 1);
-      el.style.width  = window.innerWidth  + 'px';
-      el.style.height = window.innerHeight + 'px';
+      const dpr2 = window.devicePixelRatio || 1;
+      // 110% of viewport, centred via CSS offset of -5%
+      el.width  = Math.ceil(window.innerWidth  * 1.10) * dpr2;
+      el.height = Math.ceil(window.innerHeight * 1.10) * dpr2;
+      el.style.width  = Math.ceil(window.innerWidth  * 1.10) + 'px';
+      el.style.height = Math.ceil(window.innerHeight * 1.10) + 'px';
+      el.style.position = 'fixed';
+      el.style.left = '-5%';
+      el.style.top  = '-5%';
       _trainIntCtx = el.getContext('2d');
+      _bindTrainInteract();
     }
 
     const c  = _trainIntCtx;
@@ -2670,9 +2761,9 @@ const CanvasScenes = (() => {
     const H  = c.canvas.height;
     const dpr = window.devicePixelRatio || 1;
 
-    // Subtle rocking: gentle sine oscillation on canvas transform
+    // Rocking — transform-origin is canvas centre (CSS default)
     const rock  = Math.sin(t * 0.045) * 0.9 + Math.sin(t * 0.11) * 0.4; // degrees
-    const sway  = Math.sin(t * 0.038) * 1.8; // px horizontal sway
+    const sway  = Math.sin(t * 0.038) * 1.8; // px (CSS pixels, not physical)
     c.canvas.style.transform = `rotate(${rock}deg) translateX(${sway}px)`;
 
     // Clear to fully transparent each frame
@@ -2784,7 +2875,7 @@ const CanvasScenes = (() => {
     c.fillRect(winX + winW - 24*dpr, winY, 24*dpr, winH);
     c.restore();
 
-    // Destination display above window (scrolling text)
+    // Destination display above window (LED bar)
     const destEl = document.querySelector('.lp-chip.active');
     const destText = destEl ? destEl.textContent.replace(/^[^\w]*/, '') : 'Singapore';
     c.fillStyle = '#1a1a1a';
@@ -2798,6 +2889,26 @@ const CanvasScenes = (() => {
     const now = new Date();
     c.fillText(`${now.getHours().toString().padStart(2,'0')}:${now.getMinutes().toString().padStart(2,'0')}`, winX + winW - 10*dpr, winY - 11*dpr);
     c.textAlign = 'start';
+
+    // Hint fade-in (shows for first 4 seconds, then fades out)
+    const hintAlpha = Math.max(0, Math.min(1, 1 - (t - 60) / 120));
+    if (hintAlpha > 0) {
+      c.save();
+      c.globalAlpha = hintAlpha * 0.72;
+      c.fillStyle = 'rgba(0,0,0,0.55)';
+      const hintW = 220 * dpr, hintH = 28 * dpr;
+      const hintX = winX + (winW - hintW) * 0.5;
+      const hintY = winY + winH - 44*dpr;
+      c.beginPath();
+      c.roundRect(hintX, hintY, hintW, hintH, 8*dpr);
+      c.fill();
+      c.fillStyle = '#fff';
+      c.font = `${10*dpr}px 'DM Sans', sans-serif`;
+      c.textAlign = 'center';
+      c.fillText('🖱 scroll to zoom  ·  drag to pan', winX + winW * 0.5, hintY + 18*dpr);
+      c.textAlign = 'start';
+      c.restore();
+    }
 
     // ── Floor and seats ──────────────────────────────────────────────
     const floorY = winY + winH;
@@ -3590,11 +3701,14 @@ const CanvasScenes = (() => {
       window.removeEventListener('wheel',   _trainControlEvent);
       window.removeEventListener('keydown', _trainControlEvent);
       if (typeof Train3D !== 'undefined') Train3D.stop();
-      // Clear the interior canvas and reset context so next visit re-inits properly
+      // Clear the interior canvas, remove interaction listeners, reset state
+      _unbindTrainInteract();
       const _intEl = document.getElementById('train-frame-canvas');
       if (_intEl && _trainIntCtx) {
         _trainIntCtx.clearRect(0, 0, _intEl.width, _intEl.height);
         _intEl.style.transform = '';
+        _intEl.style.left = '';
+        _intEl.style.top  = '';
         _trainIntCtx = null;
       }
     }

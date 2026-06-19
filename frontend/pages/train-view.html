@@ -148,17 +148,19 @@ const loadingEl = document.getElementById('loading');
 
     pathT += deltaS * SPEED_RAD_PER_S;
 
-    // Elliptical orbit in lon/lat space
-    const lon = CX + 0.072 * Math.cos(pathT);
-    const lat = CY + 0.038 * Math.sin(pathT);
+    // Elliptical orbit — centre shifts when user picks a location
+    const orbitCX = window._orbitCX || CX;
+    const orbitCY = window._orbitCY || CY;
+    const lon = orbitCX + 0.055 * Math.cos(pathT);
+    const lat = orbitCY + 0.030 * Math.sin(pathT);
 
-    // Altitude: 350–750 m, varies with a separate slower wave
-    const alt = 550 + 200 * Math.sin(pathT * 1.3 + 0.8);
+    // Altitude: varies around _orbitAltBase (default 550m), ±25% with slower wave
+    const altBase = window._orbitAltBase || 550;
+    const alt = altBase + altBase * 0.22 * Math.sin(pathT * 1.3 + 0.8);
 
-    // Heading: always looking roughly inward toward centre + slow drift
-    // atan2 gives angle from camera toward centre, converted to Cesium heading
-    const dLon = CX - lon;
-    const dLat = CY - lat;
+    // Heading: always looking inward toward orbit centre
+    const dLon = orbitCX - lon;
+    const dLat = orbitCY - lat;
     const headingRad = Math.atan2(dLon, dLat) + Math.PI + 0.25 * Math.sin(pathT * 0.7);
 
     // Pitch: gently varying between -12° and -28° (looking down at city)
@@ -181,11 +183,95 @@ const loadingEl = document.getElementById('loading');
     lastWallTime = performance.now();
   }, tilesLoaded ? 1500 : 600);
 
-  // Parent page messaging
+  // ── Parent page messaging ────────────────────────────────────────────────
   window.addEventListener('message', ({ data }) => {
     if (!data?.type) return;
-    if (data.type === 'cesium-pause')  { animating = false; }
-    if (data.type === 'cesium-resume') { animating = true; lastWallTime = performance.now(); }
+
+    if (data.type === 'cesium-pause') {
+      animating = false;
+    }
+    if (data.type === 'cesium-resume') {
+      animating = true;
+      lastWallTime = performance.now();
+    }
+
+    // ── Scroll to zoom ────────────────────────────────────────────────────
+    if (data.type === 'zoom') {
+      // Positive delta = zoom out (raise alt), negative = zoom in (lower alt)
+      // Clamp alt between 80 m and 4000 m
+      const factor = data.delta > 0 ? 1.12 : 0.89;
+      // Derive current alt from camera position
+      const camPos = viewer.camera.positionCartographic;
+      const curAlt = camPos ? camPos.height : 550;
+      const newAlt = Math.max(80, Math.min(4000, curAlt * factor));
+      const lon = Cesium.Math.toDegrees(camPos.longitude);
+      const lat = Cesium.Math.toDegrees(camPos.latitude);
+      viewer.camera.setView({
+        destination: Cesium.Cartesian3.fromDegrees(lon, lat, newAlt),
+        orientation: {
+          heading: viewer.camera.heading,
+          pitch:   viewer.camera.pitch,
+          roll:    0,
+        },
+      });
+      // Also update orbit altitude for ongoing animation
+      window._orbitAltBase = newAlt;
+    }
+
+    // ── Drag to pan ───────────────────────────────────────────────────────
+    if (data.type === 'pan' && (data.dx != null || data.dy != null)) {
+      // Map screen-pixel drag to lon/lat offset.
+      // Scale factor: larger at high alt, smaller close-up.
+      const camPos = viewer.camera.positionCartographic;
+      const alt    = camPos ? camPos.height : 550;
+      // ~0.000008 deg/px at 400m alt, scales with altitude
+      const scale  = (alt / 400) * 0.000008;
+      const dLon   = -(data.dx || 0) * scale;
+      const dLat   =  (data.dy || 0) * scale;
+      window._orbitCX = (window._orbitCX || CX) + dLon;
+      window._orbitCY = (window._orbitCY || CY) + dLat;
+      // Move camera immediately without flyTo (instant, no jitter)
+      const newLon = Cesium.Math.toDegrees(camPos.longitude) + dLon;
+      const newLat = Cesium.Math.toDegrees(camPos.latitude)  + dLat;
+      viewer.camera.setView({
+        destination: Cesium.Cartesian3.fromDegrees(newLon, newLat, alt),
+        orientation: {
+          heading: viewer.camera.heading,
+          pitch:   viewer.camera.pitch,
+          roll:    0,
+        },
+      });
+      // Reset pathT so orbit re-centres cleanly from here
+      pathT = 0;
+    }
+
+    if (data.type === 'fly-to' && data.lon != null) {
+      // Pause orbit, fly to selected spot, then resume orbiting around it
+      animating = false;
+
+      // New orbit centre = selected location
+      const newCX = data.lon;
+      const newCY = data.lat;
+
+      viewer.camera.flyTo({
+        destination: Cesium.Cartesian3.fromDegrees(data.lon, data.lat, data.alt || 400),
+        orientation: {
+          heading: Cesium.Math.toRadians(30),
+          pitch:   Cesium.Math.toRadians(-22),
+          roll:    0,
+        },
+        duration: 3.5,
+        easingFunction: Cesium.EasingFunction.SINUSOIDAL_IN_OUT,
+        complete: () => {
+          window._orbitCX = newCX;
+          window._orbitCY = newCY;
+          window._orbitAltBase = data.alt || 550; // restore fly-to altitude as new base
+          pathT = 0;
+          animating = true;
+          lastWallTime = performance.now();
+        },
+      });
+    }
   });
 
 })();
