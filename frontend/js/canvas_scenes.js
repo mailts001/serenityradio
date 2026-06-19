@@ -2687,14 +2687,22 @@ const CanvasScenes = (() => {
     return inWindow(w1CX) || inWindow(w2CX) || inWindow(w3CX);
   }
 
+  // Check that scroll/drag target is NOT a UI element (HUD, picker, buttons)
+  function _isUiTarget(el) {
+    if (!el) return false;
+    const ids = ['train-mini-hud','train-location-picker','lp-toggle'];
+    for (const id of ids) if (el.closest && el.closest('#' + id)) return true;
+    return false;
+  }
+
   function _trainScrollHandler(e) {
-    if (!_trainWinHit(e.clientX, e.clientY)) return;
+    // Scroll anywhere on the cabin (except HUD/picker) zooms Cesium
+    if (_isUiTarget(e.target)) return;
     e.preventDefault();
-    // Positive deltaY = scroll down = zoom out (increase altitude)
     _cesiumPost({ type: 'zoom', delta: e.deltaY });
   }
   function _trainMousedownHandler(e) {
-    if (!_trainWinHit(e.clientX, e.clientY)) return;
+    if (_isUiTarget(e.target)) return;
     _trainDrag = { x: e.clientX, y: e.clientY };
   }
   function _trainMousemoveHandler(e) {
@@ -2710,7 +2718,7 @@ const CanvasScenes = (() => {
   function _trainTouchstartHandler(e) {
     if (e.touches.length !== 1) return;
     const t0 = e.touches[0];
-    if (!_trainWinHit(t0.clientX, t0.clientY)) return;
+    if (_isUiTarget(e.target)) return;
     _trainDrag = { x: t0.clientX, y: t0.clientY };
   }
   function _trainTouchmoveHandler(e) {
