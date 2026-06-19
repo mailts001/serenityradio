@@ -2648,6 +2648,201 @@ const CanvasScenes = (() => {
     }));
   }
 
+  // ── Train interior overlay ─────────────────────────────────
+  // Draws Singapore MRT carriage interior on #train-frame-canvas.
+  // The window area is LEFT TRANSPARENT so the Cesium iframe below
+  // shows through — creating the illusion of looking out a train window.
+  let _trainIntCtx = null;
+  function _trainInteriorFrame(t) {
+    // Lazy-init the interior canvas context
+    if (!_trainIntCtx) {
+      const el = document.getElementById('train-frame-canvas');
+      if (!el) return;
+      el.width  = window.innerWidth  * (window.devicePixelRatio || 1);
+      el.height = window.innerHeight * (window.devicePixelRatio || 1);
+      el.style.width  = window.innerWidth  + 'px';
+      el.style.height = window.innerHeight + 'px';
+      _trainIntCtx = el.getContext('2d');
+    }
+
+    const c  = _trainIntCtx;
+    const W  = c.canvas.width;
+    const H  = c.canvas.height;
+    const dpr = window.devicePixelRatio || 1;
+
+    // Subtle rocking: gentle sine oscillation on canvas transform
+    const rock  = Math.sin(t * 0.045) * 0.9 + Math.sin(t * 0.11) * 0.4; // degrees
+    const sway  = Math.sin(t * 0.038) * 1.8; // px horizontal sway
+    c.canvas.style.transform = `rotate(${rock}deg) translateX(${sway}px)`;
+
+    // Clear to fully transparent each frame
+    c.clearRect(0, 0, W, H);
+
+    // ── Window bounds (the transparent cutout Cesium shows through) ──────
+    const winX = W * 0.09;
+    const winY = H * 0.10;
+    const winW = W * 0.82;
+    const winH = H * 0.62;
+    const winR = 18 * dpr;   // corner radius
+
+    // ── Ceiling ────────────────────────────────────────────────────────
+    const ceilH = winY;
+    const ceilG = c.createLinearGradient(0, 0, 0, ceilH);
+    ceilG.addColorStop(0, '#B0ACA6');
+    ceilG.addColorStop(1, '#CAC6C0');
+    c.fillStyle = ceilG;
+    c.fillRect(0, 0, W, ceilH);
+
+    // LED strip along ceiling edge
+    const ledG = c.createLinearGradient(0, ceilH - 4*dpr, 0, ceilH);
+    ledG.addColorStop(0, 'rgba(255,240,200,0.0)');
+    ledG.addColorStop(1, 'rgba(255,240,200,0.55)');
+    c.fillStyle = ledG;
+    c.fillRect(W * 0.05, ceilH - 6*dpr, W * 0.9, 6*dpr);
+
+    // AC vent slots along ceiling
+    for (let i = 0; i < 5; i++) {
+      const vx = W * (0.14 + i * 0.185);
+      c.fillStyle = '#999';
+      c.fillRect(vx - 22*dpr, 7*dpr, 44*dpr, 7*dpr);
+      for (let j = 0; j < 6; j++) {
+        c.fillStyle = '#aaa';
+        c.fillRect(vx - 20*dpr + j*7*dpr, 7*dpr, 3*dpr, 7*dpr);
+      }
+    }
+
+    // Overhead handrail bar
+    c.strokeStyle = '#777';
+    c.lineWidth = 5 * dpr;
+    c.beginPath();
+    c.moveTo(W * 0.04, ceilH - 14*dpr);
+    c.lineTo(W * 0.96, ceilH - 14*dpr);
+    c.stroke();
+
+    // Hanging straps
+    const strapCount = Math.floor(W / (72 * dpr));
+    for (let i = 0; i <= strapCount; i++) {
+      const sx = W * 0.07 + i * (W * 0.86 / strapCount);
+      // Skip straps over the door gap in the middle
+      if (Math.abs(sx - W * 0.5) < W * 0.07) continue;
+      c.strokeStyle = 'rgba(110,110,110,0.7)';
+      c.lineWidth = 2 * dpr;
+      c.beginPath();
+      c.moveTo(sx, ceilH - 14*dpr);
+      c.lineTo(sx, ceilH + 22*dpr);
+      c.stroke();
+      // Loop grip
+      c.strokeStyle = '#888';
+      c.lineWidth = 2.5 * dpr;
+      c.beginPath();
+      c.ellipse(sx, ceilH + 26*dpr, 7*dpr, 5*dpr, 0, 0, Math.PI * 2);
+      c.stroke();
+    }
+
+    // ── Left wall strip (beside window) ──────────────────────────────
+    const wallG = c.createLinearGradient(0, 0, winX, 0);
+    wallG.addColorStop(0, '#9A9690');
+    wallG.addColorStop(1, '#C6C2BC');
+    c.fillStyle = wallG;
+    c.fillRect(0, winY, winX, winH);
+
+    // ── Right wall strip ──────────────────────────────────────────────
+    const wallG2 = c.createLinearGradient(winX + winW, 0, W, 0);
+    wallG2.addColorStop(0, '#C6C2BC');
+    wallG2.addColorStop(1, '#9A9690');
+    c.fillStyle = wallG2;
+    c.fillRect(winX + winW, winY, W - winX - winW, winH);
+
+    // Vertical grab poles (left and right of window)
+    [winX * 0.5, winX + winW + (W - winX - winW) * 0.5].forEach(px => {
+      const poleG = c.createLinearGradient(px - 5*dpr, 0, px + 5*dpr, 0);
+      poleG.addColorStop(0, '#888');
+      poleG.addColorStop(0.4, '#ccc');
+      poleG.addColorStop(1, '#888');
+      c.fillStyle = poleG;
+      c.fillRect(px - 4*dpr, winY, 8*dpr, winH);
+    });
+
+    // ── Window frame border (drawn AROUND the transparent area) ─────
+    // Use rounded rect stroke to frame the window
+    c.save();
+    c.strokeStyle = '#555';
+    c.lineWidth = 10 * dpr;
+    c.beginPath();
+    c.roundRect(winX, winY, winW, winH, winR);
+    c.stroke();
+    // Inner shadow on window edge (depth illusion)
+    const shadowG = c.createLinearGradient(winX, winY, winX + 24*dpr, winY);
+    shadowG.addColorStop(0, 'rgba(0,0,0,0.30)');
+    shadowG.addColorStop(1, 'rgba(0,0,0,0)');
+    c.fillStyle = shadowG;
+    c.fillRect(winX, winY, 24*dpr, winH);
+    const shadowGR = c.createLinearGradient(winX + winW - 24*dpr, winY, winX + winW, winY);
+    shadowGR.addColorStop(0, 'rgba(0,0,0,0)');
+    shadowGR.addColorStop(1, 'rgba(0,0,0,0.30)');
+    c.fillStyle = shadowGR;
+    c.fillRect(winX + winW - 24*dpr, winY, 24*dpr, winH);
+    c.restore();
+
+    // Destination display above window (scrolling text)
+    const destEl = document.querySelector('.lp-chip.active');
+    const destText = destEl ? destEl.textContent.replace(/^[^\w]*/, '') : 'Singapore';
+    c.fillStyle = '#1a1a1a';
+    c.fillRect(winX, winY - 28*dpr, winW, 24*dpr);
+    c.fillStyle = '#00e676';
+    c.font = `${11*dpr}px 'DM Sans', monospace`;
+    c.textAlign = 'left';
+    c.fillText('🚆  EW LINE  ·  Next: ' + destText.toUpperCase(), winX + 10*dpr, winY - 11*dpr);
+    c.textAlign = 'right';
+    c.fillStyle = '#aaa';
+    const now = new Date();
+    c.fillText(`${now.getHours().toString().padStart(2,'0')}:${now.getMinutes().toString().padStart(2,'0')}`, winX + winW - 10*dpr, winY - 11*dpr);
+    c.textAlign = 'start';
+
+    // ── Floor and seats ──────────────────────────────────────────────
+    const floorY = winY + winH;
+    const floorH = H - floorY;
+
+    // Floor (dark non-slip)
+    const floorG = c.createLinearGradient(0, floorY, 0, H);
+    floorG.addColorStop(0, '#3A3A38');
+    floorG.addColorStop(1, '#282826');
+    c.fillStyle = floorG;
+    c.fillRect(0, floorY, W, floorH);
+
+    // Floor edge highlight
+    c.fillStyle = 'rgba(255,255,255,0.06)';
+    c.fillRect(0, floorY, W, 3*dpr);
+
+    // Bench seats along the bottom
+    const seatY   = floorY + floorH * 0.08;
+    const seatH   = floorH * 0.70;
+    const seatCol = '#C8442A';      // Singapore MRT red-orange
+    const seatShadow = '#A03020';
+
+    // Left seat section
+    c.fillStyle = seatCol;
+    c.beginPath();
+    c.roundRect(4*dpr, seatY, winX - 8*dpr, seatH, 6*dpr);
+    c.fill();
+    c.fillStyle = seatShadow;
+    c.fillRect(4*dpr, seatY, winX - 8*dpr, 4*dpr);
+
+    // Right seat section
+    c.fillStyle = seatCol;
+    c.beginPath();
+    c.roundRect(winX + winW + 4*dpr, seatY, W - winX - winW - 8*dpr, seatH, 6*dpr);
+    c.fill();
+    c.fillStyle = seatShadow;
+    c.fillRect(winX + winW + 4*dpr, seatY, W - winX - winW - 8*dpr, 4*dpr);
+
+    // Seat dividers
+    [winX * 0.5].forEach(dx => {
+      c.fillStyle = '#A03020';
+      c.fillRect(dx - 2*dpr, seatY, 4*dpr, seatH);
+    });
+  }
+
   // ── Main train frame ──────────────────────────────────────
   function _trainFrame(t) {
     const c = _ctx, W = _canvas.width, H = _canvas.height;
@@ -3395,6 +3590,13 @@ const CanvasScenes = (() => {
       window.removeEventListener('wheel',   _trainControlEvent);
       window.removeEventListener('keydown', _trainControlEvent);
       if (typeof Train3D !== 'undefined') Train3D.stop();
+      // Clear the interior canvas and reset context so next visit re-inits properly
+      const _intEl = document.getElementById('train-frame-canvas');
+      if (_intEl && _trainIntCtx) {
+        _trainIntCtx.clearRect(0, 0, _intEl.width, _intEl.height);
+        _intEl.style.transform = '';
+        _trainIntCtx = null;
+      }
     }
 
     if (_activeSceneType === 'aquarium') {
@@ -3427,7 +3629,12 @@ const CanvasScenes = (() => {
       switch (_activeSceneType) {
         case 'space':  _spaceFrame(t);         break;
         case 'snow':   _snowFrame(t, mode);     break;
-        case 'train':  _trainFrame(t);          break;
+        case 'train':
+          // Clear the bg-canvas so the Cesium iframe (z:1) shows through.
+          // All train visuals are drawn on #train-frame-canvas (z:3) via _trainInteriorFrame.
+          if (_ctx) _ctx.clearRect(0, 0, _ctx.canvas.width, _ctx.canvas.height);
+          _trainInteriorFrame(t);
+          break;
         default:       _worldFrame(t, mode);    break;
       }
     }

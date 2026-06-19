@@ -39,8 +39,7 @@
   #cesium-train { display:none; position:fixed; inset:0; z-index:1; width:100%; height:100%; border:none; pointer-events:none; }
   body.scene-train #cesium-train { display:block; }
   /* Legacy canvas elements — hidden in train mode */
-  body.scene-train #train3d-canvas,
-  body.scene-train #train-frame-canvas { display: none !important; }
+  body.scene-train #train3d-canvas { display: none !important; }
 
   .page{position:relative;z-index:2;max-width:900px;margin:0 auto;padding:0 1rem 4rem;}
 
@@ -298,12 +297,53 @@
   /* ── Cinema mode ── */
   body.cinema-mode > *:not(#cinema-overlay):not(#bg-canvas):not(#aurora-canvas):not(#forest3d-canvas):not(#aquarium3d-canvas):not(#train3d-canvas):not(#cesium-train):not(#train-hud) { display: none !important; }
 
-  /* ── Train window frame — rendered by canvas ── */
+  /* ── Train interior canvas — drawn over Cesium ── */
   #train-frame-canvas {
-    display: none;   /* shown via body.scene-train rule below */
-    position: fixed; inset: 0; z-index: 5;
+    display: none;
+    position: fixed; inset: 0; z-index: 3;
     pointer-events: none;
     width: 100%; height: 100%;
+    background: transparent;
+  }
+  body.scene-train #train-frame-canvas { display: block; }
+
+  /* ── Location picker panel ── */
+  #train-location-picker {
+    display: none;
+    position: fixed; bottom: 28px; left: 50%; transform: translateX(-50%);
+    z-index: 6;
+    background: rgba(8,14,24,0.82);
+    backdrop-filter: blur(14px);
+    border: 1px solid rgba(140,180,220,0.18);
+    border-radius: 16px;
+    padding: 12px 16px 10px;
+    font-family: 'DM Sans', sans-serif;
+    color: rgba(200,220,240,0.9);
+    max-width: 92vw;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+  }
+  body.scene-train #train-location-picker { display: block; }
+  #train-location-picker .lp-title {
+    font-size: 10px; letter-spacing: .08em; text-transform: uppercase;
+    color: rgba(140,180,220,0.6); margin-bottom: 8px; text-align: center;
+  }
+  #train-location-picker .lp-chips {
+    display: flex; flex-wrap: wrap; gap: 6px; justify-content: center;
+  }
+  .lp-chip {
+    background: rgba(255,255,255,0.06);
+    border: 1px solid rgba(140,180,220,0.20);
+    border-radius: 20px; padding: 5px 12px;
+    font-size: 11px; cursor: pointer;
+    color: rgba(200,220,240,0.85);
+    transition: background .15s, border-color .15s;
+    white-space: nowrap;
+  }
+  .lp-chip:hover  { background: rgba(100,160,220,0.18); border-color: rgba(100,160,220,0.5); }
+  .lp-chip.active { background: rgba(80,140,200,0.28);  border-color: rgba(80,160,240,0.6); color:#fff; }
+  #lp-notify {
+    text-align: center; font-size: 10px; color: rgba(120,200,255,0.75);
+    margin-top: 7px; min-height: 14px; transition: opacity .3s;
   }
 
   /* Speed / zoom HUD */
@@ -561,11 +601,14 @@
 <!-- Train window frame overlay (visible only in train scene) -->
 <canvas id="train-frame-canvas"></canvas>
 <div id="train-hud">
-  <b id="train-speed-label">🚆 1.0×</b> speed &nbsp;·&nbsp; <b id="train-zoom-label">1.0×</b> zoom<br>
-  <span class="hud-key">scroll</span> speed &nbsp;
-  <span class="hud-key">←</span><span class="hud-key">→</span> speed &nbsp;
-  <span class="hud-key">+</span><span class="hud-key">-</span> zoom &nbsp;
-  <span class="hud-key">0</span> reset
+  <b id="train-speed-label">🚆</b> Sightseeing &nbsp;·&nbsp; Singapore MRT
+</div>
+
+<!-- Location picker — visible only in train/sightseeing scene -->
+<div id="train-location-picker">
+  <div class="lp-title">📍 Where would you like to visit?</div>
+  <div class="lp-chips" id="lp-chips"></div>
+  <div id="lp-notify"></div>
 </div>
 
 <!-- Cinema mode overlay — floating mini-player shown when UI is hidden -->
@@ -1486,6 +1529,7 @@ function _applyScene(scene) {
   if (typeof CanvasScenes !== 'undefined') CanvasScenes.setScene(mode);
   // Toggle scene body classes (train frame, aquarium chrome, etc.)
   document.body.classList.toggle('scene-train',    scene === 'train');
+  if (scene === 'train') _initLocationPicker();
   document.body.classList.toggle('scene-aquarium', scene === 'aquarium');
 
   // Update button highlights
@@ -2215,6 +2259,71 @@ function toggleAmbient(btn) {
       if (msg) { msg.textContent = 'Could not save — try again.'; msg.style.color='var(--amber)'; msg.style.display='block'; }
     }
   };
+})();
+</script>
+
+<!-- ── Sightseeing Location Picker ── -->
+<script>
+(function(){
+  const SPOTS = [
+    { name:'🏙️ Marina Bay Sands',   lon:103.8598, lat:1.2839, alt:420 },
+    { name:'🌳 Gardens by the Bay', lon:103.8636, lat:1.2816, alt:300 },
+    { name:'🛍️ Orchard Road',       lon:103.8317, lat:1.3041, alt:260 },
+    { name:'🏝️ Sentosa',            lon:103.8198, lat:1.2494, alt:320 },
+    { name:'🐉 Chinatown',          lon:103.8444, lat:1.2838, alt:200 },
+    { name:'🕌 Little India',        lon:103.8516, lat:1.3066, alt:200 },
+    { name:'✈️ Changi Airport',      lon:103.9895, lat:1.3592, alt:380 },
+    { name:'🎡 Clarke Quay',         lon:103.8465, lat:1.2902, alt:180 },
+    { name:'🌊 Merlion Park',        lon:103.8554, lat:1.2871, alt:160 },
+    { name:'🏫 NUS / Buona Vista',   lon:103.7898, lat:1.3067, alt:220 },
+    { name:'🏗️ Jurong East',         lon:103.7420, lat:1.3330, alt:380 },
+    { name:'🐘 Night Safari',        lon:103.7913, lat:1.4043, alt:280 },
+  ];
+
+  let _inited = false;
+  let _activeChip = null;
+
+  window._initLocationPicker = function() {
+    if (_inited) return;
+    _inited = true;
+    const container = document.getElementById('lp-chips');
+    if (!container) return;
+
+    SPOTS.forEach((spot, i) => {
+      const btn = document.createElement('button');
+      btn.className = 'lp-chip';
+      btn.textContent = spot.name;
+      btn.addEventListener('click', () => _flyTo(spot, btn));
+      container.appendChild(btn);
+    });
+  };
+
+  function _flyTo(spot, btn) {
+    // Update active chip style
+    if (_activeChip) _activeChip.classList.remove('active');
+    _activeChip = btn;
+    btn.classList.add('active');
+
+    // Notify user
+    const notify = document.getElementById('lp-notify');
+    if (notify) {
+      notify.textContent = '🚆 Heading to ' + spot.name.replace(/^[^\w]*/, '') + '…';
+      notify.style.opacity = '1';
+      setTimeout(() => { notify.style.opacity = '0'; }, 3500);
+    }
+
+    // Send fly-to message to Cesium iframe
+    const iframe = document.getElementById('cesium-train');
+    if (iframe && iframe.contentWindow) {
+      iframe.contentWindow.postMessage({
+        type: 'fly-to',
+        lon:  spot.lon,
+        lat:  spot.lat,
+        alt:  spot.alt,
+        name: spot.name,
+      }, '*');
+    }
+  }
 })();
 </script>
 </body>
