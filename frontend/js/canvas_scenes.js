@@ -2666,24 +2666,21 @@ const CanvasScenes = (() => {
   }
 
   function _trainWinHit(ex, ey) {
-    // Accept interaction anywhere in the central window band of the cabin —
-    // between the overhead bins (top) and seat area (bottom).
-    // Uses the same proportions as the airline interior draw code.
-    // Canvas is 110% of viewport, offset -5%, so translate pointer to canvas-local coords.
+    // Canvas is 110% viewport, offset -5% on each side.
+    // Translate pointer to canvas-local coords.
+    // Accept interaction over the panoramic window glass area (right ~68%).
     const VW = window.innerWidth, VH = window.innerHeight;
     const CW = VW * 1.10, CH = VH * 1.10;
     const cx = ex + VW * 0.05;
     const cy = ey + VH * 0.05;
-    // Accept anywhere between the overhead bin bottom and the seat top in x full width
-    const fuseL = (CW - CW * 0.88) * 0.5;
-    const fuseR = fuseL + CW * 0.88;
-    const archT = CH * 0.03;
-    const archH = CH * 0.16;
-    const binY  = archT + archH + CH * 0.02;
-    const binH  = CH * 0.09;
-    const winBandY = binY + binH + CH * 0.02;
-    const winBandH = CH * 0.32;
-    return cx >= fuseL && cx <= fuseR && cy >= winBandY && cy <= winBandY + winBandH;
+    // Match _trainInteriorFrame: wfX=29%, wfY=8.5%, wfH=80%, sillThk=24dpr
+    const dpr     = window.devicePixelRatio || 1;
+    const sillThk = 24 * dpr;
+    const wfX = CW * 0.29, wfY = CH * 0.085, wfW = CW - CW * 0.29 - CW * 0.028, wfH = CH * 0.80;
+    const glassX = wfX + sillThk, glassY = wfY + sillThk;
+    const glassW = wfW - sillThk * 2, glassH = wfH - sillThk * 2;
+    return cx >= glassX && cx <= glassX + glassW &&
+           cy >= glassY && cy <= glassY + glassH;
   }
 
   function _trainScrollHandler(e) {
@@ -2768,314 +2765,363 @@ const CanvasScenes = (() => {
     const H   = c.canvas.height;
     const dpr = window.devicePixelRatio || 1;
 
-    // Gentle cabin turbulence — small roll + vertical bob
-    const roll = Math.sin(t * 0.031) * 0.55 + Math.sin(t * 0.074) * 0.25;
-    const bob  = Math.sin(t * 0.052) * 1.2;
+    // Very subtle turbulence — premium cabin, almost imperceptible
+    const roll = Math.sin(t * 0.028) * 0.30 + Math.sin(t * 0.061) * 0.12;
+    const bob  = Math.sin(t * 0.041) * 0.8;
     c.canvas.style.transform = `rotate(${roll}deg) translateY(${bob}px)`;
 
     c.clearRect(0, 0, W, H);
 
-    // ── Layout constants ────────────────────────────────────────────────
-    // Fuselage arch: the cabin ceiling curves down at the sides.
-    // Window pair: two oval porthole windows side-by-side (3-3 cabin view).
-    // Left side wall + 2 windows, right side wall + 2 windows, aisle centre.
+    // ─────────────────────────────────────────────────────────────────────
+    // COMPOSITION: eye-level from window seat.
+    // Left ~28% = cabin wall, seat back, armrest (dark foreground frame).
+    // Right ~72% = ONE large panoramic window — the hero element.
+    // Cesium 3D world shows through the transparent window cutout.
+    // ─────────────────────────────────────────────────────────────────────
 
-    const midX  = W * 0.5;
-    const archT = H * 0.03;   // top of arch
+    const WALL_MID   = '#D8D4CE';
+    const WALL_DARK  = '#B8B4AE';
+    const SEAT_FABRIC= '#3C4A5A';
+    const SEAT_LTHR  = '#E8E2D8';
+    const METAL_LT   = '#D0CEC8';
+    const METAL_DK   = '#909088';
+    const WIN_FRAME  = '#2A2E34';
+    const WIN_SILL   = '#3E4248';
 
-    // Fuselage inner width (narrows at top due to arch)
-    const fuseW = W * 0.88;
-    const fuseL = (W - fuseW) * 0.5;
-    const fuseR = fuseL + fuseW;
+    // ── 1. BASE fill ──────────────────────────────────────────────────────
+    const baseG = c.createLinearGradient(0, 0, W, 0);
+    baseG.addColorStop(0,    '#1C1E22');
+    baseG.addColorStop(0.08, '#2C2E32');
+    baseG.addColorStop(0.22, WALL_DARK);
+    baseG.addColorStop(0.30, WALL_MID);
+    c.fillStyle = baseG;
+    c.fillRect(0, 0, W, H);
 
-    // Arch bezier control points
-    const archH = H * 0.16;   // how much the ceiling arch curves down at sides
-
-    // Cabin wall colour — off-white airline beige
-    const cabinWall = '#E8E4DF';
-    const cabinDark = '#C8C4BF';
-
-    // ── Full fuselage fill (clip to arch shape) ──────────────────────────
-    // We draw the cabin as two parts: arch ceiling top + rectangular lower body
+    // ── 2. CEILING — arched, warm LED ambient ────────────────────────────
+    const ceilBot = H * 0.12;
+    const ceilG = c.createLinearGradient(0, 0, 0, ceilBot);
+    ceilG.addColorStop(0,   '#F4F2EE');
+    ceilG.addColorStop(0.5, '#ECEAE4');
+    ceilG.addColorStop(1,   '#D4D0C8');
     c.save();
     c.beginPath();
-    // Arch ceiling path
-    c.moveTo(fuseL, archT + archH);
-    c.bezierCurveTo(fuseL, archT, midX, archT - H * 0.01, midX, archT - H * 0.01);
-    c.bezierCurveTo(midX, archT - H * 0.01, fuseR, archT, fuseR, archT + archH);
-    // Straight down the sides and across the bottom
-    c.lineTo(fuseR, H);
-    c.lineTo(fuseL, H);
+    c.moveTo(0, 0);
+    c.lineTo(W, 0);
+    c.lineTo(W, ceilBot * 0.6);
+    c.bezierCurveTo(W * 0.75, ceilBot * 1.1, W * 0.25, ceilBot * 1.1, 0, ceilBot * 0.6);
     c.closePath();
-    c.fillStyle = cabinWall;
+    c.fillStyle = ceilG;
     c.fill();
     c.restore();
 
-    // Side panels (darker shade at the fuselage walls)
-    // Left
-    const wallLG = c.createLinearGradient(0, 0, fuseL + W * 0.06, 0);
-    wallLG.addColorStop(0, cabinDark);
-    wallLG.addColorStop(1, cabinWall);
-    c.fillStyle = wallLG;
-    c.fillRect(0, 0, fuseL + W * 0.04, H);
+    // LED warm glow strip
+    const ledY  = ceilBot * 0.58;
+    const ledGr = c.createLinearGradient(0, ledY, 0, ledY + 18*dpr);
+    ledGr.addColorStop(0, 'rgba(255,248,230,0.80)');
+    ledGr.addColorStop(1, 'rgba(255,248,230,0)');
+    c.fillStyle = ledGr;
+    c.fillRect(W * 0.05, ledY, W * 0.90, 18*dpr);
 
-    const wallRG = c.createLinearGradient(fuseR - W * 0.06, 0, W, 0);
-    wallRG.addColorStop(0, cabinWall);
-    wallRG.addColorStop(1, cabinDark);
-    c.fillStyle = wallRG;
-    c.fillRect(fuseR - W * 0.04, 0, W - fuseR + W * 0.04, H);
+    // Ceiling bloom
+    const bloomG = c.createRadialGradient(W * 0.5, 0, 0, W * 0.5, 0, W * 0.55);
+    bloomG.addColorStop(0,   'rgba(255,248,220,0.22)');
+    bloomG.addColorStop(0.6, 'rgba(255,248,220,0.05)');
+    bloomG.addColorStop(1,   'rgba(255,248,220,0)');
+    c.fillStyle = bloomG;
+    c.fillRect(0, 0, W, ceilBot * 1.5);
 
-    // ── Overhead luggage bins ─────────────────────────────────────────────
-    const binY  = archT + archH + H * 0.02;
-    const binH  = H * 0.09;
-    const binLX = fuseL + W * 0.02;
-    const binLW = W * 0.27;
-    const binRX = fuseR - W * 0.02 - W * 0.27;
-    const binRW = W * 0.27;
+    // ── 3. OVERHEAD BIN — left, dark ─────────────────────────────────────
+    const binY2 = ceilBot * 0.55, binH2 = H * 0.13, binW2 = W * 0.26;
+    const binG = c.createLinearGradient(0, binY2, binW2, binY2);
+    binG.addColorStop(0, '#1A1C1E');
+    binG.addColorStop(1, '#2E3034');
+    c.fillStyle = binG;
+    c.beginPath();
+    c.roundRect(0, binY2, binW2, binH2, [0, 0, 10*dpr, 4*dpr]);
+    c.fill();
+    const lipG = c.createLinearGradient(0, binY2 + binH2 - 5*dpr, 0, binY2 + binH2);
+    lipG.addColorStop(0, METAL_LT);
+    lipG.addColorStop(1, METAL_DK);
+    c.fillStyle = lipG;
+    c.fillRect(0, binY2 + binH2 - 4*dpr, binW2, 4*dpr);
+    c.strokeStyle = 'rgba(255,255,255,0.08)';
+    c.lineWidth = dpr;
+    c.beginPath();
+    c.moveTo(8*dpr, binY2 + binH2 - 14*dpr);
+    c.lineTo(binW2 - 8*dpr, binY2 + binH2 - 14*dpr);
+    c.stroke();
 
-    function _drawBin(bx, bw) {
-      c.fillStyle = '#D4D0CA';
-      c.beginPath();
-      c.roundRect(bx, binY, bw, binH, [0, 0, 8*dpr, 8*dpr]);
-      c.fill();
-      c.strokeStyle = '#B8B4AE';
-      c.lineWidth = 1.5 * dpr;
-      c.stroke();
-      // Bin door gap line
-      c.strokeStyle = '#9E9A94';
+    // ── 4. LEFT WALL ──────────────────────────────────────────────────────
+    const wallY = binY2 + binH2, wallW = W * 0.28, wallH = H - wallY;
+    const wG = c.createLinearGradient(0, 0, wallW, 0);
+    wG.addColorStop(0,   '#1E2026');
+    wG.addColorStop(0.4, '#2C2E34');
+    wG.addColorStop(1,   '#3A3C42');
+    c.fillStyle = wG;
+    c.fillRect(0, wallY, wallW, wallH);
+
+    // Vertical groove lines
+    [0.35, 0.68].forEach(frac => {
+      c.strokeStyle = 'rgba(255,255,255,0.04)';
       c.lineWidth = dpr;
       c.beginPath();
-      c.moveTo(bx + 6*dpr, binY + binH - 12*dpr);
-      c.lineTo(bx + bw - 6*dpr, binY + binH - 12*dpr);
-      c.stroke();
-      // Handle
-      c.fillStyle = '#AAA6A0';
-      c.beginPath();
-      c.roundRect(bx + bw * 0.4, binY + binH - 9*dpr, bw * 0.2, 6*dpr, 3*dpr);
-      c.fill();
-    }
-    _drawBin(binLX, binLW);
-    _drawBin(binRX, binRW);
-
-    // ── Ceiling panel: reading lights, air vents ─────────────────────────
-    const panelY = archT - H * 0.005;
-    const panelH = binY - panelY;
-    const panelX = fuseL + W * 0.31;
-    const panelW = W * 0.38;
-    c.fillStyle = '#DEDAD4';
-    c.beginPath();
-    c.roundRect(panelX, panelY, panelW, panelH, 6*dpr);
-    c.fill();
-
-    // Air nozzles
-    [-1, 1].forEach(side => {
-      const nx = midX + side * W * 0.07;
-      c.fillStyle = '#C0BCB6';
-      c.beginPath();
-      c.arc(nx, panelY + panelH * 0.4, 6*dpr, 0, Math.PI * 2);
-      c.fill();
-      c.fillStyle = '#A8A49E';
-      c.beginPath();
-      c.arc(nx, panelY + panelH * 0.4, 3*dpr, 0, Math.PI * 2);
-      c.fill();
-    });
-    // Reading light icons
-    [-1, 1].forEach(side => {
-      const lx = midX + side * W * 0.12;
-      c.fillStyle = '#F0EDE8';
-      c.beginPath();
-      c.arc(lx, panelY + panelH * 0.45, 4*dpr, 0, Math.PI * 2);
-      c.fill();
-      c.strokeStyle = '#C8C4BE';
-      c.lineWidth = dpr;
+      c.moveTo(wallW * frac, wallY);
+      c.lineTo(wallW * frac, wallY + wallH);
       c.stroke();
     });
-    // Call button
-    c.fillStyle = '#4A90D9';
+
+    // Metallic horizontal divider strip
+    const divY = wallY + wallH * 0.38;
+    const divG2 = c.createLinearGradient(0, divY - 2*dpr, 0, divY + 3*dpr);
+    divG2.addColorStop(0,   'rgba(180,176,168,0.0)');
+    divG2.addColorStop(0.4, 'rgba(180,176,168,0.55)');
+    divG2.addColorStop(1,   'rgba(180,176,168,0.0)');
+    c.fillStyle = divG2;
+    c.fillRect(0, divY, wallW, 3*dpr);
+
+    // Armrest — wedge from left
+    const armY = H * 0.72, armH = H * 0.28, armW = W * 0.22;
+    const armG = c.createLinearGradient(0, armY, armW, armY + armH);
+    armG.addColorStop(0,   '#2A2C30');
+    armG.addColorStop(0.5, '#3A3C40');
+    armG.addColorStop(1,   '#1E2024');
+    c.save();
     c.beginPath();
-    c.arc(midX, panelY + panelH * 0.42, 4*dpr, 0, Math.PI * 2);
+    c.moveTo(0, armY);
+    c.lineTo(armW, armY + armH * 0.15);
+    c.lineTo(armW, H);
+    c.lineTo(0, H);
+    c.closePath();
+    c.fillStyle = armG;
+    c.fill();
+    const armTopG = c.createLinearGradient(0, armY - 2*dpr, 0, armY + 8*dpr);
+    armTopG.addColorStop(0, 'rgba(210,206,198,0.70)');
+    armTopG.addColorStop(1, 'rgba(210,206,198,0)');
+    c.fillStyle = armTopG;
+    c.beginPath();
+    c.moveTo(0, armY);
+    c.lineTo(armW, armY + armH * 0.15);
+    c.lineTo(armW, armY + armH * 0.15 + 8*dpr);
+    c.lineTo(0, armY + 8*dpr);
+    c.closePath();
+    c.fill();
+    c.restore();
+
+    // Seat back (partially visible left edge)
+    const sbX = W * 0.01, sbY = wallY + wallH * 0.02;
+    const sbW = W * 0.17, sbH = H * 0.42;
+    const sbG = c.createLinearGradient(sbX, sbY, sbX + sbW, sbY + sbH);
+    sbG.addColorStop(0, SEAT_FABRIC);
+    sbG.addColorStop(1, '#2A3240');
+    c.fillStyle = sbG;
+    c.beginPath();
+    c.roundRect(sbX, sbY, sbW, sbH, [4*dpr, 8*dpr, 4*dpr, 2*dpr]);
+    c.fill();
+    // Leather headrest
+    const hrH = sbH * 0.22;
+    const hrG = c.createLinearGradient(sbX, sbY, sbX, sbY + hrH);
+    hrG.addColorStop(0, SEAT_LTHR);
+    hrG.addColorStop(1, '#D0CAC0');
+    c.fillStyle = hrG;
+    c.beginPath();
+    c.roundRect(sbX + sbW * 0.08, sbY, sbW * 0.84, hrH, [4*dpr, 8*dpr, 2*dpr, 2*dpr]);
+    c.fill();
+    // Stitching
+    c.strokeStyle = 'rgba(180,170,155,0.45)';
+    c.lineWidth = dpr;
+    c.setLineDash([3*dpr, 4*dpr]);
+    c.beginPath();
+    c.roundRect(sbX + sbW * 0.14, sbY + hrH * 0.18, sbW * 0.72, hrH * 0.62, 3*dpr);
+    c.stroke();
+    c.setLineDash([]);
+    // Bolster shadow
+    const bolstG = c.createLinearGradient(sbX + sbW * 0.8, 0, sbX + sbW, 0);
+    bolstG.addColorStop(0, 'rgba(0,0,0,0)');
+    bolstG.addColorStop(1, 'rgba(0,0,0,0.45)');
+    c.fillStyle = bolstG;
+    c.beginPath();
+    c.roundRect(sbX, sbY, sbW, sbH, [4*dpr, 8*dpr, 4*dpr, 2*dpr]);
     c.fill();
 
-    // ── Oval porthole windows (the transparent cutouts) ──────────────────
-    // Two windows on each side, at the lower wall area.
-    // Window band Y-range
-    const winBandY = binY + binH + H * 0.02;
-    const winBandH = H * 0.32;
+    // ── 5. PANORAMIC WINDOW — hero element ───────────────────────────────
+    const wfPad  = W * 0.028;
+    const wfX    = W * 0.29;
+    const wfY    = H * 0.085;
+    const wfW    = W - wfX - wfPad;
+    const wfH    = H * 0.80;
+    const wfR    = 26 * dpr;
 
-    // Porthole dimensions
-    const portRX = W * 0.085;  // horizontal radius
-    const portRY = H * 0.115;  // vertical radius (taller than wide, classic porthole)
-    const portR  = 12 * dpr;   // corner radius for roundRect approximation
+    // Right wall fill
+    const rWallG = c.createLinearGradient(wfX, 0, W, 0);
+    rWallG.addColorStop(0,   '#32363C');
+    rWallG.addColorStop(0.3, '#3C4044');
+    rWallG.addColorStop(1,   '#2A2C30');
+    c.fillStyle = rWallG;
+    c.fillRect(wfX, ceilBot * 0.6, W - wfX, H - ceilBot * 0.6);
 
-    // Left side: 2 windows; Right side: 2 windows
-    const portYC = winBandY + winBandH * 0.5;  // vertical centre of porthole row
+    // Deep recess shadow
+    const recessInset = 16 * dpr;
+    c.fillStyle = '#0A0C0E';
+    c.beginPath();
+    c.roundRect(wfX + recessInset, wfY + recessInset,
+                wfW - recessInset * 2, wfH - recessInset * 2, wfR - 4*dpr);
+    c.fill();
 
-    // Left portholes — at x positions inside left wall
-    const portL1 = fuseL + W * 0.10;
-    const portL2 = fuseL + W * 0.24;
-    // Right portholes
-    const portR1 = fuseR - W * 0.10;
-    const portR2 = fuseR - W * 0.24;
+    // Outer frame
+    c.fillStyle = WIN_FRAME;
+    c.beginPath();
+    c.roundRect(wfX + recessInset, wfY + recessInset,
+                wfW - recessInset * 2, wfH - recessInset * 2, wfR - 4*dpr);
+    c.fill();
 
-    const portHoles = [portL1, portL2, portR1, portR2];
+    // Inner sill
+    const sillThk = recessInset + 8 * dpr;
+    const sillG = c.createLinearGradient(wfX, wfY, wfX + sillThk * 2, wfY + sillThk * 2);
+    sillG.addColorStop(0, WIN_SILL);
+    sillG.addColorStop(1, '#22262A');
+    c.fillStyle = sillG;
+    c.beginPath();
+    c.roundRect(wfX + sillThk * 0.5, wfY + sillThk * 0.5,
+                wfW - sillThk, wfH - sillThk, wfR - 8*dpr);
+    c.fill();
 
-    function _drawPorthole(cx, cy) {
-      // Outer frame (thick dark ring)
-      c.fillStyle = '#7A7870';
-      c.beginPath();
-      c.ellipse(cx, cy, portRX + 8*dpr, portRY + 8*dpr, 0, 0, Math.PI * 2);
-      c.fill();
-      // Inner thick surround
-      c.fillStyle = '#C8C4BC';
-      c.beginPath();
-      c.ellipse(cx, cy, portRX + 3*dpr, portRY + 3*dpr, 0, 0, Math.PI * 2);
-      c.fill();
-      // Cutout — clearRect to transparent so Cesium shows through
-      c.save();
-      c.globalCompositeOperation = 'destination-out';
-      c.beginPath();
-      c.ellipse(cx, cy, portRX, portRY, 0, 0, Math.PI * 2);
-      c.fill();
-      c.restore();
-      // Glare highlight on glass (drawn over the transparent hole — visible because parent is transparent)
-      c.save();
-      c.globalAlpha = 0.18;
-      const glareG = c.createLinearGradient(cx - portRX, cy - portRY, cx + portRX * 0.3, cy - portRY * 0.1);
-      glareG.addColorStop(0, '#ffffff');
-      glareG.addColorStop(1, 'rgba(255,255,255,0)');
-      c.fillStyle = glareG;
-      c.beginPath();
-      c.ellipse(cx, cy, portRX, portRY, 0, 0, Math.PI * 2);
-      c.fill();
-      c.restore();
-    }
+    // TRANSPARENT CUTOUT — Cesium shows through
+    const glassX = wfX + sillThk;
+    const glassY = wfY + sillThk;
+    const glassW = wfW - sillThk * 2;
+    const glassH = wfH - sillThk * 2;
+    const glassR = wfR - 12 * dpr;
+    c.save();
+    c.globalCompositeOperation = 'destination-out';
+    c.beginPath();
+    c.roundRect(glassX, glassY, glassW, glassH, glassR);
+    c.fill();
+    c.restore();
 
-    portHoles.forEach(cx => _drawPorthole(cx, portYC));
+    // Top sill catch-light (metallic edge)
+    const catchG = c.createLinearGradient(0, glassY - 4*dpr, 0, glassY + 4*dpr);
+    catchG.addColorStop(0, 'rgba(220,215,205,0.70)');
+    catchG.addColorStop(1, 'rgba(220,215,205,0)');
+    c.fillStyle = catchG;
+    c.beginPath();
+    c.roundRect(wfX + sillThk * 0.5, wfY + sillThk * 0.5,
+                wfW - sillThk, 4*dpr, [glassR, glassR, 0, 0]);
+    c.fill();
 
-    // ── Seat area — 3-3 economy layout ──────────────────────────────────
-    // Below windows: seat-back visible at bottom of frame
-    const seatTopY = winBandY + winBandH + H * 0.02;
-    const seatH2   = H - seatTopY;
+    // Glass effects (clipped to pane)
+    c.save();
+    c.beginPath();
+    c.roundRect(glassX, glassY, glassW, glassH, glassR);
+    c.clip();
 
-    // Three seat zones: left block (3), aisle, right block (3)
-    // Seat back colour: fabric blue-grey (typical economy)
-    const seatFabric = '#4A5568';
-    const seatDark   = '#2D3748';
-    const headrest   = '#E8E4DF';
+    // Diagonal glare streak
+    c.save();
+    c.translate(glassX + glassW * 0.22, glassY + glassH * 0.15);
+    c.rotate(Math.PI * 0.22);
+    const glareLen = glassW * 0.55;
+    const glareG2 = c.createLinearGradient(-glareLen * 0.5, -20*dpr, glareLen * 0.5, 20*dpr);
+    glareG2.addColorStop(0,    'rgba(255,255,255,0)');
+    glareG2.addColorStop(0.35, 'rgba(255,255,255,0.10)');
+    glareG2.addColorStop(0.5,  'rgba(255,255,255,0.18)');
+    glareG2.addColorStop(0.65, 'rgba(255,255,255,0.06)');
+    glareG2.addColorStop(1,    'rgba(255,255,255,0)');
+    c.fillStyle = glareG2;
+    c.fillRect(-glareLen * 0.5, -glassH, glareLen, glassH * 2);
+    c.restore();
 
-    // Aisle
-    const aisleW = W * 0.14;
-    const aisleX = midX - aisleW * 0.5;
-    c.fillStyle = '#C4C0BA'; // carpet
-    c.fillRect(aisleX, seatTopY, aisleW, seatH2);
-    // Carpet stripe
-    c.fillStyle = '#B0ACA6';
-    c.fillRect(aisleX + aisleW * 0.3, seatTopY, aisleW * 0.4, seatH2);
+    // Edge vignette (depth-of-field feel on the frame edge)
+    const dofG = c.createRadialGradient(
+      glassX + glassW * 0.5, glassY + glassH * 0.45, glassH * 0.15,
+      glassX + glassW * 0.5, glassY + glassH * 0.45, glassH * 0.75);
+    dofG.addColorStop(0, 'rgba(0,0,0,0)');
+    dofG.addColorStop(1, 'rgba(0,0,0,0.22)');
+    c.fillStyle = dofG;
+    c.fillRect(glassX, glassY, glassW, glassH);
+    c.restore();
 
-    // Seat columns
-    const colW = (aisleX - fuseL - W * 0.02) / 3;  // width of each seat column
-    // Left 3 seats
-    for (let i = 0; i < 3; i++) {
-      const sx = fuseL + W * 0.01 + i * colW;
-      // Seat back
-      c.fillStyle = seatFabric;
-      c.beginPath();
-      c.roundRect(sx + 2*dpr, seatTopY, colW - 4*dpr, seatH2 * 0.85, [6*dpr, 6*dpr, 0, 0]);
-      c.fill();
-      // Headrest
-      c.fillStyle = headrest;
-      c.beginPath();
-      c.roundRect(sx + 4*dpr, seatTopY, colW - 8*dpr, seatH2 * 0.20, 4*dpr);
-      c.fill();
-      // Seat pocket (dark stripe lower on back)
-      c.fillStyle = seatDark;
-      c.fillRect(sx + 6*dpr, seatTopY + seatH2 * 0.55, colW - 12*dpr, seatH2 * 0.14);
-      // Tray latch
-      c.fillStyle = '#9EA6B4';
-      c.beginPath();
-      c.roundRect(sx + colW * 0.38, seatTopY + seatH2 * 0.60, colW * 0.24, 4*dpr, 2*dpr);
-      c.fill();
-      // Divider line between seats
-      if (i < 2) {
-        c.strokeStyle = '#2D3748';
-        c.lineWidth = dpr;
-        c.beginPath();
-        c.moveTo(sx + colW, seatTopY);
-        c.lineTo(sx + colW, seatTopY + seatH2);
-        c.stroke();
-      }
-    }
-    // Right 3 seats (mirror of left)
-    const rightStart = aisleX + aisleW;
-    const colWR = (fuseR - W * 0.01 - rightStart) / 3;
-    for (let i = 0; i < 3; i++) {
-      const sx = rightStart + i * colWR;
-      c.fillStyle = seatFabric;
-      c.beginPath();
-      c.roundRect(sx + 2*dpr, seatTopY, colWR - 4*dpr, seatH2 * 0.85, [6*dpr, 6*dpr, 0, 0]);
-      c.fill();
-      c.fillStyle = headrest;
-      c.beginPath();
-      c.roundRect(sx + 4*dpr, seatTopY, colWR - 8*dpr, seatH2 * 0.20, 4*dpr);
-      c.fill();
-      c.fillStyle = seatDark;
-      c.fillRect(sx + 6*dpr, seatTopY + seatH2 * 0.55, colWR - 12*dpr, seatH2 * 0.14);
-      c.fillStyle = '#9EA6B4';
-      c.beginPath();
-      c.roundRect(sx + colWR * 0.38, seatTopY + seatH2 * 0.60, colWR * 0.24, 4*dpr, 2*dpr);
-      c.fill();
-      if (i < 2) {
-        c.strokeStyle = '#2D3748';
-        c.lineWidth = dpr;
-        c.beginPath();
-        c.moveTo(sx + colWR, seatTopY);
-        c.lineTo(sx + colWR, seatTopY + seatH2);
-        c.stroke();
-      }
-    }
+    // Outer shadow from left edge of frame
+    const outerShadG = c.createLinearGradient(wfX, 0, wfX + 30*dpr, 0);
+    outerShadG.addColorStop(0, 'rgba(0,0,0,0.50)');
+    outerShadG.addColorStop(1, 'rgba(0,0,0,0)');
+    c.fillStyle = outerShadG;
+    c.fillRect(wfX, wfY, 30*dpr, wfH);
 
-    // ── Flight info bar (top of screen, above cabin arch) ───────────────
-    const barH = archT + H * 0.006;
-    c.fillStyle = '#1A1F2E';
-    c.fillRect(0, 0, W, barH);
+    // Bottom sill ledge
+    const ledgeH = H * 0.055;
+    const ledgeY = wfY + wfH;
+    const ledgeG = c.createLinearGradient(0, ledgeY, 0, ledgeY + ledgeH);
+    ledgeG.addColorStop(0, '#3A3E44');
+    ledgeG.addColorStop(1, '#1E2024');
+    c.fillStyle = ledgeG;
+    c.fillRect(wfX, ledgeY, wfW, ledgeH);
+    const ledgeTopG = c.createLinearGradient(0, ledgeY, 0, ledgeY + 5*dpr);
+    ledgeTopG.addColorStop(0, 'rgba(200,196,188,0.55)');
+    ledgeTopG.addColorStop(1, 'rgba(200,196,188,0)');
+    c.fillStyle = ledgeTopG;
+    c.fillRect(wfX, ledgeY, wfW, 5*dpr);
 
-    const destEl  = document.querySelector('.lp-chip.active, #lp-custom-active');
-    const destName = window._lpCustomDest || (destEl ? destEl.textContent.replace(/^[^\w\s✈️🏙️🌳🛍️🏝️🐉🕌🎡🌊🏫🏗️🐘]*/, '').trim() : 'Worldwide');
-    const now2 = new Date();
+    // ── 6. VIGNETTES — cinematic depth ───────────────────────────────────
+    // Left foreground push (seat/wall goes dark)
+    const vigG = c.createLinearGradient(0, 0, W * 0.32, 0);
+    vigG.addColorStop(0,   'rgba(0,0,0,0.72)');
+    vigG.addColorStop(0.6, 'rgba(0,0,0,0.18)');
+    vigG.addColorStop(1,   'rgba(0,0,0,0)');
+    c.fillStyle = vigG;
+    c.fillRect(0, 0, W * 0.32, H);
+    // Top
+    const topVigG = c.createLinearGradient(0, 0, 0, H * 0.08);
+    topVigG.addColorStop(0, 'rgba(0,0,0,0.55)');
+    topVigG.addColorStop(1, 'rgba(0,0,0,0)');
+    c.fillStyle = topVigG;
+    c.fillRect(0, 0, W, H * 0.08);
+    // Bottom
+    const botVigG = c.createLinearGradient(0, H * 0.88, 0, H);
+    botVigG.addColorStop(0, 'rgba(0,0,0,0)');
+    botVigG.addColorStop(1, 'rgba(0,0,0,0.65)');
+    c.fillStyle = botVigG;
+    c.fillRect(0, H * 0.88, W, H * 0.12);
+
+    // ── 7. FLIGHT INFO PILL ───────────────────────────────────────────────
+    const destEl   = document.querySelector('.lp-chip.active');
+    const destName = window._lpCustomDest ||
+      (destEl ? destEl.textContent.replace(/^[^\w\s]*/u, '').trim() : 'Worldwide');
+    const now2    = new Date();
     const timeStr = `${now2.getHours().toString().padStart(2,'0')}:${now2.getMinutes().toString().padStart(2,'0')}`;
-
-    c.fillStyle = '#00C2FF';
-    c.font = `bold ${10*dpr}px 'DM Sans', sans-serif`;
-    c.textAlign = 'left';
-    c.fillText('✈  SERENITY AIR', 10*dpr, barH * 0.70);
-
-    c.fillStyle = 'rgba(255,255,255,0.85)';
-    c.font = `${10*dpr}px 'DM Sans', sans-serif`;
+    const barTxt  = `\u2708  SERENITY AIR   \u00B7   ${destName.toUpperCase()}   \u00B7   ${timeStr}`;
+    c.font = `${9.5*dpr}px 'DM Sans', sans-serif`;
+    const barTW  = c.measureText(barTxt).width;
+    const barPX  = 18*dpr, barPY = 7*dpr;
+    const barBX  = (W - barTW) * 0.5 - barPX;
+    const barBY  = 10*dpr;
+    const barBW  = barTW + barPX * 2;
+    const barBH  = 9.5*dpr + barPY * 2;
+    c.fillStyle = 'rgba(12,14,18,0.68)';
+    c.beginPath();
+    c.roundRect(barBX, barBY, barBW, barBH, barBH * 0.5);
+    c.fill();
+    c.fillStyle = 'rgba(200,220,240,0.82)';
     c.textAlign = 'center';
-    c.fillText('Now flying over: ' + destName.toUpperCase(), W * 0.5, barH * 0.70);
-
-    c.fillStyle = 'rgba(160,200,240,0.75)';
-    c.textAlign = 'right';
-    c.fillText(timeStr, W - 10*dpr, barH * 0.70);
+    c.fillText(barTxt, W * 0.5, barBY + barBH * 0.71);
     c.textAlign = 'start';
 
-    // ── Hint (first 2 seconds) ───────────────────────────────────────────
-    const hintAlpha = Math.max(0, Math.min(1, 1 - (t - 60) / 120));
+    // ── 8. HINT ───────────────────────────────────────────────────────────
+    const hintAlpha = Math.max(0, Math.min(1, 1 - (t - 70) / 100));
     if (hintAlpha > 0) {
       c.save();
-      c.globalAlpha = hintAlpha * 0.80;
-      const hintTxt = '🖱 scroll to zoom  ·  drag to pan';
-      const hintW2  = 230 * dpr, hintH2 = 28 * dpr;
-      const hintX2  = (W - hintW2) * 0.5;
-      const hintY2  = portYC + portRY + 14*dpr;
+      c.globalAlpha = hintAlpha * 0.85;
+      const htxt = '\uD83D\uDDB1  scroll to zoom  \u00B7  drag to pan';
+      c.font = `${9.5*dpr}px 'DM Sans', sans-serif`;
+      const htw  = c.measureText(htxt).width + 28*dpr;
+      const hth  = 26*dpr;
+      const hhx  = glassX + (glassW - htw) * 0.5;
+      const hhy  = glassY + glassH - 44*dpr;
       c.fillStyle = 'rgba(0,0,0,0.60)';
       c.beginPath();
-      c.roundRect(hintX2, hintY2, hintW2, hintH2, 8*dpr);
+      c.roundRect(hhx, hhy, htw, hth, 13*dpr);
       c.fill();
       c.fillStyle = '#fff';
-      c.font = `${10*dpr}px 'DM Sans', sans-serif`;
       c.textAlign = 'center';
-      c.fillText(hintTxt, W * 0.5, hintY2 + 18*dpr);
+      c.fillText(htxt, glassX + glassW * 0.5, hhy + hth * 0.70);
       c.textAlign = 'start';
       c.restore();
     }
