@@ -111,65 +111,81 @@ const loadingEl = document.getElementById('loading');
     }
   }
 
-  // ── Singapore MRT / scenic waypoints ─────────────────────────────────────
-  // Route: Jurong East → CBD → Marina Bay → Esplanade (west to east)
-  // Each: { lon, lat, alt(m above ground), heading°, pitch°, duration(s) }
-  const WP = [
-    { lon:103.7420, lat:1.3330, alt:400, h:85,  p:-22, dur:7  }, // Jurong East wide
-    { lon:103.7653, lat:1.3151, alt:250, h:78,  p:-17, dur:5  }, // Clementi
-    { lon:103.7898, lat:1.3067, alt:200, h:72,  p:-14, dur:5  }, // Buona Vista / NUS
-    { lon:103.8082, lat:1.3025, alt:170, h:82,  p:-13, dur:4  }, // Commonwealth
-    { lon:103.8272, lat:1.2862, alt:130, h:90,  p:-10, dur:5  }, // Tiong Bahru heritage
-    { lon:103.8464, lat:1.2762, alt:220, h:86,  p:-16, dur:5  }, // Tanjong Pagar CBD
-    { lon:103.8514, lat:1.2840, alt:320, h:60,  p:-22, dur:6  }, // Raffles Place skyline
-    { lon:103.8598, lat:1.2839, alt:450, h:295, p:-28, dur:7  }, // Marina Bay Sands
-    { lon:103.8635, lat:1.2816, alt:280, h:320, p:-18, dur:6  }, // Gardens by the Bay
-    { lon:103.8554, lat:1.2896, alt:200, h:250, p:-14, dur:6  }, // Esplanade / Merlion
-    { lon:103.8500, lat:1.2960, alt:180, h:200, p:-12, dur:5  }, // Padang / heritage
-    { lon:103.8444, lat:1.3000, alt:250, h:100, p:-18, dur:5  }, // Fort Canning
-  ];
+  // ── Smooth continuous flythrough — parametric path, no flyTo jumps ────────
+  //
+  // The camera follows a slow elliptical orbit around Singapore's core,
+  // updated every frame via preRender. Speed is very gentle (~1 full loop
+  // every ~3 minutes). Altitude and heading vary smoothly with sine waves
+  // so it feels like a graceful aerial sightseeing cruise, not a slideshow.
+  //
+  // Centre of orbit: Marina Bay / CBD area (lon 103.852, lat 1.283)
+  // Orbit radius: ~0.07° lon × ~0.04° lat  (~8 km east-west)
 
-  let wpIdx  = 0;
-  let active = true;
-
-  function flyNext() {
-    if (!active) return;
-    const w   = WP[wpIdx % WP.length];
-    const last = (wpIdx % WP.length) === WP.length - 1;
-
-    viewer.camera.flyTo({
-      destination: Cesium.Cartesian3.fromDegrees(w.lon, w.lat, w.alt),
-      orientation: {
-        heading: Cesium.Math.toRadians(w.h),
-        pitch:   Cesium.Math.toRadians(w.p),
-        roll:    0,
-      },
-      duration:        w.dur,
-      easingFunction:  Cesium.EasingFunction.SINUSOIDAL_IN_OUT,
-      complete: () => {
-        wpIdx++;
-        setTimeout(flyNext, last ? 2500 : 400);
-      },
-      cancel: () => { /* user may have interacted */ },
-    });
-  }
-
-  // Sync Cesium sun to real Singapore time (UTC+8)
+  // Sync Cesium sun to real Singapore time
   viewer.clock.currentTime = Cesium.JulianDate.fromDate(new Date());
   viewer.clock.multiplier  = 1;
 
-  // Hide loading overlay then start flying
+  // Parametric time — advances each frame
+  let pathT = 0;
+
+  // Speed: full loop in ~180 seconds (very leisurely cruise)
+  const LOOP_SECONDS  = 180;
+  const SPEED_RAD_PER_S = (Math.PI * 2) / LOOP_SECONDS;
+
+  // Central anchor (Marina Bay area)
+  const CX = 103.852, CY = 1.283;
+
+  let lastWallTime = null;
+  let animating    = true;
+
+  viewer.scene.preRender.addEventListener((_scene, time) => {
+    if (!animating) return;
+
+    // Wall-clock delta (caps at 100ms to survive tab switching)
+    const wallMs  = performance.now();
+    const deltaS  = lastWallTime ? Math.min((wallMs - lastWallTime) / 1000, 0.1) : 0.016;
+    lastWallTime  = wallMs;
+
+    pathT += deltaS * SPEED_RAD_PER_S;
+
+    // Elliptical orbit in lon/lat space
+    const lon = CX + 0.072 * Math.cos(pathT);
+    const lat = CY + 0.038 * Math.sin(pathT);
+
+    // Altitude: 350–750 m, varies with a separate slower wave
+    const alt = 550 + 200 * Math.sin(pathT * 1.3 + 0.8);
+
+    // Heading: always looking roughly inward toward centre + slow drift
+    // atan2 gives angle from camera toward centre, converted to Cesium heading
+    const dLon = CX - lon;
+    const dLat = CY - lat;
+    const headingRad = Math.atan2(dLon, dLat) + Math.PI + 0.25 * Math.sin(pathT * 0.7);
+
+    // Pitch: gently varying between -12° and -28° (looking down at city)
+    const pitchDeg = -18 + 8 * Math.sin(pathT * 0.9 + 1.2);
+
+    viewer.camera.setView({
+      destination: Cesium.Cartesian3.fromDegrees(lon, lat, alt),
+      orientation: {
+        heading: headingRad,
+        pitch:   Cesium.Math.toRadians(pitchDeg),
+        roll:    0,
+      },
+    });
+  });
+
+  // Hide loading overlay
   setTimeout(() => {
     loadingEl.classList.add('hidden');
     setTimeout(() => { loadingEl.style.display = 'none'; }, 1000);
-    flyNext();
-  }, tilesLoaded ? 1800 : 800);
+    lastWallTime = performance.now();
+  }, tilesLoaded ? 1500 : 600);
 
   // Parent page messaging
   window.addEventListener('message', ({ data }) => {
     if (!data?.type) return;
-    if (data.type === 'cesium-pause')  { active = false; viewer.camera.cancelFlight(); }
-    if (data.type === 'cesium-resume') { active = true;  flyNext(); }
+    if (data.type === 'cesium-pause')  { animating = false; }
+    if (data.type === 'cesium-resume') { animating = true; lastWallTime = performance.now(); }
   });
 
 })();
