@@ -308,59 +308,103 @@
   body.scene-train #train-frame-canvas { display: block; }
 
   /* ── Location picker panel ── */
+  /* ── Location picker — mobile-first collapsible drawer ── */
+  #lp-toggle {
+    display: none;
+    position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%);
+    z-index: 7;
+    background: rgba(8,14,24,0.88); backdrop-filter: blur(12px);
+    border: 1px solid rgba(100,160,230,0.30); border-radius: 24px;
+    padding: 9px 20px; font-size: 12px; font-family: 'DM Sans', sans-serif;
+    color: rgba(180,210,245,0.92); cursor: pointer; white-space: nowrap;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.55);
+    transition: background .15s, transform .15s;
+  }
+  #lp-toggle:active { transform: translateX(-50%) scale(0.96); }
+  body.scene-train #lp-toggle { display: block; }
+
   #train-location-picker {
     display: none;
-    position: fixed; bottom: 28px; left: 50%; transform: translateX(-50%);
+    position: fixed; bottom: 0; left: 0; right: 0;
     z-index: 6;
-    background: rgba(8,14,24,0.82);
-    backdrop-filter: blur(14px);
-    border: 1px solid rgba(140,180,220,0.18);
-    border-radius: 16px;
-    padding: 12px 16px 10px;
+    background: rgba(6,10,18,0.94);
+    backdrop-filter: blur(18px);
+    border-top: 1px solid rgba(100,160,230,0.18);
+    border-radius: 20px 20px 0 0;
+    padding: 14px 16px 24px;
     font-family: 'DM Sans', sans-serif;
     color: rgba(200,220,240,0.9);
-    max-width: 92vw;
-    box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+    box-shadow: 0 -8px 40px rgba(0,0,0,0.60);
+    transform: translateY(100%);
+    transition: transform 0.32s cubic-bezier(0.32,0.72,0,1);
   }
   body.scene-train #train-location-picker { display: block; }
+  #train-location-picker.lp-open { transform: translateY(0); }
+
+  /* Drag handle */
+  #train-location-picker::before {
+    content: ''; display: block; width: 36px; height: 4px;
+    background: rgba(140,170,210,0.30); border-radius: 2px;
+    margin: 0 auto 12px;
+  }
+
   #train-location-picker .lp-title {
-    font-size: 10px; letter-spacing: .08em; text-transform: uppercase;
-    color: rgba(140,180,220,0.6); margin-bottom: 8px; text-align: center;
+    font-size: 10px; letter-spacing: .09em; text-transform: uppercase;
+    color: rgba(120,165,215,0.65); margin-bottom: 10px; text-align: center;
   }
-  #train-location-picker .lp-chips {
-    display: flex; flex-wrap: wrap; gap: 6px; justify-content: center;
-  }
-  .lp-chip {
-    background: rgba(255,255,255,0.06);
-    border: 1px solid rgba(140,180,220,0.20);
-    border-radius: 20px; padding: 5px 12px;
-    font-size: 11px; cursor: pointer;
-    color: rgba(200,220,240,0.85);
-    transition: background .15s, border-color .15s;
-    white-space: nowrap;
-  }
-  .lp-chip:hover  { background: rgba(100,160,220,0.18); border-color: rgba(100,160,220,0.5); }
-  .lp-chip.active { background: rgba(80,140,200,0.28);  border-color: rgba(80,160,240,0.6); color:#fff; }
   .lp-search-row {
-    display: flex; gap: 6px; margin-bottom: 8px;
+    display: flex; gap: 8px; margin-bottom: 10px;
   }
   #lp-search {
-    flex: 1; background: rgba(255,255,255,0.07); border: 1px solid rgba(140,180,220,0.25);
-    border-radius: 20px; padding: 6px 14px; font-size: 11px; font-family: 'DM Sans', sans-serif;
-    color: rgba(220,235,255,0.9); outline: none;
+    flex: 1; min-width: 0;
+    background: rgba(255,255,255,0.07); border: 1px solid rgba(140,180,220,0.22);
+    border-radius: 22px; padding: 8px 16px; font-size: 13px;
+    font-family: 'DM Sans', sans-serif; color: rgba(220,235,255,0.92); outline: none;
+    -webkit-appearance: none;
   }
-  #lp-search::placeholder { color: rgba(140,170,200,0.5); }
-  #lp-search:focus { border-color: rgba(100,180,255,0.55); background: rgba(255,255,255,0.10); }
+  #lp-search::placeholder { color: rgba(130,160,195,0.50); }
+  #lp-search:focus { border-color: rgba(100,175,255,0.55); background: rgba(255,255,255,0.10); }
   #lp-search-btn {
-    background: rgba(80,140,220,0.35); border: 1px solid rgba(100,160,255,0.40);
-    border-radius: 20px; padding: 6px 14px; font-size: 11px; font-family: 'DM Sans', sans-serif;
-    color: rgba(200,225,255,0.9); cursor: pointer; white-space: nowrap;
-    transition: background .15s;
+    flex-shrink: 0;
+    background: rgba(30,110,220,0.40); border: 1px solid rgba(80,155,255,0.38);
+    border-radius: 22px; padding: 8px 18px; font-size: 13px;
+    font-family: 'DM Sans', sans-serif; color: rgba(200,225,255,0.92);
+    cursor: pointer; white-space: nowrap; transition: background .15s;
+    -webkit-appearance: none;
   }
-  #lp-search-btn:hover { background: rgba(80,140,220,0.55); }
+  #lp-search-btn:active { background: rgba(30,110,220,0.65); }
+
+  /* Chips — horizontal scroll on mobile, wrap on desktop */
+  #train-location-picker .lp-chips {
+    display: flex; gap: 7px;
+    overflow-x: auto; -webkit-overflow-scrolling: touch;
+    scrollbar-width: none; padding-bottom: 2px;
+    flex-wrap: nowrap;
+  }
+  #train-location-picker .lp-chips::-webkit-scrollbar { display: none; }
+  @media (min-width: 640px) {
+    #train-location-picker .lp-chips { flex-wrap: wrap; justify-content: center; }
+    #train-location-picker { border-radius: 18px; left: 50%; right: auto;
+      transform: translateX(-50%) translateY(100%); width: min(92vw, 560px);
+      bottom: 20px; border: 1px solid rgba(100,160,230,0.20); }
+    #train-location-picker.lp-open { transform: translateX(-50%) translateY(0); }
+  }
+  .lp-chip {
+    background: rgba(255,255,255,0.07);
+    border: 1px solid rgba(140,180,220,0.20);
+    border-radius: 22px; padding: 7px 14px;
+    font-size: 12px; cursor: pointer;
+    color: rgba(200,220,240,0.88);
+    transition: background .12s, border-color .12s;
+    white-space: nowrap; flex-shrink: 0;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .lp-chip:active, .lp-chip:hover { background: rgba(40,120,220,0.22); border-color: rgba(100,165,245,0.45); }
+  .lp-chip.active { background: rgba(30,110,210,0.32); border-color: rgba(80,165,255,0.65); color:#fff; }
+
   #lp-notify {
-    text-align: center; font-size: 10px; color: rgba(120,200,255,0.75);
-    margin-top: 7px; min-height: 14px; transition: opacity .3s;
+    text-align: center; font-size: 11px; color: rgba(110,185,255,0.80);
+    margin-top: 8px; min-height: 16px; transition: opacity .3s;
   }
 
   /* Speed / zoom HUD */
@@ -621,11 +665,14 @@
   <b id="train-speed-label">🚆</b> Sightseeing &nbsp;·&nbsp; Singapore MRT
 </div>
 
-<!-- Location picker — visible only in train/sightseeing scene -->
+<!-- Location picker toggle button (always visible in train mode) -->
+<button id="lp-toggle" onclick="window._lpToggle()">✈️ Choose Destination</button>
+
+<!-- Location picker — bottom drawer -->
 <div id="train-location-picker">
-  <div class="lp-title">✈️ Where would you like to fly to?</div>
+  <div class="lp-title">Where would you like to fly?</div>
   <div class="lp-search-row">
-    <input id="lp-search" type="text" placeholder="Type any city or landmark…" autocomplete="off" spellcheck="false">
+    <input id="lp-search" type="text" placeholder="Any city or landmark…" autocomplete="off" spellcheck="false" enterkeyhint="go">
     <button id="lp-search-btn" onclick="window._lpSearch()">Go</button>
   </div>
   <div class="lp-chips" id="lp-chips"></div>
@@ -2286,7 +2333,8 @@ function toggleAmbient(btn) {
 <!-- ── Sightseeing Location Picker ── -->
 <script>
 (function(){
-  const SPOTS = [
+  // ── Default spots (Singapore) — shown before any search ──────────────────
+  const DEFAULT_SPOTS = [
     { name:'🏙️ Marina Bay Sands',   lon:103.8598, lat:1.2839, alt:420 },
     { name:'🌳 Gardens by the Bay', lon:103.8636, lat:1.2816, alt:300 },
     { name:'🛍️ Orchard Road',       lon:103.8317, lat:1.3041, alt:260 },
@@ -2296,32 +2344,128 @@ function toggleAmbient(btn) {
     { name:'✈️ Changi Airport',      lon:103.9895, lat:1.3592, alt:380 },
     { name:'🎡 Clarke Quay',         lon:103.8465, lat:1.2902, alt:180 },
     { name:'🌊 Merlion Park',        lon:103.8554, lat:1.2871, alt:160 },
-    { name:'🏫 NUS / Buona Vista',   lon:103.7898, lat:1.3067, alt:220 },
-    { name:'🏗️ Jurong East',         lon:103.7420, lat:1.3330, alt:380 },
     { name:'🐘 Night Safari',        lon:103.7913, lat:1.4043, alt:280 },
   ];
 
-  let _inited = false;
+  // ── Curated popular venues per major city ─────────────────────────────────
+  // Keyed by lowercase city keywords found in the Nominatim display_name
+  const CITY_SPOTS = {
+    'london': [
+      { name:'🏰 Tower of London',    lon:-0.0759, lat:51.5081, alt:280 },
+      { name:'🎡 London Eye',          lon:-0.1195, lat:51.5033, alt:220 },
+      { name:'🏛️ British Museum',      lon:-0.1270, lat:51.5194, alt:180 },
+      { name:'👑 Buckingham Palace',   lon:-0.1400, lat:51.5014, alt:200 },
+      { name:'🌿 Hyde Park',           lon:-0.1657, lat:51.5073, alt:160 },
+    ],
+    'paris': [
+      { name:'🗼 Eiffel Tower',        lon:2.2945,  lat:48.8584, alt:320 },
+      { name:'🖼️ Louvre Museum',       lon:2.3376,  lat:48.8606, alt:220 },
+      { name:'⛪ Notre-Dame',          lon:2.3499,  lat:48.8530, alt:200 },
+      { name:'🌸 Champs-Élysées',      lon:2.3088,  lat:48.8698, alt:180 },
+      { name:'🏰 Versailles',          lon:2.1204,  lat:48.8049, alt:280 },
+    ],
+    'tokyo': [
+      { name:'⛩️ Senso-ji Temple',     lon:139.7967, lat:35.7148, alt:200 },
+      { name:'🗼 Tokyo Tower',         lon:139.7454, lat:35.6586, alt:280 },
+      { name:'🌸 Shinjuku Gyoen',      lon:139.7100, lat:35.6851, alt:160 },
+      { name:'🏯 Imperial Palace',     lon:139.7527, lat:35.6852, alt:220 },
+      { name:'🎢 Odaiba',              lon:139.7789, lat:35.6252, alt:240 },
+    ],
+    'new york': [
+      { name:'🗽 Statue of Liberty',   lon:-74.0445, lat:40.6892, alt:320 },
+      { name:'🌳 Central Park',        lon:-73.9654, lat:40.7851, alt:260 },
+      { name:'🌉 Brooklyn Bridge',     lon:-73.9969, lat:40.7061, alt:220 },
+      { name:'🎭 Times Square',        lon:-73.9855, lat:40.7580, alt:200 },
+      { name:'🏙️ Empire State',        lon:-73.9857, lat:40.7484, alt:280 },
+    ],
+    'dubai': [
+      { name:'🏗️ Burj Khalifa',        lon:55.2744,  lat:25.1972, alt:600 },
+      { name:'🛍️ Dubai Mall',          lon:55.2796,  lat:25.1985, alt:280 },
+      { name:'🌴 Palm Jumeirah',        lon:55.1171,  lat:25.1124, alt:500 },
+      { name:'🌆 Dubai Marina',         lon:55.1430,  lat:25.0762, alt:320 },
+      { name:'🏰 Old Dubai / Creek',    lon:55.2962,  lat:25.2697, alt:220 },
+    ],
+    'sydney': [
+      { name:'🎭 Opera House',         lon:151.2153, lat:-33.8568, alt:280 },
+      { name:'🌉 Harbour Bridge',      lon:151.2107, lat:-33.8523, alt:240 },
+      { name:'🏖️ Bondi Beach',         lon:151.2743, lat:-33.8915, alt:200 },
+      { name:'🌿 Royal Botanic Garden',lon:151.2165, lat:-33.8643, alt:180 },
+      { name:'🐨 Taronga Zoo',         lon:151.2415, lat:-33.8430, alt:200 },
+    ],
+    'singapore': DEFAULT_SPOTS.slice(0, 5),
+    'bangkok': [
+      { name:'🏯 Grand Palace',        lon:100.4913, lat:13.7500, alt:220 },
+      { name:'⛩️ Wat Arun',            lon:100.4878, lat:13.7437, alt:180 },
+      { name:'🛍️ Chatuchak Market',    lon:100.5499, lat:13.7999, alt:200 },
+      { name:'🌉 Chao Phraya River',   lon:100.5018, lat:13.7367, alt:240 },
+      { name:'🌆 Silom / Sathorn',     lon:100.5313, lat:13.7262, alt:180 },
+    ],
+    'rome': [
+      { name:'🏛️ Colosseum',           lon:12.4922,  lat:41.8902, alt:280 },
+      { name:'⛪ Vatican / St Peter's',lon:12.4534,  lat:41.9022, alt:300 },
+      { name:'⛲ Trevi Fountain',       lon:12.4833,  lat:41.9009, alt:160 },
+      { name:'🏛️ Roman Forum',         lon:12.4853,  lat:41.8925, alt:220 },
+      { name:'🌳 Villa Borghese',       lon:12.4922,  lat:41.9141, alt:180 },
+    ],
+  };
+
+  let _inited    = false;
   let _activeChip = null;
+  let _isOpen    = false;
+
+  // ── Drawer toggle ─────────────────────────────────────────────────────────
+  window._lpToggle = function() {
+    const drawer  = document.getElementById('train-location-picker');
+    const toggle  = document.getElementById('lp-toggle');
+    if (!drawer) return;
+    _isOpen = !_isOpen;
+    drawer.classList.toggle('lp-open', _isOpen);
+    if (toggle) toggle.textContent = _isOpen ? '✕ Close' : '✈️ Choose Destination';
+    if (_isOpen) {
+      setTimeout(() => document.getElementById('lp-search')?.focus(), 350);
+    }
+  };
+  // Close on outside click
+  document.addEventListener('click', e => {
+    if (!_isOpen) return;
+    const drawer = document.getElementById('train-location-picker');
+    const toggle = document.getElementById('lp-toggle');
+    if (drawer && !drawer.contains(e.target) && !toggle?.contains(e.target)) {
+      _isOpen = false;
+      drawer.classList.remove('lp-open');
+      const t = document.getElementById('lp-toggle');
+      if (t) t.textContent = '✈️ Choose Destination';
+    }
+  });
 
   window._initLocationPicker = function() {
     if (_inited) return;
     _inited = true;
-    const container = document.getElementById('lp-chips');
-    if (!container) return;
-
-    SPOTS.forEach(spot => {
-      const btn = document.createElement('button');
-      btn.className = 'lp-chip';
-      btn.textContent = spot.name;
-      btn.addEventListener('click', () => _flyTo(spot, btn));
-      container.appendChild(btn);
-    });
-
-    // Wire up Enter key on search input
+    _buildChips(DEFAULT_SPOTS);
     const inp = document.getElementById('lp-search');
     if (inp) inp.addEventListener('keydown', e => { if (e.key === 'Enter') window._lpSearch(); });
   };
+
+  function _buildChips(spots) {
+    const container = document.getElementById('lp-chips');
+    if (!container) return;
+    container.innerHTML = '';
+    spots.forEach(spot => {
+      const btn = document.createElement('button');
+      btn.className = 'lp-chip';
+      btn.textContent = spot.name;
+      btn.addEventListener('click', () => { _flyTo(spot, btn); _closePicker(); });
+      container.appendChild(btn);
+    });
+  }
+
+  function _closePicker() {
+    _isOpen = false;
+    const drawer = document.getElementById('train-location-picker');
+    if (drawer) drawer.classList.remove('lp-open');
+    const t = document.getElementById('lp-toggle');
+    if (t) t.textContent = '✈️ Choose Destination';
+  }
 
   function _notify(msg, timeout) {
     const el = document.getElementById('lp-notify');
@@ -2336,68 +2480,82 @@ function toggleAmbient(btn) {
     if (_activeChip) _activeChip.classList.remove('active');
     _activeChip = btn;
     if (btn) btn.classList.add('active');
-
-    // Store destination name for the cabin flight bar
-    window._lpCustomDest = spot.name.replace(/^[\s\S]*?([A-Za-z].*)$/, '$1').trim();
-
-    _notify('✈️ Flying to ' + spot.name.replace(/^[^\w]*/, '') + '…');
-
+    window._lpCustomDest = spot.name.replace(/^[^\w\s]*/u, '').trim();
+    _notify('✈️ Flying to ' + window._lpCustomDest + '…');
     const iframe = document.getElementById('cesium-train');
     if (iframe && iframe.contentWindow) {
       iframe.contentWindow.postMessage({
-        type: 'fly-to',
-        lon:  spot.lon,
-        lat:  spot.lat,
-        alt:  spot.alt || 450,
-        name: spot.name,
+        type:'fly-to', lon:spot.lon, lat:spot.lat, alt:spot.alt||450, name:spot.name
       }, '*');
     }
   }
 
-  // Free-text search via Nominatim (OpenStreetMap geocoder — no API key needed)
+  // ── City detection: find matching curated spots or fallback to Nominatim POI search ──
+  function _spotsForCity(displayName, cityLon, cityLat) {
+    const dn = displayName.toLowerCase();
+    for (const [key, spots] of Object.entries(CITY_SPOTS)) {
+      if (dn.includes(key)) return Promise.resolve(spots);
+    }
+    // Fallback: search for top tourist attractions near this city via Nominatim
+    const q = encodeURIComponent(`tourism attraction near ${displayName.split(',')[0]}`);
+    return fetch(`https://nominatim.openstreetmap.org/search?q=${q}&format=json&limit=5&addressdetails=0`, {
+      headers: { 'Accept-Language':'en', 'User-Agent':'SerenityRadio/1.0' }
+    }).then(r => r.json()).then(data =>
+      data.slice(0,5).map(p => ({
+        name: '📍 ' + p.display_name.split(',')[0],
+        lon:  parseFloat(p.lon),
+        lat:  parseFloat(p.lat),
+        alt:  220,
+      }))
+    ).catch(() => []);
+  }
+
+  // ── Free-text search ──────────────────────────────────────────────────────
   window._lpSearch = async function() {
-    const inp = document.getElementById('lp-search');
+    const inp   = document.getElementById('lp-search');
     const query = inp ? inp.value.trim() : '';
     if (!query) return;
 
-    _notify('🔍 Searching for "' + query + '"…', 8000);
-    const btn = document.getElementById('lp-search-btn');
-    if (btn) { btn.textContent = '…'; btn.disabled = true; }
+    _notify('🔍 Searching…', 10000);
+    const searchBtn = document.getElementById('lp-search-btn');
+    if (searchBtn) { searchBtn.textContent = '…'; searchBtn.disabled = true; }
 
     try {
-      const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&limit=1&addressdetails=0`;
-      const res  = await fetch(url, { headers: { 'Accept-Language': 'en', 'User-Agent': 'SerenityRadio/1.0' } });
+      const url  = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&limit=1&addressdetails=0`;
+      const res  = await fetch(url, { headers:{ 'Accept-Language':'en','User-Agent':'SerenityRadio/1.0' }});
       const data = await res.json();
+      if (!data.length) { _notify('❌ Not found — try a different name'); return; }
 
-      if (!data.length) {
-        _notify('❌ Location not found — try a different name');
-        return;
-      }
+      const place  = data[0];
+      const lon    = parseFloat(place.lon);
+      const lat    = parseFloat(place.lat);
+      const bb     = place.boundingbox;
+      const span   = bb ? Math.max(parseFloat(bb[1])-parseFloat(bb[0]), parseFloat(bb[3])-parseFloat(bb[2])) : 0.05;
+      const alt    = Math.min(4000, Math.max(180, span * 7000));
+      const name   = place.display_name.split(',').slice(0,2).join(', ');
 
-      const place = data[0];
-      const lon   = parseFloat(place.lon);
-      const lat   = parseFloat(place.lat);
-      // Estimate a sensible altitude based on bounding box size
-      const bb    = place.boundingbox; // [minlat, maxlat, minlon, maxlon]
-      const span  = bb ? Math.max(parseFloat(bb[1]) - parseFloat(bb[0]), parseFloat(bb[3]) - parseFloat(bb[2])) : 0.05;
-      const alt   = Math.min(4000, Math.max(200, span * 7000));
-      const name  = place.display_name.split(',').slice(0, 2).join(', ');
-
-      // Deactivate preset chips
       if (_activeChip) { _activeChip.classList.remove('active'); _activeChip = null; }
       window._lpCustomDest = name;
-
       _notify('✈️ Flying to ' + name + '…');
       if (inp) inp.value = '';
 
+      // Fly to city
       const iframe = document.getElementById('cesium-train');
-      if (iframe && iframe.contentWindow) {
-        iframe.contentWindow.postMessage({ type: 'fly-to', lon, lat, alt, name }, '*');
+      if (iframe?.contentWindow) {
+        iframe.contentWindow.postMessage({ type:'fly-to', lon, lat, alt, name }, '*');
+      }
+
+      // Populate chips with top venues for this city
+      _notify('🔍 Finding top spots in ' + name.split(',')[0] + '…', 6000);
+      const spots = await _spotsForCity(place.display_name, lon, lat);
+      if (spots.length) {
+        _buildChips(spots);
+        _notify('✅ Top spots in ' + name.split(',')[0] + ' loaded — tap to explore!');
       }
     } catch(e) {
       _notify('❌ Search failed — check connection');
     } finally {
-      if (btn) { btn.textContent = 'Go'; btn.disabled = false; }
+      if (searchBtn) { searchBtn.textContent = 'Go'; searchBtn.disabled = false; }
     }
   };
 })();
