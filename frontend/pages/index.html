@@ -341,6 +341,23 @@
   }
   .lp-chip:hover  { background: rgba(100,160,220,0.18); border-color: rgba(100,160,220,0.5); }
   .lp-chip.active { background: rgba(80,140,200,0.28);  border-color: rgba(80,160,240,0.6); color:#fff; }
+  .lp-search-row {
+    display: flex; gap: 6px; margin-bottom: 8px;
+  }
+  #lp-search {
+    flex: 1; background: rgba(255,255,255,0.07); border: 1px solid rgba(140,180,220,0.25);
+    border-radius: 20px; padding: 6px 14px; font-size: 11px; font-family: 'DM Sans', sans-serif;
+    color: rgba(220,235,255,0.9); outline: none;
+  }
+  #lp-search::placeholder { color: rgba(140,170,200,0.5); }
+  #lp-search:focus { border-color: rgba(100,180,255,0.55); background: rgba(255,255,255,0.10); }
+  #lp-search-btn {
+    background: rgba(80,140,220,0.35); border: 1px solid rgba(100,160,255,0.40);
+    border-radius: 20px; padding: 6px 14px; font-size: 11px; font-family: 'DM Sans', sans-serif;
+    color: rgba(200,225,255,0.9); cursor: pointer; white-space: nowrap;
+    transition: background .15s;
+  }
+  #lp-search-btn:hover { background: rgba(80,140,220,0.55); }
   #lp-notify {
     text-align: center; font-size: 10px; color: rgba(120,200,255,0.75);
     margin-top: 7px; min-height: 14px; transition: opacity .3s;
@@ -606,7 +623,11 @@
 
 <!-- Location picker — visible only in train/sightseeing scene -->
 <div id="train-location-picker">
-  <div class="lp-title">📍 Where would you like to visit?</div>
+  <div class="lp-title">✈️ Where would you like to fly to?</div>
+  <div class="lp-search-row">
+    <input id="lp-search" type="text" placeholder="Type any city or landmark…" autocomplete="off" spellcheck="false">
+    <button id="lp-search-btn" onclick="window._lpSearch()">Go</button>
+  </div>
   <div class="lp-chips" id="lp-chips"></div>
   <div id="lp-notify"></div>
 </div>
@@ -2289,41 +2310,96 @@ function toggleAmbient(btn) {
     const container = document.getElementById('lp-chips');
     if (!container) return;
 
-    SPOTS.forEach((spot, i) => {
+    SPOTS.forEach(spot => {
       const btn = document.createElement('button');
       btn.className = 'lp-chip';
       btn.textContent = spot.name;
       btn.addEventListener('click', () => _flyTo(spot, btn));
       container.appendChild(btn);
     });
+
+    // Wire up Enter key on search input
+    const inp = document.getElementById('lp-search');
+    if (inp) inp.addEventListener('keydown', e => { if (e.key === 'Enter') window._lpSearch(); });
   };
 
+  function _notify(msg, timeout) {
+    const el = document.getElementById('lp-notify');
+    if (!el) return;
+    el.textContent = msg;
+    el.style.opacity = '1';
+    clearTimeout(el._t);
+    el._t = setTimeout(() => { el.style.opacity = '0'; }, timeout || 3500);
+  }
+
   function _flyTo(spot, btn) {
-    // Update active chip style
     if (_activeChip) _activeChip.classList.remove('active');
     _activeChip = btn;
-    btn.classList.add('active');
+    if (btn) btn.classList.add('active');
 
-    // Notify user
-    const notify = document.getElementById('lp-notify');
-    if (notify) {
-      notify.textContent = '🚆 Heading to ' + spot.name.replace(/^[^\w]*/, '') + '…';
-      notify.style.opacity = '1';
-      setTimeout(() => { notify.style.opacity = '0'; }, 3500);
-    }
+    // Store destination name for the cabin flight bar
+    window._lpCustomDest = spot.name.replace(/^[\s\S]*?([A-Za-z].*)$/, '$1').trim();
 
-    // Send fly-to message to Cesium iframe
+    _notify('✈️ Flying to ' + spot.name.replace(/^[^\w]*/, '') + '…');
+
     const iframe = document.getElementById('cesium-train');
     if (iframe && iframe.contentWindow) {
       iframe.contentWindow.postMessage({
         type: 'fly-to',
         lon:  spot.lon,
         lat:  spot.lat,
-        alt:  spot.alt,
+        alt:  spot.alt || 450,
         name: spot.name,
       }, '*');
     }
   }
+
+  // Free-text search via Nominatim (OpenStreetMap geocoder — no API key needed)
+  window._lpSearch = async function() {
+    const inp = document.getElementById('lp-search');
+    const query = inp ? inp.value.trim() : '';
+    if (!query) return;
+
+    _notify('🔍 Searching for "' + query + '"…', 8000);
+    const btn = document.getElementById('lp-search-btn');
+    if (btn) { btn.textContent = '…'; btn.disabled = true; }
+
+    try {
+      const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&limit=1&addressdetails=0`;
+      const res  = await fetch(url, { headers: { 'Accept-Language': 'en', 'User-Agent': 'SerenityRadio/1.0' } });
+      const data = await res.json();
+
+      if (!data.length) {
+        _notify('❌ Location not found — try a different name');
+        return;
+      }
+
+      const place = data[0];
+      const lon   = parseFloat(place.lon);
+      const lat   = parseFloat(place.lat);
+      // Estimate a sensible altitude based on bounding box size
+      const bb    = place.boundingbox; // [minlat, maxlat, minlon, maxlon]
+      const span  = bb ? Math.max(parseFloat(bb[1]) - parseFloat(bb[0]), parseFloat(bb[3]) - parseFloat(bb[2])) : 0.05;
+      const alt   = Math.min(4000, Math.max(200, span * 7000));
+      const name  = place.display_name.split(',').slice(0, 2).join(', ');
+
+      // Deactivate preset chips
+      if (_activeChip) { _activeChip.classList.remove('active'); _activeChip = null; }
+      window._lpCustomDest = name;
+
+      _notify('✈️ Flying to ' + name + '…');
+      if (inp) inp.value = '';
+
+      const iframe = document.getElementById('cesium-train');
+      if (iframe && iframe.contentWindow) {
+        iframe.contentWindow.postMessage({ type: 'fly-to', lon, lat, alt, name }, '*');
+      }
+    } catch(e) {
+      _notify('❌ Search failed — check connection');
+    } finally {
+      if (btn) { btn.textContent = 'Go'; btn.disabled = false; }
+    }
+  };
 })();
 </script>
 </body>
