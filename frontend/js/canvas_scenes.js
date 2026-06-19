@@ -2679,7 +2679,7 @@ const CanvasScenes = (() => {
     const maxW = avH / WIN_ASPECT;
     const wW   = Math.min(rawW, maxW);
     const wH   = wW * WIN_ASPECT;
-    const w1CX = CW * 0.230, w2CX = CW * 0.500, w3CX = CW * 0.770;
+    const w1CX = CW * 0.210, w2CX = CW * 0.500, w3CX = CW * 0.790;
     function inWindow(centerX) {
       return cx >= centerX - wW*0.5 && cx <= centerX + wW*0.5 &&
              cy >= wTop && cy <= wTop + wH;
@@ -2793,9 +2793,9 @@ const CanvasScenes = (() => {
     const wH    = wW * WIN_ASPECT;
     const wR    = wW * 0.42;           // corner radius — classic airplane window
 
-    const w1CX = W * 0.230;
+    const w1CX = W * 0.210;
     const w2CX = W * 0.500;
-    const w3CX = W * 0.770;
+    const w3CX = W * 0.790;
 
     // ─── 1. FULL DARK ATMOSPHERE ──────────────────────────────────────────────
     const bgG = c.createLinearGradient(0, 0, W, 0);
@@ -3820,13 +3820,10 @@ const CanvasScenes = (() => {
       _tX = 0; _tBI = 0; _tFC = 0; _tBlend = 0;
       _tSnow = null; _tRain = null; _tGlassDrops = [];
       _tSpeed = 1.6; _tZoom = 1.0;
-      window.addEventListener('wheel',   _trainControlEvent, {passive:false});
-      window.addEventListener('keydown', _trainControlEvent);
+      // NOTE: wheel/keydown for 2D train speed removed — cabin uses _bindTrainInteract
       // Start 3D carriage; passes bg-canvas → becomes scene.background texture
       if (typeof Train3D !== 'undefined') Train3D.start(_canvas);
     } else {
-      window.removeEventListener('wheel',   _trainControlEvent);
-      window.removeEventListener('keydown', _trainControlEvent);
       if (typeof Train3D !== 'undefined') Train3D.stop();
       // Clear the interior canvas, remove interaction listeners, reset state
       _unbindTrainInteract();
