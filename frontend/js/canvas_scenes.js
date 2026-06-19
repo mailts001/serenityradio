@@ -2666,21 +2666,25 @@ const CanvasScenes = (() => {
   }
 
   function _trainWinHit(ex, ey) {
-    // Canvas is 110% viewport, offset -5% on each side.
-    // Translate pointer to canvas-local coords.
-    // Accept interaction over the panoramic window glass area (right ~68%).
+    // Canvas is 110% viewport, offset -5%.  Two portrait windows at 34.5% and 65.5% horizontal.
     const VW = window.innerWidth, VH = window.innerHeight;
     const CW = VW * 1.10, CH = VH * 1.10;
     const cx = ex + VW * 0.05;
     const cy = ey + VH * 0.05;
-    // Match _trainInteriorFrame: wfX=29%, wfY=8.5%, wfH=80%, sillThk=24dpr
-    const dpr     = window.devicePixelRatio || 1;
-    const sillThk = 24 * dpr;
-    const wfX = CW * 0.29, wfY = CH * 0.085, wfW = CW - CW * 0.29 - CW * 0.028, wfH = CH * 0.80;
-    const glassX = wfX + sillThk, glassY = wfY + sillThk;
-    const glassW = wfW - sillThk * 2, glassH = wfH - sillThk * 2;
-    return cx >= glassX && cx <= glassX + glassW &&
-           cy >= glassY && cy <= glassY + glassH;
+    // Reproduce window geometry from _trainInteriorFrame
+    const SAFE_BOTTOM = CH * 0.78;
+    const WIN_ASPECT  = 1.55;
+    const rawWinW = CW * 0.22;
+    const maxWinW = (SAFE_BOTTOM - CH * 0.12) / WIN_ASPECT;
+    const wW = Math.min(rawWinW, maxWinW, CH * 0.28);
+    const wH = wW * WIN_ASPECT;
+    const wTop = CH * 0.10;
+    const w1CX = CW * 0.345, w2CX = CW * 0.655;
+    function inWindow(centerX) {
+      return cx >= centerX - wW*0.5 && cx <= centerX + wW*0.5 &&
+             cy >= wTop && cy <= wTop + wH;
+    }
+    return inWindow(w1CX) || inWindow(w2CX);
   }
 
   function _trainScrollHandler(e) {
@@ -2764,369 +2768,349 @@ const CanvasScenes = (() => {
     const H   = c.canvas.height;
     const dpr = window.devicePixelRatio || 1;
 
-    // Subtle premium-cabin turbulence
-    const roll = Math.sin(t * 0.028) * 0.25 + Math.sin(t * 0.059) * 0.09;
-    const bob  = Math.sin(t * 0.041) * 0.6;
+    // Very subtle turbulence
+    const roll = Math.sin(t * 0.028) * 0.22 + Math.sin(t * 0.059) * 0.08;
+    const bob  = Math.sin(t * 0.041) * 0.5;
     c.canvas.style.transform = `rotate(${roll}deg) translateY(${bob}px)`;
     c.clearRect(0, 0, W, H);
 
-    // ─── PALETTE ────────────────────────────────────────────────────────────
-    const SEAT_FABRIC = '#2E3A4A';
-    const SEAT_LTHR   = '#EAE4D8';
-    const WIN_OUTER   = '#1C2028';
-    const WIN_MID     = '#2A2E36';
-    const WIN_INNER   = '#3A3E46';
+    // ─── LAYOUT ────────────────────────────────────────────────────────────
+    // Canvas = 110% of viewport, offset -5%.
+    // Bottom 22% of canvas left fully transparent → music player shows through.
+    // Interior drawn only above that line.
+    const SAFE_BOTTOM = H * 0.78;   // don't draw below this Y
 
-    // ─── 1. DARK ATMOSPHERE BASE ─────────────────────────────────────────────
+    // ─── WINDOW GEOMETRY — portrait airplane window ───────────────────────
+    // Fix: enforce portrait ratio regardless of screen orientation.
+    // Real airplane window: width ~28cm, height ~43cm → ratio 1:1.55
+    // We cap width so it can never exceed height.
+    const WIN_ASPECT = 1.55;   // height/width ratio
+    // Base width from canvas, but clamp so it stays portrait
+    const rawWinW  = W * 0.22;
+    const maxWinW  = (SAFE_BOTTOM - H * 0.12) / WIN_ASPECT;  // max width that keeps portrait in available height
+    const wW       = Math.min(rawWinW, maxWinW, H * 0.28);
+    const wH       = wW * WIN_ASPECT;
+    const wR       = wW * 0.42;   // rounded corners — ~42% of width, the classic airplane window look
+    const wTop     = H * 0.10;    // top of window
+
+    // Two windows: left (W1) and right (W2)
+    // Left window centred at ~35% from left, right at ~65%
+    const w1CX = W * 0.345;
+    const w2CX = W * 0.655;
+
+    // ─── PALETTE ──────────────────────────────────────────────────────────
+    const SEAT_FABRIC = '#2A3848';
+    const SEAT_LTHR   = '#ECE6DA';
+    const WIN_FRAME   = '#1A1E24';
+    const WIN_SILL    = '#2E3340';
+
+    // ─── 1. DARK ATMOSPHERE BASE ──────────────────────────────────────────
     const bgG = c.createLinearGradient(0, 0, W, 0);
-    bgG.addColorStop(0,    '#0A0C10');
-    bgG.addColorStop(0.20, '#141820');
-    bgG.addColorStop(0.42, '#1E2430');
-    bgG.addColorStop(0.70, '#222838');
-    bgG.addColorStop(1.0,  '#121418');
+    bgG.addColorStop(0,    '#080A0E');
+    bgG.addColorStop(0.15, '#10141C');
+    bgG.addColorStop(0.50, '#1A2030');
+    bgG.addColorStop(0.85, '#12161E');
+    bgG.addColorStop(1.0,  '#080A0E');
     c.fillStyle = bgG;
-    c.fillRect(0, 0, W, H);
+    c.fillRect(0, 0, W, SAFE_BOTTOM);
 
-    // ─── 2. CEILING — warm arch with LED mood strip ──────────────────────────
-    const ceilH = H * 0.13;
+    // ─── 2. CEILING ARCH ─────────────────────────────────────────────────
+    const ceilH = H * 0.12;
     c.save();
     c.beginPath();
     c.moveTo(0, 0); c.lineTo(W, 0);
-    c.lineTo(W, ceilH * 0.52);
-    c.bezierCurveTo(W * 0.80, ceilH * 1.05, W * 0.20, ceilH * 1.05, 0, ceilH * 0.52);
+    c.lineTo(W, ceilH * 0.50);
+    c.bezierCurveTo(W*0.80, ceilH*1.08, W*0.20, ceilH*1.08, 0, ceilH*0.50);
     c.closePath();
     const ceilG = c.createLinearGradient(0, 0, 0, ceilH);
-    ceilG.addColorStop(0, '#EDEBE6'); ceilG.addColorStop(1, '#C0BDB8');
+    ceilG.addColorStop(0, '#EDEBE6'); ceilG.addColorStop(1, '#BFBCB7');
     c.fillStyle = ceilG; c.fill(); c.restore();
 
-    // LED warm strip below arch
-    const ledY = ceilH * 0.50;
-    const ledG = c.createLinearGradient(0, ledY, 0, ledY + 20*dpr);
-    ledG.addColorStop(0, 'rgba(255,242,205,0.72)'); ledG.addColorStop(1, 'rgba(255,242,205,0)');
-    c.fillStyle = ledG; c.fillRect(W*0.06, ledY, W*0.88, 20*dpr);
+    // LED warm strip
+    const ledY  = ceilH * 0.48;
+    const ledGr = c.createLinearGradient(0, ledY, 0, ledY + 22*dpr);
+    ledGr.addColorStop(0, 'rgba(255,242,205,0.70)');
+    ledGr.addColorStop(1, 'rgba(255,242,205,0)');
+    c.fillStyle = ledGr; c.fillRect(W*0.05, ledY, W*0.90, 22*dpr);
 
     // Ceiling bloom
     const blG = c.createRadialGradient(W*0.5, 0, 0, W*0.5, 0, W*0.55);
-    blG.addColorStop(0, 'rgba(255,244,215,0.16)'); blG.addColorStop(1, 'rgba(255,244,215,0)');
-    c.fillStyle = blG; c.fillRect(0, 0, W, ceilH * 1.5);
+    blG.addColorStop(0, 'rgba(255,244,215,0.14)');
+    blG.addColorStop(1, 'rgba(255,244,215,0)');
+    c.fillStyle = blG; c.fillRect(0, 0, W, ceilH*1.5);
 
-    // ─── 3. LEFT WALL & SEAT-BACK ────────────────────────────────────────────
-    // Seat back of seat in front — occupies most of left side
-    // This is what you actually see in a window seat: the seat back ahead
-    const prevSeatW = W * 0.30;  // seat-back-in-front width
-    const prevSeatY = ceilH * 0.52;
-    const prevSeatH = H - prevSeatY;
+    // ─── 3. WALL PANELS + OVERHEAD BINS ──────────────────────────────────
+    // Continuous wall behind windows — mid-dark grey
+    const wallY = ceilH * 0.48;
+    const wallH = SAFE_BOTTOM - wallY;
+    const wallG = c.createLinearGradient(0, wallY, 0, SAFE_BOTTOM);
+    wallG.addColorStop(0, '#1E2430'); wallG.addColorStop(1, '#141820');
+    c.fillStyle = wallG; c.fillRect(0, wallY, W, wallH);
 
-    // Seat back body (dark navy fabric)
-    const sbG = c.createLinearGradient(0, prevSeatY, prevSeatW, prevSeatY + prevSeatH);
-    sbG.addColorStop(0,   '#1E2A38'); sbG.addColorStop(0.6, '#161E2C'); sbG.addColorStop(1, '#0E1420');
-    c.fillStyle = sbG;
-    c.beginPath();
-    c.roundRect(0, prevSeatY, prevSeatW, prevSeatH, [0, 12*dpr, 8*dpr, 0]);
-    c.fill();
+    // Overhead bins — spans full width, broken at window tops
+    const binY2 = ceilH * 0.48, binH2 = H * 0.10;
+    // Left bin (left of w1)
+    const lb1X = 0, lb1W = w1CX - wW*0.5 - 8*dpr;
+    // Centre bin (between w1 and w2)
+    const cb1X = w1CX + wW*0.5 + 8*dpr, cb1W = w2CX - wW*0.5 - cb1X - 8*dpr;
+    // Right bin (right of w2)
+    const rb1X = w2CX + wW*0.5 + 8*dpr, rb1W = W - rb1X;
 
-    // Headrest — cream leather, top of seat back
-    const hrH = prevSeatH * 0.18;
-    const hrG = c.createLinearGradient(0, prevSeatY, 0, prevSeatY + hrH);
-    hrG.addColorStop(0, SEAT_LTHR); hrG.addColorStop(0.7, '#D8D2C0'); hrG.addColorStop(1, '#C4BEAc');
-    c.fillStyle = hrG;
-    c.beginPath();
-    c.roundRect(W*0.03, prevSeatY, prevSeatW*0.88, hrH, [0, 8*dpr, 5*dpr, 0]);
-    c.fill();
+    function _drawBin(bx, bw) {
+      if (bw < 4*dpr) return;
+      const bg = c.createLinearGradient(bx, binY2, bx, binY2 + binH2);
+      bg.addColorStop(0, '#22262C'); bg.addColorStop(1, '#1A1E24');
+      c.fillStyle = bg;
+      c.beginPath(); c.roundRect(bx, binY2, bw, binH2, [0, 0, 8*dpr, 8*dpr]); c.fill();
+      // Metallic lip
+      const lpG = c.createLinearGradient(0, binY2+binH2-4*dpr, 0, binY2+binH2);
+      lpG.addColorStop(0, 'rgba(180,175,165,0.55)'); lpG.addColorStop(1, 'rgba(180,175,165,0)');
+      c.fillStyle = lpG; c.fillRect(bx, binY2+binH2-5*dpr, bw, 5*dpr);
+      // Door gap
+      c.strokeStyle = 'rgba(255,255,255,0.07)'; c.lineWidth = dpr;
+      c.beginPath(); c.moveTo(bx+6*dpr, binY2+binH2-12*dpr); c.lineTo(bx+bw-6*dpr, binY2+binH2-12*dpr); c.stroke();
+    }
+    _drawBin(lb1X, lb1W);
+    _drawBin(cb1X, cb1W);
+    _drawBin(rb1X, rb1W);
 
-    // Headrest stitching
-    c.strokeStyle = 'rgba(155,148,130,0.40)'; c.lineWidth = dpr;
-    c.setLineDash([3*dpr, 5*dpr]);
-    c.beginPath();
-    c.roundRect(W*0.06, prevSeatY + hrH*0.15, prevSeatW*0.75, hrH*0.65, 3*dpr);
-    c.stroke(); c.setLineDash([]);
+    // ─── 4. SEAT BACKS (seat row ahead) ──────────────────────────────────
+    // Three seat backs visible: left-of-w1, between windows, right-of-w2
+    const seatRowY = binY2 + binH2 + H*0.005;
+    const seatRowH = SAFE_BOTTOM - seatRowY;
 
-    // IFE screen on seat back (seatback entertainment screen)
-    const ifeY = prevSeatY + hrH + prevSeatH*0.06;
-    const ifeW = prevSeatW * 0.72, ifeH = prevSeatH * 0.28;
-    const ifeX = W*0.03;
-    // Screen bezel
-    c.fillStyle = '#0A0C10';
-    c.beginPath(); c.roundRect(ifeX, ifeY, ifeW, ifeH, 4*dpr); c.fill();
-    // Screen surface — dim blue glow (off/standby)
-    const ifeScreenG = c.createLinearGradient(ifeX, ifeY, ifeX, ifeY + ifeH);
-    ifeScreenG.addColorStop(0, '#0D1A2E'); ifeScreenG.addColorStop(1, '#081018');
-    c.fillStyle = ifeScreenG;
-    c.beginPath(); c.roundRect(ifeX + 2*dpr, ifeY + 2*dpr, ifeW - 4*dpr, ifeH - 4*dpr, 3*dpr); c.fill();
-    // Screen subtle blue glow
-    const ifegG = c.createRadialGradient(ifeX + ifeW*0.5, ifeY + ifeH*0.5, 0, ifeX + ifeW*0.5, ifeY + ifeH*0.5, ifeW*0.55);
-    ifegG.addColorStop(0, 'rgba(30,80,160,0.18)'); ifegG.addColorStop(1, 'rgba(30,80,160,0)');
-    c.fillStyle = ifegG;
-    c.beginPath(); c.roundRect(ifeX+2*dpr, ifeY+2*dpr, ifeW-4*dpr, ifeH-4*dpr, 3*dpr); c.fill();
-
-    // Tray table latch (small indent on seat back)
-    const ttY = prevSeatY + prevSeatH * 0.60;
-    c.fillStyle = 'rgba(30,40,55,0.95)';
-    c.beginPath(); c.roundRect(ifeX + ifeW*0.30, ttY, ifeW*0.40, 5*dpr, 2.5*dpr); c.fill();
-    c.fillStyle = 'rgba(120,135,155,0.50)';
-    c.beginPath(); c.roundRect(ifeX + ifeW*0.38, ttY + dpr, ifeW*0.24, 3*dpr, 1.5*dpr); c.fill();
-
-    // Seat-back top edge highlight (catches ceiling LED)
-    const sbTopG = c.createLinearGradient(0, prevSeatY - 2*dpr, 0, prevSeatY + 6*dpr);
-    sbTopG.addColorStop(0, 'rgba(200,195,185,0.40)'); sbTopG.addColorStop(1, 'rgba(200,195,185,0)');
-    c.fillStyle = sbTopG; c.fillRect(0, prevSeatY, prevSeatW, 6*dpr);
-
-    // Right edge shadow of seat back (depth)
-    const sbRG = c.createLinearGradient(prevSeatW*0.75, 0, prevSeatW, 0);
-    sbRG.addColorStop(0, 'rgba(0,0,0,0)'); sbRG.addColorStop(1, 'rgba(0,0,0,0.65)');
-    c.fillStyle = sbRG;
-    c.beginPath(); c.roundRect(0, prevSeatY, prevSeatW, prevSeatH, [0, 12*dpr, 8*dpr, 0]); c.fill();
-
-    // ─── 4. USER ARMREST ──────────────────────────────────────────────────────
-    // The passenger's own armrest — lower left, broad wedge
-    const arY  = H * 0.74, arH2 = H * 0.26, arW2 = W * 0.25;
-    const arG  = c.createLinearGradient(0, arY, arW2, arY + arH2);
-    arG.addColorStop(0, '#16181E'); arG.addColorStop(0.5, '#22262E'); arG.addColorStop(1, '#0C0E12');
-    c.save();
-    c.beginPath();
-    c.moveTo(0, arY + arH2*0.12);
-    c.bezierCurveTo(0, arY, arW2*0.55, arY, arW2, arY + arH2*0.20);
-    c.lineTo(arW2, H); c.lineTo(0, H); c.closePath();
-    c.fillStyle = arG; c.fill();
-    // Catch-light on top
-    const arTG = c.createLinearGradient(0, arY, 0, arY + 10*dpr);
-    arTG.addColorStop(0, 'rgba(190,185,175,0.55)'); arTG.addColorStop(1, 'rgba(190,185,175,0)');
-    c.fillStyle = arTG;
-    c.beginPath();
-    c.moveTo(0, arY + arH2*0.12);
-    c.bezierCurveTo(0, arY, arW2*0.55, arY, arW2, arY + arH2*0.20);
-    c.lineTo(arW2, arY + arH2*0.32); c.bezierCurveTo(arW2*0.55, arY+10*dpr, 0, arY+10*dpr, 0, arY+arH2*0.22);
-    c.closePath(); c.fill(); c.restore();
-
-    // Seatbelt
-    c.strokeStyle = 'rgba(195,182,135,0.42)'; c.lineWidth = 3.5*dpr; c.lineCap = 'round';
-    c.beginPath();
-    c.moveTo(2*dpr, arY + arH2*0.28);
-    c.bezierCurveTo(arW2*0.28, arY + arH2*0.18, arW2*0.65, arY + arH2*0.13, arW2 - 5*dpr, arY + arH2*0.22);
-    c.stroke(); c.lineCap = 'butt';
-    // Buckle
-    c.fillStyle = 'rgba(175,160,115,0.55)';
-    c.beginPath(); c.roundRect(arW2*0.46, arY + arH2*0.14, 14*dpr, 9*dpr, 2*dpr); c.fill();
-
-    // ─── 5. AIRPLANE WINDOW — classic rounded-rect portrait shape ────────────
-    // Real airplane windows: portrait rounded rectangle, cornerRadius ≈ 38–42% of width
-    // NOT a circle/ellipse — that's a ship porthole.
-    const wX  = W * 0.31;          // left edge of window region
-    const wCX = W * 0.60;          // horizontal centre
-    const wW  = W * 0.42;          // window width
-    const wH  = H * 0.68;          // window height (tall portrait)
-    const wY  = H * 0.13;          // top of window
-    const wR  = wW * 0.40;         // corner radius — the KEY that makes it look like a plane window
-
-    // Outer wall around window area
-    const rWG = c.createLinearGradient(wX - W*0.02, 0, W, 0);
-    rWG.addColorStop(0, '#1E2430'); rWG.addColorStop(0.4, '#2A3040'); rWG.addColorStop(1, '#181C24');
-    c.fillStyle = rWG;
-    c.fillRect(wX - W*0.02, ceilH*0.50, W - wX + W*0.02, H - ceilH*0.50);
-
-    // Layer A — outermost shadow (wide halo)
-    c.fillStyle = '#070810';
-    c.beginPath();
-    c.roundRect(wCX - wW*0.5 - 20*dpr, wY - 20*dpr, wW + 40*dpr, wH + 40*dpr, wR + 20*dpr);
-    c.fill();
-
-    // Layer B — structural frame (near-black, thick)
-    const fmG = c.createLinearGradient(wCX - wW*0.5, wY, wCX + wW*0.5, wY + wH);
-    fmG.addColorStop(0, '#32383E'); fmG.addColorStop(0.5, WIN_OUTER); fmG.addColorStop(1, '#0E1014');
-    c.fillStyle = fmG;
-    c.beginPath();
-    c.roundRect(wCX - wW*0.5 - 12*dpr, wY - 12*dpr, wW + 24*dpr, wH + 24*dpr, wR + 12*dpr);
-    c.fill();
-
-    // Layer C — inner reveal / sill (shows wall thickness, lighter)
-    const slG = c.createLinearGradient(wCX - wW*0.5, wY, wCX - wW*0.5 + 18*dpr, wY + 18*dpr);
-    slG.addColorStop(0, '#4A5058'); slG.addColorStop(1, WIN_MID);
-    c.fillStyle = slG;
-    c.beginPath();
-    c.roundRect(wCX - wW*0.5 - 4*dpr, wY - 4*dpr, wW + 8*dpr, wH + 8*dpr, wR + 4*dpr);
-    c.fill();
-
-    // Layer D — inner frame lip (slight gradient, gives bevel feel)
-    const lpG = c.createLinearGradient(wCX - wW*0.5, wY, wCX + wW*0.5, wY + wH);
-    lpG.addColorStop(0, WIN_INNER); lpG.addColorStop(0.6, WIN_MID); lpG.addColorStop(1, '#1A1E24');
-    c.fillStyle = lpG;
-    c.beginPath();
-    c.roundRect(wCX - wW*0.5, wY, wW, wH, wR);
-    c.fill();
-
-    // TRANSPARENT CUTOUT — Cesium shows through this exactly
-    c.save();
-    c.globalCompositeOperation = 'destination-out';
-    const gX = wCX - wW*0.5 + 2*dpr, gY = wY + 2*dpr;
-    const gW = wW - 4*dpr,            gH2 = wH - 4*dpr;
-    const gR = wR - 2*dpr;
-    c.beginPath(); c.roundRect(gX, gY, gW, gH2, gR); c.fill();
-    c.restore();
-
-    // Glass effects — clipped to pane
-    c.save();
-    c.beginPath(); c.roundRect(gX, gY, gW, gH2, gR); c.clip();
-
-    // Diagonal glare streak (upper-left)
-    c.save();
-    c.translate(gX + gW*0.18, gY + gH2*0.12);
-    c.rotate(Math.PI * 0.18);
-    const glL  = gW * 0.7;
-    const glG  = c.createLinearGradient(-glL*0.5, -14*dpr, glL*0.5, 14*dpr);
-    glG.addColorStop(0,    'rgba(255,255,255,0)');
-    glG.addColorStop(0.32, 'rgba(255,255,255,0.09)');
-    glG.addColorStop(0.50, 'rgba(255,255,255,0.17)');
-    glG.addColorStop(0.68, 'rgba(255,255,255,0.05)');
-    glG.addColorStop(1,    'rgba(255,255,255,0)');
-    c.fillStyle = glG; c.fillRect(-glL*0.5, -gH2, glL, gH2*2);
-    c.restore();
-
-    // Second smaller glare (right shoulder)
-    c.save(); c.globalAlpha = 0.50;
-    c.translate(gX + gW*0.68, gY + gH2*0.08);
-    c.rotate(Math.PI * 0.12);
-    const gl2 = c.createLinearGradient(-gW*0.15, -8*dpr, gW*0.15, 8*dpr);
-    gl2.addColorStop(0, 'rgba(255,255,255,0)'); gl2.addColorStop(0.5,'rgba(255,255,255,0.13)'); gl2.addColorStop(1,'rgba(255,255,255,0)');
-    c.fillStyle = gl2; c.fillRect(-gW*0.15, -gH2, gW*0.30, gH2*2);
-    c.restore();
-
-    // DoF vignette on pane edges
-    const dfG = c.createRadialGradient(gX+gW*0.5, gY+gH2*0.45, gH2*0.20, gX+gW*0.5, gY+gH2*0.45, gH2*0.85);
-    dfG.addColorStop(0, 'rgba(0,0,0,0)'); dfG.addColorStop(0.65,'rgba(0,0,0,0.05)'); dfG.addColorStop(1,'rgba(0,0,0,0.30)');
-    c.fillStyle = dfG; c.fillRect(gX, gY, gW, gH2);
-    c.restore();
-
-    // Top catch-light arc on frame (convex bevel reflection)
-    c.save(); c.globalAlpha = 0.50;
-    c.strokeStyle = 'rgba(195,190,180,0.55)'; c.lineWidth = 4.5*dpr;
-    c.beginPath();
-    // Arc along top of frame (slightly inside the outer frame)
-    c.roundRect(wCX - wW*0.5 - 8*dpr, wY - 8*dpr, wW + 16*dpr, wH + 16*dpr, wR + 8*dpr);
-    c.stroke();
-    c.restore();
-
-    // ─── 6. RIGHT SEAT — adjacent passenger seat ─────────────────────────────
-    const rsX  = wCX + wW*0.5 + 16*dpr;
-    const rsY  = ceilH * 0.52;
-    const rsW  = W - rsX - W*0.01;
-    const rsH3 = H * 0.62;
-    if (rsW > 8*dpr) {
-      // Seat back
-      const rsbG = c.createLinearGradient(rsX, rsY, rsX + rsW, rsY + rsH3);
-      rsbG.addColorStop(0, '#232E3C'); rsbG.addColorStop(1, '#111820');
-      c.fillStyle = rsbG;
-      c.beginPath(); c.roundRect(rsX, rsY, rsW, rsH3, [8*dpr, 0, 0, 6*dpr]); c.fill();
-      // Headrest
-      const rhrH = rsH3 * 0.20;
-      const rhrG = c.createLinearGradient(rsX, rsY, rsX, rsY + rhrH);
-      rhrG.addColorStop(0, SEAT_LTHR); rhrG.addColorStop(1, '#C8C2B0');
-      c.fillStyle = rhrG;
-      c.beginPath(); c.roundRect(rsX + rsW*0.08, rsY, rsW*0.84, rhrH, [8*dpr, 0, 2*dpr, 2*dpr]); c.fill();
+    function _drawSeatBack(sx, sw) {
+      if (sw < 6*dpr) return;
+      // Seat body
+      const sg = c.createLinearGradient(sx, seatRowY, sx+sw, seatRowY+seatRowH);
+      sg.addColorStop(0, SEAT_FABRIC); sg.addColorStop(1, '#161E2C');
+      c.fillStyle = sg;
+      c.beginPath(); c.roundRect(sx, seatRowY, sw, seatRowH, [0, 8*dpr, 6*dpr, 0]); c.fill();
+      // Headrest leather
+      const hrH3 = seatRowH * 0.19;
+      const hrG3 = c.createLinearGradient(sx, seatRowY, sx, seatRowY+hrH3);
+      hrG3.addColorStop(0, SEAT_LTHR); hrG3.addColorStop(1, '#D5CFBD');
+      c.fillStyle = hrG3;
+      c.beginPath(); c.roundRect(sx+sw*0.08, seatRowY, sw*0.84, hrH3, [0,7*dpr,4*dpr,0]); c.fill();
       // Stitching
       c.strokeStyle = 'rgba(150,142,125,0.38)'; c.lineWidth = dpr;
-      c.setLineDash([3*dpr, 5*dpr]);
-      c.beginPath(); c.roundRect(rsX + rsW*0.15, rsY + rhrH*0.16, rsW*0.70, rhrH*0.64, 3*dpr); c.stroke();
+      c.setLineDash([3*dpr,5*dpr]);
+      c.beginPath(); c.roundRect(sx+sw*0.14, seatRowY+hrH3*0.16, sw*0.72, hrH3*0.62, 3*dpr); c.stroke();
       c.setLineDash([]);
-      // Lumbar seam
-      c.strokeStyle = 'rgba(255,255,255,0.05)'; c.lineWidth = dpr;
-      c.beginPath(); c.moveTo(rsX + 4*dpr, rsY + rsH3*0.46); c.lineTo(rsX + rsW - 4*dpr, rsY + rsH3*0.46); c.stroke();
-      // Left edge highlight
-      const reLG = c.createLinearGradient(rsX, 0, rsX + rsW*0.20, 0);
-      reLG.addColorStop(0, 'rgba(255,255,255,0.05)'); reLG.addColorStop(1, 'rgba(0,0,0,0)');
-      c.fillStyle = reLG;
-      c.beginPath(); c.roundRect(rsX, rsY, rsW, rsH3, [8*dpr, 0, 0, 6*dpr]); c.fill();
-      // Right seat armrest
-      const rarY2 = H * 0.70;
-      const rarG  = c.createLinearGradient(rsX, rarY2, rsX + rsW, H);
-      rarG.addColorStop(0, '#1A1E26'); rarG.addColorStop(1, '#0A0C10');
-      c.fillStyle = rarG;
+      // IFE screen (small, mid-seat)
+      const ifeY2 = seatRowY + hrH3 + seatRowH*0.06;
+      const ifeW2 = sw * 0.70, ifeH2 = seatRowH * 0.25;
+      const ifeX2 = sx + sw*0.15;
+      c.fillStyle = '#080C12';
+      c.beginPath(); c.roundRect(ifeX2, ifeY2, ifeW2, ifeH2, 3*dpr); c.fill();
+      // Screen dim blue glow
+      const ifG2 = c.createRadialGradient(ifeX2+ifeW2*0.5, ifeY2+ifeH2*0.5, 0, ifeX2+ifeW2*0.5, ifeY2+ifeH2*0.5, ifeW2*0.5);
+      ifG2.addColorStop(0, 'rgba(20,65,140,0.20)'); ifG2.addColorStop(1, 'rgba(20,65,140,0)');
+      c.fillStyle = ifG2;
+      c.beginPath(); c.roundRect(ifeX2+2*dpr, ifeY2+2*dpr, ifeW2-4*dpr, ifeH2-4*dpr, 2*dpr); c.fill();
+      // Tray latch
+      c.fillStyle = 'rgba(30,40,58,0.95)';
+      c.beginPath(); c.roundRect(ifeX2+ifeW2*0.32, seatRowY+seatRowH*0.60, ifeW2*0.36, 5*dpr, 2.5*dpr); c.fill();
+      // Top catch-light
+      const tclG = c.createLinearGradient(0, seatRowY-2*dpr, 0, seatRowY+6*dpr);
+      tclG.addColorStop(0, 'rgba(195,190,178,0.38)'); tclG.addColorStop(1, 'rgba(195,190,178,0)');
+      c.fillStyle = tclG; c.fillRect(sx, seatRowY, sw, 6*dpr);
+      // Right edge shadow
+      const rshG = c.createLinearGradient(sx+sw*0.72, 0, sx+sw, 0);
+      rshG.addColorStop(0, 'rgba(0,0,0,0)'); rshG.addColorStop(1, 'rgba(0,0,0,0.60)');
+      c.fillStyle = rshG;
+      c.beginPath(); c.roundRect(sx, seatRowY, sw, seatRowH, [0,8*dpr,6*dpr,0]); c.fill();
+    }
+    // Left seat (covers far-left up to window 1)
+    _drawSeatBack(0, w1CX - wW*0.5 - 4*dpr);
+    // Centre seat (between the two windows)
+    const cSeatX = w1CX + wW*0.5 + 4*dpr, cSeatW = w2CX - wW*0.5 - cSeatX - 4*dpr;
+    _drawSeatBack(cSeatX, cSeatW);
+    // Right seat (right of window 2 to edge)
+    _drawSeatBack(w2CX + wW*0.5 + 4*dpr, W - w2CX - wW*0.5 - 4*dpr);
+
+    // ─── 5. ARMREST (user's own seat, foreground) ─────────────────────────
+    const arY3 = SAFE_BOTTOM * 0.76, arH3 = SAFE_BOTTOM - arY3;
+    const arW3 = W * 0.14;
+    const arG3 = c.createLinearGradient(0, arY3, arW3, arY3+arH3);
+    arG3.addColorStop(0, '#14161C'); arG3.addColorStop(0.6, '#1E222A'); arG3.addColorStop(1, '#0C0E12');
+    c.save();
+    c.beginPath();
+    c.moveTo(0, arY3 + arH3*0.14);
+    c.bezierCurveTo(0, arY3, arW3*0.55, arY3, arW3, arY3+arH3*0.22);
+    c.lineTo(arW3, SAFE_BOTTOM); c.lineTo(0, SAFE_BOTTOM); c.closePath();
+    c.fillStyle = arG3; c.fill();
+    // Catch-light
+    const arTG3 = c.createLinearGradient(0, arY3, 0, arY3+9*dpr);
+    arTG3.addColorStop(0, 'rgba(185,180,170,0.52)'); arTG3.addColorStop(1, 'rgba(185,180,170,0)');
+    c.fillStyle = arTG3;
+    c.beginPath();
+    c.moveTo(0, arY3+arH3*0.14); c.bezierCurveTo(0, arY3, arW3*0.55, arY3, arW3, arY3+arH3*0.22);
+    c.lineTo(arW3, arY3+arH3*0.34); c.bezierCurveTo(arW3*0.55, arY3+9*dpr, 0, arY3+9*dpr, 0, arY3+arH3*0.24);
+    c.closePath(); c.fill();
+    // Seatbelt
+    c.strokeStyle = 'rgba(190,178,128,0.40)'; c.lineWidth = 3*dpr; c.lineCap = 'round';
+    c.beginPath();
+    c.moveTo(2*dpr, arY3+arH3*0.30);
+    c.bezierCurveTo(arW3*0.30, arY3+arH3*0.19, arW3*0.68, arY3+arH3*0.13, arW3-4*dpr, arY3+arH3*0.22);
+    c.stroke(); c.lineCap = 'butt';
+    c.fillStyle = 'rgba(172,158,112,0.55)';
+    c.beginPath(); c.roundRect(arW3*0.44, arY3+arH3*0.13, 13*dpr, 8*dpr, 2*dpr); c.fill();
+    c.restore();
+
+    // ─── 6. DRAW BOTH AIRPLANE WINDOWS ───────────────────────────────────
+    // Shared function — draws one portrait airplane window with transparent cutout
+    const wFrameThk = 14*dpr;  // outer frame thickness
+    const wSillThk  = wFrameThk + 8*dpr;  // sill
+
+    function _drawWindow(cxW) {
+      const wxL  = cxW - wW*0.5;
+      const wyT  = wTop;
+
+      // Shadow halo
+      c.fillStyle = '#040608';
       c.beginPath();
-      c.moveTo(rsX, rarY2 + rsW*0.12);
-      c.bezierCurveTo(rsX + rsW*0.30, rarY2, rsX + rsW, rarY2, rsX + rsW, rarY2 + rsW*0.08);
-      c.lineTo(rsX + rsW, H); c.lineTo(rsX, H); c.closePath(); c.fill();
-      // Armrest catch-light
-      const racG = c.createLinearGradient(0, rarY2, 0, rarY2 + 8*dpr);
-      racG.addColorStop(0, 'rgba(180,175,165,0.42)'); racG.addColorStop(1, 'rgba(180,175,165,0)');
-      c.fillStyle = racG;
+      c.roundRect(wxL - 18*dpr, wyT - 18*dpr, wW + 36*dpr, wH + 36*dpr, wR + 18*dpr);
+      c.fill();
+
+      // Outer structural frame
+      const fG2 = c.createLinearGradient(wxL, wyT, wxL+wW, wyT+wH);
+      fG2.addColorStop(0, '#30363E'); fG2.addColorStop(0.5, WIN_FRAME); fG2.addColorStop(1, '#0C1014');
+      c.fillStyle = fG2;
       c.beginPath();
-      c.moveTo(rsX, rarY2 + rsW*0.12);
-      c.bezierCurveTo(rsX + rsW*0.30, rarY2, rsX + rsW, rarY2, rsX + rsW, rarY2 + rsW*0.08);
-      c.lineTo(rsX + rsW, rarY2 + rsW*0.20); c.bezierCurveTo(rsX + rsW, rarY2 + rsW*0.12, rsX + rsW*0.30, rarY2 + 8*dpr, rsX, rarY2 + rsW*0.20);
-      c.closePath(); c.fill();
+      c.roundRect(wxL - 11*dpr, wyT - 11*dpr, wW + 22*dpr, wH + 22*dpr, wR + 11*dpr);
+      c.fill();
+
+      // Inner sill reveal (shows wall thickness)
+      const slG2 = c.createLinearGradient(wxL, wyT, wxL+18*dpr, wyT+18*dpr);
+      slG2.addColorStop(0, '#464E58'); slG2.addColorStop(1, WIN_SILL);
+      c.fillStyle = slG2;
+      c.beginPath();
+      c.roundRect(wxL - 3*dpr, wyT - 3*dpr, wW + 6*dpr, wH + 6*dpr, wR + 3*dpr);
+      c.fill();
+
+      // Inner bevel lip
+      const lpG2 = c.createLinearGradient(wxL, wyT, wxL+wW, wyT+wH);
+      lpG2.addColorStop(0, '#3C4250'); lpG2.addColorStop(0.6, '#282E3A'); lpG2.addColorStop(1, '#181C22');
+      c.fillStyle = lpG2;
+      c.beginPath(); c.roundRect(wxL, wyT, wW, wH, wR); c.fill();
+
+      // TRANSPARENT CUTOUT
+      c.save();
+      c.globalCompositeOperation = 'destination-out';
+      const gx2 = wxL + 2*dpr, gy2 = wyT + 2*dpr;
+      const gw2 = wW - 4*dpr,  gh2 = wH - 4*dpr, gr2 = wR - 2*dpr;
+      c.beginPath(); c.roundRect(gx2, gy2, gw2, gh2, gr2); c.fill();
+      c.restore();
+
+      // Glass effects
+      c.save();
+      c.beginPath(); c.roundRect(gx2, gy2, gw2, gh2, gr2); c.clip();
+
+      // Diagonal glare streak
+      c.save();
+      c.translate(gx2 + gw2*0.16, gy2 + gh2*0.10);
+      c.rotate(Math.PI * 0.17);
+      const glL2 = gw2 * 0.75;
+      const glG2 = c.createLinearGradient(-glL2*0.5, -12*dpr, glL2*0.5, 12*dpr);
+      glG2.addColorStop(0,    'rgba(255,255,255,0)');
+      glG2.addColorStop(0.32, 'rgba(255,255,255,0.08)');
+      glG2.addColorStop(0.50, 'rgba(255,255,255,0.16)');
+      glG2.addColorStop(0.68, 'rgba(255,255,255,0.04)');
+      glG2.addColorStop(1,    'rgba(255,255,255,0)');
+      c.fillStyle = glG2; c.fillRect(-glL2*0.5, -gh2, glL2, gh2*2);
+      c.restore();
+
+      // DoF vignette
+      const dfG2 = c.createRadialGradient(gx2+gw2*0.5, gy2+gh2*0.45, gh2*0.18, gx2+gw2*0.5, gy2+gh2*0.45, gh2*0.88);
+      dfG2.addColorStop(0, 'rgba(0,0,0,0)');
+      dfG2.addColorStop(0.7, 'rgba(0,0,0,0.05)');
+      dfG2.addColorStop(1, 'rgba(0,0,0,0.28)');
+      c.fillStyle = dfG2; c.fillRect(gx2, gy2, gw2, gh2);
+      c.restore();
+
+      // Top bevel catch-light arc
+      c.save(); c.globalAlpha = 0.45;
+      c.strokeStyle = 'rgba(190,185,175,0.60)'; c.lineWidth = 4*dpr;
+      c.beginPath();
+      c.roundRect(wxL - 7*dpr, wyT - 7*dpr, wW + 14*dpr, wH + 14*dpr, wR + 7*dpr);
+      c.stroke(); c.restore();
+
+      return { gx: gx2, gy: gy2, gw: gw2, gh: gh2 }; // return glass rect for hint positioning
     }
 
-    // ─── 7. FLIGHT STATUS — top-right overlay on window frame ────────────────
+    const g1 = _drawWindow(w1CX);
+    const g2 = _drawWindow(w2CX);
+
+    // ─── 7. FLIGHT STATUS — top-right badge ───────────────────────────────
     const destEl   = document.querySelector('.lp-chip.active');
     const destName = window._lpCustomDest ||
       (destEl ? destEl.textContent.replace(/^[^\w\s]*/u, '').trim() : null);
-    const statusLabel = destName ? 'LANDING IN' : 'IN FLIGHT';
-    const statusDest  = (destName || 'SERENITY AIR').toUpperCase();
-    const now3   = new Date();
-    const tmStr  = `${now3.getHours().toString().padStart(2,'0')}:${now3.getMinutes().toString().padStart(2,'0')}`;
+    const statusLabel3 = destName ? 'LANDING IN' : 'IN FLIGHT';
+    const statusDest3  = (destName || 'SERENITY AIR').toUpperCase();
+    const now4   = new Date();
+    const tmStr3 = `${now4.getHours().toString().padStart(2,'0')}:${now4.getMinutes().toString().padStart(2,'0')}`;
 
-    // Status badge — sits in top-right corner, above window
-    const stW = Math.min(W * 0.38, 280 * dpr);
-    const stH = 52 * dpr;
-    const stX = W - stW - 10*dpr;
-    const stY = 8*dpr;
-    c.fillStyle = 'rgba(8,12,20,0.72)';
-    c.beginPath(); c.roundRect(stX, stY, stW, stH, 10*dpr); c.fill();
-    // Left accent stripe (brand blue)
+    const stW3 = Math.min(W * 0.36, 260*dpr);
+    const stH3 = 50*dpr;
+    const stX3 = W - stW3 - 10*dpr;
+    const stY3 = 8*dpr;
+    c.fillStyle = 'rgba(6,10,18,0.74)';
+    c.beginPath(); c.roundRect(stX3, stY3, stW3, stH3, 10*dpr); c.fill();
     c.fillStyle = '#1A8BE0';
-    c.beginPath(); c.roundRect(stX, stY, 3*dpr, stH, [10*dpr, 0, 0, 10*dpr]); c.fill();
-    // Airline name
-    c.fillStyle = 'rgba(90,165,230,0.90)';
-    c.font = `bold ${8.5*dpr}px 'DM Sans', sans-serif`;
+    c.beginPath(); c.roundRect(stX3, stY3, 3*dpr, stH3, [10*dpr,0,0,10*dpr]); c.fill();
+    c.fillStyle = 'rgba(80,160,228,0.92)';
+    c.font = `bold ${8*dpr}px 'DM Sans', sans-serif`;
     c.textAlign = 'left';
-    c.fillText('✈  SERENITY AIR', stX + 10*dpr, stY + 15*dpr);
-    // Status label
-    c.fillStyle = 'rgba(120,170,215,0.65)';
-    c.font = `${7.5*dpr}px 'DM Sans', sans-serif`;
-    c.fillText(statusLabel, stX + 10*dpr, stY + 27*dpr);
-    // Destination
-    c.fillStyle = 'rgba(230,238,248,0.95)';
-    c.font = `bold ${10*dpr}px 'DM Sans', sans-serif`;
+    c.fillText('✈  SERENITY AIR', stX3+10*dpr, stY3+14*dpr);
+    c.fillStyle = 'rgba(110,165,215,0.62)';
+    c.font = `${7*dpr}px 'DM Sans', sans-serif`;
+    c.fillText(statusLabel3, stX3+10*dpr, stY3+26*dpr);
+    c.fillStyle = 'rgba(228,236,248,0.95)';
+    c.font = `bold ${9.5*dpr}px 'DM Sans', sans-serif`;
     c.save();
-    c.beginPath(); c.roundRect(stX, stY, stW - 2, stH, 10*dpr); c.clip();
-    c.fillText(statusDest, stX + 10*dpr, stY + 41*dpr);
+    c.beginPath(); c.roundRect(stX3, stY3, stW3-2, stH3, 10*dpr); c.clip();
+    c.fillText(statusDest3, stX3+10*dpr, stY3+40*dpr);
     c.restore();
-    // Time
-    c.fillStyle = 'rgba(140,175,215,0.55)';
-    c.font = `${7.5*dpr}px 'DM Sans', monospace`;
+    c.fillStyle = 'rgba(130,175,215,0.52)';
+    c.font = `${7*dpr}px 'DM Sans', monospace`;
     c.textAlign = 'right';
-    c.fillText(tmStr, stX + stW - 8*dpr, stY + 20*dpr);
+    c.fillText(tmStr3, stX3+stW3-8*dpr, stY3+18*dpr);
     c.textAlign = 'start';
 
-    // ─── 8. CINEMATIC VIGNETTES ───────────────────────────────────────────────
-    // Left — seat back in foreground pushed dark
-    const lvG = c.createLinearGradient(0, 0, W*0.18, 0);
-    lvG.addColorStop(0, 'rgba(0,0,0,0.82)'); lvG.addColorStop(1, 'rgba(0,0,0,0)');
-    c.fillStyle = lvG; c.fillRect(0, 0, W*0.18, H);
+    // ─── 8. CINEMATIC VIGNETTES ───────────────────────────────────────────
+    // Left edge
+    const lvG2 = c.createLinearGradient(0, 0, W*0.12, 0);
+    lvG2.addColorStop(0, 'rgba(0,0,0,0.80)'); lvG2.addColorStop(1, 'rgba(0,0,0,0)');
+    c.fillStyle = lvG2; c.fillRect(0, 0, W*0.12, SAFE_BOTTOM);
+    // Right edge
+    const rvG2 = c.createLinearGradient(W*0.88, 0, W, 0);
+    rvG2.addColorStop(0, 'rgba(0,0,0,0)'); rvG2.addColorStop(1, 'rgba(0,0,0,0.80)');
+    c.fillStyle = rvG2; c.fillRect(W*0.88, 0, W*0.12, SAFE_BOTTOM);
     // Top
-    const tvG = c.createLinearGradient(0, 0, 0, H*0.10);
-    tvG.addColorStop(0, 'rgba(0,0,0,0.65)'); tvG.addColorStop(1, 'rgba(0,0,0,0)');
-    c.fillStyle = tvG; c.fillRect(0, 0, W, H*0.10);
-    // Bottom
-    const bvG = c.createLinearGradient(0, H*0.86, 0, H);
-    bvG.addColorStop(0, 'rgba(0,0,0,0)'); bvG.addColorStop(1, 'rgba(0,0,0,0.72)');
-    c.fillStyle = bvG; c.fillRect(0, H*0.86, W, H*0.14);
-    // Right
-    const rvG = c.createLinearGradient(W*0.88, 0, W, 0);
-    rvG.addColorStop(0, 'rgba(0,0,0,0)'); rvG.addColorStop(1, 'rgba(0,0,0,0.75)');
-    c.fillStyle = rvG; c.fillRect(W*0.88, 0, W*0.12, H);
+    const tvG2 = c.createLinearGradient(0, 0, 0, H*0.09);
+    tvG2.addColorStop(0, 'rgba(0,0,0,0.62)'); tvG2.addColorStop(1, 'rgba(0,0,0,0)');
+    c.fillStyle = tvG2; c.fillRect(0, 0, W, H*0.09);
+    // SAFE_BOTTOM fade — gradual transition to transparent so player shows through
+    const sbFadeG = c.createLinearGradient(0, SAFE_BOTTOM*0.88, 0, SAFE_BOTTOM);
+    sbFadeG.addColorStop(0, 'rgba(0,0,0,0)'); sbFadeG.addColorStop(1, 'rgba(0,0,0,0.50)');
+    c.fillStyle = sbFadeG; c.fillRect(0, SAFE_BOTTOM*0.88, W, SAFE_BOTTOM*0.12);
 
-    // ─── 9. HINT ─────────────────────────────────────────────────────────────
-    const hA = Math.max(0, Math.min(1, 1 - (t - 70) / 100));
-    if (hA > 0) {
-      c.save(); c.globalAlpha = hA * 0.85;
-      const ht = '🖱  scroll to zoom  ·  drag to pan';
-      c.font = `${9.5*dpr}px 'DM Sans', sans-serif`;
-      const hw = c.measureText(ht).width + 28*dpr, hh = 26*dpr;
-      const hx = gX + (gW - hw)*0.5, hy = gY + gH2 - 44*dpr;
-      c.fillStyle = 'rgba(0,0,0,0.62)';
-      c.beginPath(); c.roundRect(hx, hy, hw, hh, 13*dpr); c.fill();
+    // ─── 9. HINT ─────────────────────────────────────────────────────────
+    const hA2 = Math.max(0, Math.min(1, 1 - (t - 70) / 100));
+    if (hA2 > 0) {
+      c.save(); c.globalAlpha = hA2 * 0.82;
+      const ht2 = '🖱  scroll to zoom  ·  drag to pan';
+      c.font = `${9*dpr}px 'DM Sans', sans-serif`;
+      const hw2 = c.measureText(ht2).width + 24*dpr, hh2 = 24*dpr;
+      // Place hint centred between the two windows (on the centre seat back)
+      const midHX = (g1.gx + g1.gw + g2.gx) * 0.5;
+      const hx2   = midHX - hw2*0.5;
+      const hy2   = g1.gy + g1.gh*0.5 - hh2*0.5;
+      c.fillStyle = 'rgba(0,0,0,0.65)';
+      c.beginPath(); c.roundRect(hx2, hy2, hw2, hh2, 12*dpr); c.fill();
       c.fillStyle = '#fff'; c.textAlign = 'center';
-      c.fillText(ht, gX + gW*0.5, hy + hh*0.70);
+      c.fillText(ht2, midHX, hy2 + hh2*0.70);
       c.textAlign = 'start'; c.restore();
     }
   }
