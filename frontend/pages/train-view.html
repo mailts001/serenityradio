@@ -241,12 +241,9 @@ const loadingEl = document.getElementById('loading');
           roll:    0,
         },
       });
-      // Reset pathT so orbit re-centres cleanly from here
-      pathT = 0;
     }
 
     if (data.type === 'fly-to' && data.lon != null) {
-      // Pause orbit, fly to selected spot, then resume orbiting around it
       animating = false;
 
       // New orbit centre = selected location
@@ -263,12 +260,11 @@ const loadingEl = document.getElementById('loading');
         duration: 3.5,
         easingFunction: Cesium.EasingFunction.SINUSOIDAL_IN_OUT,
         complete: () => {
-          window._orbitCX = newCX;
-          window._orbitCY = newCY;
-          window._orbitAltBase = data.alt || 550; // restore fly-to altitude as new base
-          pathT = 0;
-          animating = true;
-          lastWallTime = performance.now();
+          // Stay at the destination — don't restart orbit.
+          // The user explicitly chose a spot; let them look around freely.
+          // animating remains false until they interact (zoom/pan) which
+          // will nudge the camera but won't auto-roam.
+          animating = false;
         },
       });
     }
