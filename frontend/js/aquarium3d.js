@@ -637,13 +637,14 @@ const Aquarium3D = (() => {
           // and THREE.js flips them on GPU upload to match OpenGL V=0=bottom convention.
           // The WebGL Samples UV data is already in OpenGL convention → flipY=true ✓
 
-          // ── Swap procedural geo → real geo on all fish in this species ──
+          // ── Swap procedural geo → real geo, then reveal fish ──────────
           const specFish = _fish.filter(f => f.spec.name === spec.name);
           if (specFish.length > 0) {
             const oldGeo = specFish[0].mesh.geometry;
             specFish.forEach(f => {
               f.mesh.geometry = geo;
               f.mat.uniforms.uMap.value = tex;
+              f.mesh.visible = true;   // reveal now that real model is ready
             });
             oldGeo.dispose();
           }
@@ -776,13 +777,18 @@ const Aquarium3D = (() => {
       const geo = _createFishGeo(spec.fishLength);
       _disposables.push(geo);
       _buildFishForSpecies(spec, tex, geo);
+      // Hide fish that have a real model pending — they'll show once the swap
+      // completes so visitors never see the procedural placeholder colours.
+      if (spec.modelName) {
+        _fish.filter(f => f.spec.name === spec.name)
+             .forEach(f => { f.mesh.visible = false; });
+      }
     });
     // Initialise fish visibility mask
     _fishMask = _fish.map(() => true);
 
     // Start background load of real WebGL Samples fish models.
-    // Procedural fish are already visible; _loadRealFishAsync swaps them
-    // species by species as each model+texture finishes downloading.
+    // Fish with modelName are hidden until swap; _loadRealFishAsync reveals them.
     _loadRealFishAsync();
   }
 
