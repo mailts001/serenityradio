@@ -2666,25 +2666,9 @@ const CanvasScenes = (() => {
   }
 
   function _trainWinHit(ex, ey) {
-    // Canvas is 110% viewport, offset -5%.  Three portrait windows at 23%, 50%, 77%.
-    const VW = window.innerWidth, VH = window.innerHeight;
-    const CW = VW * 1.10, CH = VH * 1.10;
-    const cx = ex + VW * 0.05;
-    const cy = ey + VH * 0.05;
-    const WIN_ASPECT = 1.55;
-    const wTop = CH * 0.09;
-    const wBot = CH * 0.82;
-    const avH  = wBot - wTop;
-    const rawW = CW * 0.26;
-    const maxW = avH / WIN_ASPECT;
-    const wW   = Math.min(rawW, maxW);
-    const wH   = wW * WIN_ASPECT;
-    const w1CX = CW * 0.210, w2CX = CW * 0.500, w3CX = CW * 0.790;
-    function inWindow(centerX) {
-      return cx >= centerX - wW*0.5 && cx <= centerX + wW*0.5 &&
-             cy >= wTop && cy <= wTop + wH;
-    }
-    return inWindow(w1CX) || inWindow(w2CX) || inWindow(w3CX);
+    // Not used for scroll gating anymore (scroll anywhere works)
+    // Kept for potential future use
+    return true;
   }
 
   // Check that scroll/drag target is NOT a UI element (HUD, picker, buttons)
@@ -2788,22 +2772,30 @@ const CanvasScenes = (() => {
     const WIN_FRAME   = '#1A1E24';
     const WIN_SILL    = '#2E3340';
 
-    // ─── WINDOW GEOMETRY — portrait, enforced aspect ratio ──────────────────
-    // 3 windows: centred at 23%, 50%, 77% of canvas width
-    const WIN_ASPECT = 1.55;           // height/width — always portrait
-    const wTop  = H * 0.09;            // distance from top of canvas
-    const wBot  = H * 0.82;            // window bottom limit
+    // ─── WINDOW GEOMETRY — responsive: 2 windows on mobile, 3 on desktop ────
+    const WIN_ASPECT = 1.55;           // portrait: height/width always
+    const wTop  = H * 0.09;
+    const wBot  = H * 0.82;
     const avH   = wBot - wTop;
-    // Width: aim for ~26% of canvas, but never wider than portrait allows
-    const rawW  = W * 0.26;
+
+    // Screen viewport width (canvas is 110% of it)
+    const VPW = W / (window.devicePixelRatio || 1) / 1.10;
+    const isMobile = VPW < 640;
+
+    // Mobile: 2 wider windows; Desktop: 3 windows
+    const rawW  = isMobile ? W * 0.36 : W * 0.26;
     const maxW  = avH / WIN_ASPECT;
     const wW    = Math.min(rawW, maxW);
     const wH    = wW * WIN_ASPECT;
-    const wR    = wW * 0.42;           // corner radius — classic airplane window
+    const wR    = wW * 0.42;
 
-    const w1CX = W * 0.210;
-    const w2CX = W * 0.500;
-    const w3CX = W * 0.790;
+    // Window centres — 2 or 3, evenly balanced
+    const winCXs = isMobile
+      ? [W * 0.300, W * 0.700]
+      : [W * 0.210, W * 0.500, W * 0.790];
+    const w1CX = winCXs[0];
+    const w2CX = winCXs[1];
+    const w3CX = winCXs[2] || null;
 
     // ─── 1. FULL DARK ATMOSPHERE ──────────────────────────────────────────────
     const bgG = c.createLinearGradient(0, 0, W, 0);
@@ -2850,13 +2842,14 @@ const CanvasScenes = (() => {
     const binY  = ceilH * 0.50;
     const binH2 = H * 0.095;
 
-    // Gap regions for bins: left edge, between w1-w2, between w2-w3, right edge
-    const gaps = [
-      [0,                     w1CX - wW*0.5 - 6*dpr],
-      [w1CX + wW*0.5 + 6*dpr, w2CX - wW*0.5 - 6*dpr],
-      [w2CX + wW*0.5 + 6*dpr, w3CX - wW*0.5 - 6*dpr],
-      [w3CX + wW*0.5 + 6*dpr, W],
-    ];
+    // Gap regions for bins: built from winCXs dynamically
+    const gaps = [];
+    let prev = 0;
+    for (const cx of winCXs) {
+      gaps.push([prev, cx - wW*0.5 - 6*dpr]);
+      prev = cx + wW*0.5 + 6*dpr;
+    }
+    gaps.push([prev, W]);
     gaps.forEach(([bx, br]) => {
       const bw = br - bx;
       if (bw < 4*dpr) return;
@@ -2919,10 +2912,14 @@ const CanvasScenes = (() => {
       c.fillStyle=rsG; c.beginPath(); c.roundRect(sx,seatY,sw,seatH,[0,8*dpr,5*dpr,0]); c.fill();
     }
 
-    _drawSeatBack(0,                      w1CX - wW*0.5 - 4*dpr);
-    _drawSeatBack(w1CX + wW*0.5 + 4*dpr,  w2CX - wW*0.5 - 4*dpr);
-    _drawSeatBack(w2CX + wW*0.5 + 4*dpr,  w3CX - wW*0.5 - 4*dpr);
-    _drawSeatBack(w3CX + wW*0.5 + 4*dpr,  W);
+    // Draw seat backs between / around each window dynamically
+    { let s = 0;
+      for (const cx of winCXs) {
+        _drawSeatBack(s, cx - wW*0.5 - 4*dpr);
+        s = cx + wW*0.5 + 4*dpr;
+      }
+      _drawSeatBack(s, W);
+    }
 
     // ─── 6. ARMREST (user seat, foreground bottom-left) ──────────────────────
     const arY2 = H * 0.75, arH2 = H - arY2, arW2 = W * 0.13;
@@ -3022,9 +3019,7 @@ const CanvasScenes = (() => {
       lastGlassRects.push({gx, gy, gw, gh});
     }
 
-    _drawWindow(w1CX);
-    _drawWindow(w2CX);
-    _drawWindow(w3CX);
+    winCXs.forEach(cx => _drawWindow(cx));
 
     // ─── 8. FLIGHT STATUS BADGE — top-right ───────────────────────────────────
     const destEl   = document.querySelector('.lp-chip.active');
