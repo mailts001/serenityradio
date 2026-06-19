@@ -9,100 +9,133 @@
   html, body { width:100%; height:100%; overflow:hidden; background:#000; }
   #cesiumContainer { width:100%; height:100%; }
 
-  /* Hide ALL Cesium UI chrome — we only want the 3D world */
+  /* Hide ALL Cesium UI chrome */
   .cesium-widget-credits,
   .cesium-infoBox,
   .cesium-selection-wrapper,
   .cesium-viewer-toolbar,
   .cesium-viewer-animationContainer,
   .cesium-viewer-timelineContainer,
-  .cesium-viewer-bottom { display:none !important; }
+  .cesium-viewer-bottom,
+  .cesium-navigationHelpButton-wrapper,
+  .cesium-viewer-geocoderContainer { display:none !important; }
+
+  /* Loading overlay */
+  #loading {
+    position:fixed; inset:0; background:#000a18;
+    display:flex; flex-direction:column; align-items:center; justify-content:center;
+    color:rgba(120,200,255,0.8); font-family:system-ui; font-size:13px; gap:12px;
+    transition: opacity 1s ease;
+  }
+  #loading.hidden { opacity:0; pointer-events:none; }
+  .load-dot {
+    width:8px; height:8px; border-radius:50%; background:rgba(120,200,255,0.6);
+    display:inline-block; margin:0 3px;
+    animation: pulse 1.4s ease-in-out infinite;
+  }
+  .load-dot:nth-child(2){ animation-delay:.2s; }
+  .load-dot:nth-child(3){ animation-delay:.4s; }
+  @keyframes pulse { 0%,100%{opacity:.3;transform:scale(.8);} 50%{opacity:1;transform:scale(1.2);} }
 </style>
 
-<!-- Cesium from CDN -->
 <script src="https://cesium.com/downloads/cesiumjs/releases/1.122/Build/Cesium/Cesium.js"></script>
 <link  href="https://cesium.com/downloads/cesiumjs/releases/1.122/Build/Cesium/Widgets/widgets.css" rel="stylesheet">
 </head>
 <body>
+<div id="loading">
+  <div style="font-size:16px;letter-spacing:.05em;margin-bottom:4px">🌏 Loading Singapore</div>
+  <div><span class="load-dot"></span><span class="load-dot"></span><span class="load-dot"></span></div>
+  <div style="opacity:.5;font-size:11px">Photorealistic 3D tiles</div>
+</div>
 <div id="cesiumContainer"></div>
 
 <script>
-// ── Tokens ─────────────────────────────────────────────────────────────────
+// ── Tokens ───────────────────────────────────────────────────────────────────
 Cesium.Ion.defaultAccessToken =
   'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiI5NjgyMGZmMC01NTdlLTQxZjQtODIyMy00YWZlZGY1ZWU2ODgiLCJpZCI6NDQ2NDg3LCJpc3MiOiJodHRwczovL2FwaS5jZXNpdW0uY29tIiwiYXVkIjoidW5kZWZpbmVkX2RlZmF1bHQiLCJpYXQiOjE3ODE4NTAyMDF9.F9eYt0I4a44zm1zFRYyzJFfnLsytQJ8hP6He5yi8zAc';
 
-// Google Maps API key — injected by server from env var GOOGLE_MAPS_KEY
-// Falls back to placeholder so page doesn't crash if key missing
-Cesium.GoogleMaps.defaultApiKey = '%%GOOGLE_MAPS_KEY%%';
+// Google key injected by server — empty string = no 3D tiles, falls back to Bing+terrain
+const GOOGLE_KEY = '%%GOOGLE_MAPS_KEY%%';
+if (GOOGLE_KEY) Cesium.GoogleMaps.defaultApiKey = GOOGLE_KEY;
 
-// ── Viewer — all UI disabled ────────────────────────────────────────────────
+// ── Viewer ────────────────────────────────────────────────────────────────────
+// globe:true always — 3D tiles layer on top; if tiles fail, globe imagery shows
 const viewer = new Cesium.Viewer('cesiumContainer', {
-  timeline:         false,
-  animation:        false,
-  sceneModePicker:  false,
-  baseLayerPicker:  false,
+  timeline:             false,
+  animation:            false,
+  sceneModePicker:      false,
+  baseLayerPicker:      false,
   navigationHelpButton: false,
-  homeButton:       false,
-  geocoder:         false,
-  fullscreenButton: false,
-  infoBox:          false,
-  selectionIndicator: false,
-  globe:            false,   // hidden — 3D tiles include terrain + ground
+  homeButton:           false,
+  geocoder:             false,
+  fullscreenButton:     false,
+  infoBox:              false,
+  selectionIndicator:   false,
+  // Keep globe visible as fallback if 3D tiles fail
+  terrainProvider:      new Cesium.EllipsoidTerrainProvider(),
 });
 
 viewer.scene.skyAtmosphere.show = true;
-viewer.scene.fog.enabled = true;
-viewer.scene.fog.density = 0.00015;
+viewer.scene.fog.enabled        = true;
+viewer.scene.fog.density        = 0.0001;
+viewer.scene.globe.enableLighting = true;
 
-// ── Google Photorealistic 3D Tiles ─────────────────────────────────────────
+// ── Try Google Photorealistic 3D Tiles ────────────────────────────────────────
+const loadingEl = document.getElementById('loading');
+
 (async () => {
-  try {
-    const tileset = await Cesium.createGooglePhotorealistic3DTileset();
-    viewer.scene.primitives.add(tileset);
-  } catch (e) {
-    console.warn('[CesiumTrain] 3D Tiles failed:', e.message);
-    // Fallback: show Cesium World Terrain + Bing imagery
-    viewer.terrainProvider = await Cesium.createWorldTerrainAsync();
-    viewer.globe.show = true;
+  let tilesLoaded = false;
+
+  if (GOOGLE_KEY) {
+    try {
+      const tileset = await Cesium.createGooglePhotorealistic3DTileset();
+      viewer.scene.primitives.add(tileset);
+      // Hide the globe — 3D tiles include ground
+      viewer.scene.globe.show = false;
+      tilesLoaded = true;
+      console.log('[CesiumTrain] Google 3D Tiles loaded ✓');
+    } catch (e) {
+      console.warn('[CesiumTrain] Google 3D Tiles failed:', e.message, '— using globe fallback');
+    }
+  } else {
+    console.info('[CesiumTrain] No Google key — using Bing imagery + terrain');
   }
 
-  // ── Singapore MRT East–West line camera waypoints ───────────────────────
-  // Each waypoint: [lon, lat, altitude(m), heading°, pitch°, duration(s)]
-  // Route: Jurong East → Queenstown → Raffles Place → Marina Bay (west→east)
+  // If 3D tiles failed / no key: load Cesium World Terrain for nice fallback
+  if (!tilesLoaded) {
+    try {
+      const terrain = await Cesium.createWorldTerrainAsync({ requestWaterMask: true });
+      viewer.scene.terrainProvider = terrain;
+    } catch (e) {
+      // EllipsoidTerrainProvider already set above — safe default
+    }
+  }
+
+  // ── Singapore MRT / scenic waypoints ─────────────────────────────────────
+  // Route: Jurong East → CBD → Marina Bay → Esplanade (west to east)
+  // Each: { lon, lat, alt(m above ground), heading°, pitch°, duration(s) }
   const WP = [
-    // Jurong East hub — wide establishing shot
-    { lon:103.7420, lat:1.3330, alt:380, h:85,  p:-22, dur:6  },
-    // Clementi — suburban stretch
-    { lon:103.7653, lat:1.3151, alt:220, h:78,  p:-18, dur:5  },
-    // Buona Vista — near NUS, elevated view
-    { lon:103.7898, lat:1.3067, alt:180, h:72,  p:-15, dur:5  },
-    // Commonwealth — HDB heartland
-    { lon:103.8082, lat:1.3025, alt:160, h:80,  p:-14, dur:4  },
-    // Queenstown — mature estate
-    { lon:103.8056, lat:1.2942, alt:150, h:88,  p:-13, dur:4  },
-    // Tiong Bahru — heritage shophouses low pass
-    { lon:103.8272, lat:1.2862, alt:120, h:90,  p:-10, dur:5  },
-    // Outram Park — MRT interchange, lower
-    { lon:103.8397, lat:1.2802, alt:100, h:92,  p:-9,  dur:4  },
-    // Tanjong Pagar — CBD skyscrapers
-    { lon:103.8464, lat:1.2762, alt:200, h:85,  p:-16, dur:5  },
-    // Raffles Place — heart of CBD
-    { lon:103.8514, lat:1.2840, alt:280, h:60,  p:-20, dur:6  },
-    // Marina Bay — Gardens by the Bay, Supertrees
-    { lon:103.8644, lat:1.2797, alt:350, h:50,  p:-25, dur:6  },
-    // Marina Bay Sands — iconic establishing shot
-    { lon:103.8598, lat:1.2839, alt:420, h:300, p:-28, dur:7  },
-    // Esplanade / Merlion waterfront
-    { lon:103.8554, lat:1.2896, alt:180, h:250, p:-15, dur:5  },
+    { lon:103.7420, lat:1.3330, alt:400, h:85,  p:-22, dur:7  }, // Jurong East wide
+    { lon:103.7653, lat:1.3151, alt:250, h:78,  p:-17, dur:5  }, // Clementi
+    { lon:103.7898, lat:1.3067, alt:200, h:72,  p:-14, dur:5  }, // Buona Vista / NUS
+    { lon:103.8082, lat:1.3025, alt:170, h:82,  p:-13, dur:4  }, // Commonwealth
+    { lon:103.8272, lat:1.2862, alt:130, h:90,  p:-10, dur:5  }, // Tiong Bahru heritage
+    { lon:103.8464, lat:1.2762, alt:220, h:86,  p:-16, dur:5  }, // Tanjong Pagar CBD
+    { lon:103.8514, lat:1.2840, alt:320, h:60,  p:-22, dur:6  }, // Raffles Place skyline
+    { lon:103.8598, lat:1.2839, alt:450, h:295, p:-28, dur:7  }, // Marina Bay Sands
+    { lon:103.8635, lat:1.2816, alt:280, h:320, p:-18, dur:6  }, // Gardens by the Bay
+    { lon:103.8554, lat:1.2896, alt:200, h:250, p:-14, dur:6  }, // Esplanade / Merlion
+    { lon:103.8500, lat:1.2960, alt:180, h:200, p:-12, dur:5  }, // Padang / heritage
+    { lon:103.8444, lat:1.3000, alt:250, h:100, p:-18, dur:5  }, // Fort Canning
   ];
 
-  let wpIdx = 0;
-  let looping = true;
+  let wpIdx  = 0;
+  let active = true;
 
-  function flyToWaypoint(i) {
-    if (!looping) return;
-    const w = WP[i % WP.length];
-    const isLast = (i % WP.length) === WP.length - 1;
+  function flyNext() {
+    if (!active) return;
+    const w   = WP[wpIdx % WP.length];
+    const last = (wpIdx % WP.length) === WP.length - 1;
 
     viewer.camera.flyTo({
       destination: Cesium.Cartesian3.fromDegrees(w.lon, w.lat, w.alt),
@@ -111,41 +144,32 @@ viewer.scene.fog.density = 0.00015;
         pitch:   Cesium.Math.toRadians(w.p),
         roll:    0,
       },
-      duration: w.dur,
-      easingFunction: Cesium.EasingFunction.SINUSOIDAL_IN_OUT,
+      duration:        w.dur,
+      easingFunction:  Cesium.EasingFunction.SINUSOIDAL_IN_OUT,
       complete: () => {
-        // Pause briefly at key landmark shots
-        const pause = isLast ? 2000 : 300;
-        setTimeout(() => flyToWaypoint(i + 1), pause);
+        wpIdx++;
+        setTimeout(flyNext, last ? 2500 : 400);
       },
+      cancel: () => { /* user may have interacted */ },
     });
   }
 
-  // Brief pause then start the journey
-  setTimeout(() => flyToWaypoint(0), 1200);
+  // Sync Cesium sun to real Singapore time (UTC+8)
+  viewer.clock.currentTime = Cesium.JulianDate.fromDate(new Date());
+  viewer.clock.multiplier  = 1;
 
-  // ── Time-of-day: sync Cesium sun to real Singapore clock ────────────────
-  function syncSunToRealTime() {
-    // Singapore is UTC+8
-    const now = new Date();
-    viewer.clock.currentTime = Cesium.JulianDate.fromDate(now);
-    viewer.clock.multiplier  = 1;   // real-time (not accelerated)
-    viewer.scene.globe.enableLighting = true;
-  }
-  syncSunToRealTime();
+  // Hide loading overlay then start flying
+  setTimeout(() => {
+    loadingEl.classList.add('hidden');
+    setTimeout(() => { loadingEl.style.display = 'none'; }, 1000);
+    flyNext();
+  }, tilesLoaded ? 1800 : 800);
 
-  // Allow parent page to send messages to control the view
-  window.addEventListener('message', e => {
-    if (e.data?.type === 'cesium-pause') {
-      looping = false;
-      viewer.camera.cancelFlight();
-    } else if (e.data?.type === 'cesium-resume') {
-      looping = true;
-      flyToWaypoint(wpIdx);
-    } else if (e.data?.type === 'cesium-speed' && e.data.multiplier) {
-      // Speed up / slow down the fly duration — re-trigger current waypoint
-      // (future enhancement)
-    }
+  // Parent page messaging
+  window.addEventListener('message', ({ data }) => {
+    if (!data?.type) return;
+    if (data.type === 'cesium-pause')  { active = false; viewer.camera.cancelFlight(); }
+    if (data.type === 'cesium-resume') { active = true;  flyNext(); }
   });
 
 })();
