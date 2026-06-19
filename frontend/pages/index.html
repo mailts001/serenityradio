@@ -2404,65 +2404,26 @@ function toggleAmbient(btn) {
   ];
 
   // ── Curated popular venues per major city ─────────────────────────────────
-  // Keyed by lowercase city keywords found in the Nominatim display_name
+  // Curated spots keyed by lowercase city keyword in Nominatim display_name
   const CITY_SPOTS = {
-    'london': [
-      { name:'🏰 Tower of London',    lon:-0.0759, lat:51.5081, alt:280 },
-      { name:'🎡 London Eye',          lon:-0.1195, lat:51.5033, alt:220 },
-      { name:'🏛️ British Museum',      lon:-0.1270, lat:51.5194, alt:180 },
-      { name:'👑 Buckingham Palace',   lon:-0.1400, lat:51.5014, alt:200 },
-      { name:'🌿 Hyde Park',           lon:-0.1657, lat:51.5073, alt:160 },
-    ],
-    'paris': [
-      { name:'🗼 Eiffel Tower',        lon:2.2945,  lat:48.8584, alt:320 },
-      { name:'🖼️ Louvre Museum',       lon:2.3376,  lat:48.8606, alt:220 },
-      { name:'⛪ Notre-Dame',          lon:2.3499,  lat:48.8530, alt:200 },
-      { name:'🌸 Champs-Élysées',      lon:2.3088,  lat:48.8698, alt:180 },
-      { name:'🏰 Versailles',          lon:2.1204,  lat:48.8049, alt:280 },
-    ],
-    'tokyo': [
-      { name:'⛩️ Senso-ji Temple',     lon:139.7967, lat:35.7148, alt:200 },
-      { name:'🗼 Tokyo Tower',         lon:139.7454, lat:35.6586, alt:280 },
-      { name:'🌸 Shinjuku Gyoen',      lon:139.7100, lat:35.6851, alt:160 },
-      { name:'🏯 Imperial Palace',     lon:139.7527, lat:35.6852, alt:220 },
-      { name:'🎢 Odaiba',              lon:139.7789, lat:35.6252, alt:240 },
-    ],
-    'new york': [
-      { name:'🗽 Statue of Liberty',   lon:-74.0445, lat:40.6892, alt:320 },
-      { name:'🌳 Central Park',        lon:-73.9654, lat:40.7851, alt:260 },
-      { name:'🌉 Brooklyn Bridge',     lon:-73.9969, lat:40.7061, alt:220 },
-      { name:'🎭 Times Square',        lon:-73.9855, lat:40.7580, alt:200 },
-      { name:'🏙️ Empire State',        lon:-73.9857, lat:40.7484, alt:280 },
-    ],
-    'dubai': [
-      { name:'🏗️ Burj Khalifa',        lon:55.2744,  lat:25.1972, alt:600 },
-      { name:'🛍️ Dubai Mall',          lon:55.2796,  lat:25.1985, alt:280 },
-      { name:'🌴 Palm Jumeirah',        lon:55.1171,  lat:25.1124, alt:500 },
-      { name:'🌆 Dubai Marina',         lon:55.1430,  lat:25.0762, alt:320 },
-      { name:'🏰 Old Dubai / Creek',    lon:55.2962,  lat:25.2697, alt:220 },
-    ],
-    'sydney': [
-      { name:'🎭 Opera House',         lon:151.2153, lat:-33.8568, alt:280 },
-      { name:'🌉 Harbour Bridge',      lon:151.2107, lat:-33.8523, alt:240 },
-      { name:'🏖️ Bondi Beach',         lon:151.2743, lat:-33.8915, alt:200 },
-      { name:'🌿 Royal Botanic Garden',lon:151.2165, lat:-33.8643, alt:180 },
-      { name:'🐨 Taronga Zoo',         lon:151.2415, lat:-33.8430, alt:200 },
-    ],
-    'singapore': DEFAULT_SPOTS.slice(0, 5),
-    'bangkok': [
-      { name:'🏯 Grand Palace',        lon:100.4913, lat:13.7500, alt:220 },
-      { name:'⛩️ Wat Arun',            lon:100.4878, lat:13.7437, alt:180 },
-      { name:'🛍️ Chatuchak Market',    lon:100.5499, lat:13.7999, alt:200 },
-      { name:'🌉 Chao Phraya River',   lon:100.5018, lat:13.7367, alt:240 },
-      { name:'🌆 Silom / Sathorn',     lon:100.5313, lat:13.7262, alt:180 },
-    ],
-    'rome': [
-      { name:'🏛️ Colosseum',           lon:12.4922,  lat:41.8902, alt:280 },
-      { name:'⛪ Vatican & St Peters Basilica',lon:12.4534,  lat:41.9022, alt:300 },
-      { name:'⛲ Trevi Fountain',       lon:12.4833,  lat:41.9009, alt:160 },
-      { name:'🏛️ Roman Forum',         lon:12.4853,  lat:41.8925, alt:220 },
-      { name:'🌳 Villa Borghese',       lon:12.4922,  lat:41.9141, alt:180 },
-    ],
+    'london':      [{ name:'🏰 Tower of London',    lon:-0.0759,  lat:51.5081,  alt:280 },{ name:'🎡 London Eye',          lon:-0.1195,  lat:51.5033,  alt:220 },{ name:'🏛️ British Museum',      lon:-0.1270,  lat:51.5194,  alt:180 },{ name:'👑 Buckingham Palace',   lon:-0.1400,  lat:51.5014,  alt:200 },{ name:'🌿 Hyde Park',           lon:-0.1657,  lat:51.5073,  alt:160 }],
+    'paris':       [{ name:'🗼 Eiffel Tower',        lon:2.2945,   lat:48.8584,  alt:320 },{ name:'🖼️ Louvre Museum',       lon:2.3376,   lat:48.8606,  alt:220 },{ name:'⛪ Notre-Dame',          lon:2.3499,   lat:48.8530,  alt:200 },{ name:'🌸 Champs-Elysees',      lon:2.3088,   lat:48.8698,  alt:180 },{ name:'🏰 Versailles',          lon:2.1204,   lat:48.8049,  alt:280 }],
+    'tokyo':       [{ name:'⛩️ Senso-ji Temple',     lon:139.7967, lat:35.7148,  alt:200 },{ name:'🗼 Tokyo Tower',         lon:139.7454, lat:35.6586,  alt:280 },{ name:'🌸 Shinjuku Gyoen',      lon:139.7100, lat:35.6851,  alt:160 },{ name:'🏯 Imperial Palace',     lon:139.7527, lat:35.6852,  alt:220 },{ name:'🎢 Odaiba',              lon:139.7789, lat:35.6252,  alt:240 }],
+    'new york':    [{ name:'🗽 Statue of Liberty',   lon:-74.0445, lat:40.6892,  alt:320 },{ name:'🌳 Central Park',        lon:-73.9654, lat:40.7851,  alt:260 },{ name:'🌉 Brooklyn Bridge',     lon:-73.9969, lat:40.7061,  alt:220 },{ name:'🎭 Times Square',        lon:-73.9855, lat:40.7580,  alt:200 },{ name:'🏙️ Empire State Bldg',  lon:-73.9857, lat:40.7484,  alt:280 }],
+    'dubai':       [{ name:'🏗️ Burj Khalifa',        lon:55.2744,  lat:25.1972,  alt:600 },{ name:'🛍️ Dubai Mall',          lon:55.2796,  lat:25.1985,  alt:280 },{ name:'🌴 Palm Jumeirah',        lon:55.1171,  lat:25.1124,  alt:500 },{ name:'🌆 Dubai Marina',         lon:55.1430,  lat:25.0762,  alt:320 },{ name:'🏰 Old Dubai / Creek',   lon:55.2962,  lat:25.2697,  alt:220 }],
+    'sydney':      [{ name:'🎭 Opera House',         lon:151.2153, lat:-33.8568, alt:280 },{ name:'🌉 Harbour Bridge',      lon:151.2107, lat:-33.8523, alt:240 },{ name:'🏖️ Bondi Beach',         lon:151.2743, lat:-33.8915, alt:200 },{ name:'🌿 Royal Botanic Gdn',   lon:151.2165, lat:-33.8643, alt:180 },{ name:'🐨 Taronga Zoo',         lon:151.2415, lat:-33.8430, alt:200 }],
+    'singapore':   DEFAULT_SPOTS.slice(0, 5),
+    'bangkok':     [{ name:'🏯 Grand Palace',        lon:100.4913, lat:13.7500,  alt:220 },{ name:'⛩️ Wat Arun',            lon:100.4878, lat:13.7437,  alt:180 },{ name:'🛍️ Chatuchak Market',    lon:100.5499, lat:13.7999,  alt:200 },{ name:'🌉 Chao Phraya River',   lon:100.5018, lat:13.7367,  alt:240 },{ name:'🌆 Silom / Sathorn',     lon:100.5313, lat:13.7262,  alt:180 }],
+    'rome':        [{ name:'🏛️ Colosseum',           lon:12.4922,  lat:41.8902,  alt:280 },{ name:'⛪ Vatican Basilica',    lon:12.4534,  lat:41.9022,  alt:300 },{ name:'⛲ Trevi Fountain',       lon:12.4833,  lat:41.9009,  alt:160 },{ name:'🏛️ Roman Forum',         lon:12.4853,  lat:41.8925,  alt:220 },{ name:'🌳 Villa Borghese',       lon:12.4922,  lat:41.9141,  alt:180 }],
+    'taipei':      [{ name:'🗼 Taipei 101',           lon:121.5645, lat:25.0338,  alt:400 },{ name:'🏯 Chiang Kai-shek Mem', lon:121.5212, lat:25.0366,  alt:220 },{ name:'🛍️ Shilin Night Market',  lon:121.5241, lat:25.0879,  alt:180 },{ name:'⛩️ Longshan Temple',      lon:121.4997, lat:25.0370,  alt:160 },{ name:'🌿 Elephant Mountain',    lon:121.5774, lat:25.0267,  alt:300 }],
+    'seoul':       [{ name:'🏯 Gyeongbokgung Palace', lon:126.9770, lat:37.5796,  alt:260 },{ name:'🌉 Han River / Banpo',    lon:126.9923, lat:37.5131,  alt:280 },{ name:'🛍️ Myeongdong',           lon:126.9844, lat:37.5636,  alt:180 },{ name:'🌸 Namsan / N Seoul',     lon:126.9882, lat:37.5512,  alt:300 },{ name:'⛩️ Bukchon Hanok',        lon:126.9849, lat:37.5826,  alt:160 }],
+    'hong kong':   [{ name:'🌆 Victoria Harbour',     lon:114.1677, lat:22.2934,  alt:400 },{ name:'🚡 Victoria Peak',        lon:114.1450, lat:22.2759,  alt:350 },{ name:'🌉 Tsim Sha Tsui',        lon:114.1722, lat:22.2975,  alt:220 },{ name:'🏖️ Repulse Bay',          lon:114.1938, lat:22.2364,  alt:200 },{ name:'⛩️ Wong Tai Sin',          lon:114.1934, lat:22.3426,  alt:180 }],
+    'amsterdam':   [{ name:'🎨 Rijksmuseum',          lon:4.8851,   lat:52.3600,  alt:200 },{ name:'🚲 Anne Frank House',     lon:4.8839,   lat:52.3752,  alt:160 },{ name:'🌷 Keukenhof Gardens',    lon:4.5474,   lat:52.2706,  alt:180 },{ name:'🌊 Jordaan Canal',         lon:4.8837,   lat:52.3758,  alt:140 },{ name:'🏛️ Van Gogh Museum',      lon:4.8810,   lat:52.3584,  alt:180 }],
+    'barcelona':   [{ name:'⛪ Sagrada Familia',       lon:2.1744,   lat:41.4036,  alt:300 },{ name:'🎨 Park Guell',           lon:2.1527,   lat:41.4145,  alt:260 },{ name:'🏖️ Barceloneta Beach',    lon:2.1924,   lat:41.3789,  alt:180 },{ name:'🛍️ Las Ramblas',          lon:2.1744,   lat:41.3818,  alt:160 },{ name:'🏛️ Gothic Quarter',        lon:2.1768,   lat:41.3834,  alt:140 }],
+    'istanbul':    [{ name:'🕌 Hagia Sophia',          lon:28.9800,  lat:41.0086,  alt:280 },{ name:'🕌 Blue Mosque',          lon:28.9784,  lat:41.0054,  alt:240 },{ name:'🛍️ Grand Bazaar',         lon:28.9684,  lat:41.0106,  alt:180 },{ name:'🌉 Bosphorus Bridge',      lon:29.0338,  lat:41.0466,  alt:400 },{ name:'🏰 Topkapi Palace',        lon:28.9836,  lat:41.0115,  alt:220 }],
+    'berlin':      [{ name:'🏛️ Brandenburg Gate',     lon:13.3777,  lat:52.5163,  alt:200 },{ name:'🌿 Tiergarten',           lon:13.3500,  lat:52.5145,  alt:160 },{ name:'🏛️ Reichstag',            lon:13.3762,  lat:52.5186,  alt:180 },{ name:'🎡 East Side Gallery',     lon:13.4413,  alt:200,       lat:52.5052 },{ name:'🗼 TV Tower / Mitte',      lon:13.4093,  lat:52.5208,  alt:300 }],
+    'kuala lumpur':[{ name:'🏙️ Petronas Towers',      lon:101.7118, lat:3.1579,   alt:500 },{ name:'🌿 KLCC Park',             lon:101.7118, lat:3.1557,   alt:220 },{ name:'🛍️ Bukit Bintang',         lon:101.7108, lat:3.1456,   alt:180 },{ name:'🏯 Batu Caves',            lon:101.6841, lat:3.2379,   alt:300 },{ name:'🌆 Merdeka Square',        lon:101.6942, lat:3.1481,   alt:200 }],
+    'los angeles': [{ name:'🎬 Hollywood Sign',        lon:-118.3217,lat:34.1341,  alt:400 },{ name:'🌊 Venice Beach',          lon:-118.4695,lat:33.9850,  alt:180 },{ name:'🎢 Santa Monica Pier',     lon:-118.4965,lat:34.0095,  alt:200 },{ name:'🏛️ Getty Center',          lon:-118.4741,lat:34.0780,  alt:300 },{ name:'🌆 Downtown LA',           lon:-118.2437,lat:34.0522,  alt:350 }],
   };
 
   let _inited    = false;
@@ -2546,24 +2507,38 @@ function toggleAmbient(btn) {
     }
   }
 
-  // ── City detection: find matching curated spots or fallback to Nominatim POI search ──
-  function _spotsForCity(displayName, cityLon, cityLat) {
+  // ── City detection: curated list first, then bbox-bounded Nominatim POI search ──
+  async function _spotsForCity(displayName, cityLon, cityLat, bbox) {
     const dn = displayName.toLowerCase();
     for (const [key, spots] of Object.entries(CITY_SPOTS)) {
-      if (dn.includes(key)) return Promise.resolve(spots);
+      if (dn.includes(key)) return spots;
     }
-    // Fallback: search for top tourist attractions near this city via Nominatim
-    const q = encodeURIComponent(`tourism attraction near ${displayName.split(',')[0]}`);
-    return fetch(`https://nominatim.openstreetmap.org/search?q=${q}&format=json&limit=5&addressdetails=0`, {
-      headers: { 'Accept-Language':'en', 'User-Agent':'SerenityRadio/1.0' }
-    }).then(r => r.json()).then(data =>
-      data.slice(0,5).map(p => ({
-        name: '📍 ' + p.display_name.split(',')[0],
-        lon:  parseFloat(p.lon),
-        lat:  parseFloat(p.lat),
-        alt:  220,
-      }))
-    ).catch(() => []);
+    // Fallback: bbox-bounded search for tourist attractions (much better than free-text)
+    // bbox from Nominatim: [south, north, west, east]
+    let viewbox = '';
+    if (bbox && bbox.length === 4) {
+      const s = parseFloat(bbox[0]), n = parseFloat(bbox[1]);
+      const w = parseFloat(bbox[2]), e = parseFloat(bbox[3]);
+      // Nominatim viewbox: left,top,right,bottom  (west,north,east,south)
+      viewbox = `&viewbox=${w},${n},${e},${s}&bounded=1`;
+    }
+    // Search for amenity=place_of_worship + tourism=attraction types
+    const queries = ['tourist attraction', 'museum', 'landmark'];
+    const results = [];
+    for (const q of queries) {
+      if (results.length >= 5) break;
+      try {
+        const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(q)}&format=json&limit=4&addressdetails=0${viewbox}`;
+        const data = await fetch(url, { headers:{ 'Accept-Language':'en','User-Agent':'SerenityRadio/1.0' }}).then(r => r.json());
+        for (const p of data) {
+          const name = p.display_name.split(',')[0].trim();
+          if (results.some(r => r.name.includes(name))) continue; // dedup
+          results.push({ name:'📍 ' + name, lon:parseFloat(p.lon), lat:parseFloat(p.lat), alt:220 });
+          if (results.length >= 6) break;
+        }
+      } catch(e) { /* ignore per-query failures */ }
+    }
+    return results;
   }
 
   // ── Free-text search ──────────────────────────────────────────────────────
@@ -2602,11 +2577,14 @@ function toggleAmbient(btn) {
       }
 
       // Populate chips with top venues for this city
-      _notify('🔍 Finding top spots in ' + name.split(',')[0] + '…', 6000);
-      const spots = await _spotsForCity(place.display_name, lon, lat);
+      const cityShort = name.split(',')[0];
+      _notify('🔍 Finding top spots in ' + cityShort + '…', 8000);
+      const spots = await _spotsForCity(place.display_name, lon, lat, place.boundingbox);
       if (spots.length) {
         _buildChips(spots);
-        _notify('✅ Top spots in ' + name.split(',')[0] + ' loaded — tap to explore!');
+        _notify('✅ ' + spots.length + ' spots in ' + cityShort + ' — tap to fly there!');
+      } else {
+        _notify('✈️ Arrived in ' + cityShort + ' — no POIs found nearby');
       }
     } catch(e) {
       _notify('❌ Search failed — check connection');
