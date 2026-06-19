@@ -307,26 +307,47 @@
   }
   body.scene-train #train-frame-canvas { display: block; }
 
-  /* ── Player floats above canvas in train scene ── */
-  body.scene-train .player-card {
-    position: fixed;
-    bottom: 0; left: 0; right: 0;
-    z-index: 4;
-    margin: 0;
-    border-radius: 20px 20px 0 0;
-    padding: 1.0rem 1.5rem 1.2rem;
-    background: rgba(6,10,18,0.92);
+  /* ── Compact train HUD — play + scene switcher floating above canvas ── */
+  #train-mini-hud {
+    display: none;
+    position: fixed; bottom: 0; left: 0; right: 0;
+    z-index: 10;
+    background: rgba(6,10,18,0.90);
     backdrop-filter: blur(18px);
-    border-top: 1px solid rgba(100,160,230,0.15);
-    animation: none;
+    border-top: 1px solid rgba(100,160,230,0.14);
+    padding: 10px 16px 14px;
+    font-family: 'DM Sans', sans-serif;
   }
+  body.scene-train #train-mini-hud { display: block; }
+  .tmh-row { display: flex; align-items: center; gap: 10px; }
+  .tmh-track {
+    flex: 1; font-size: 12px; color: rgba(190,215,245,0.80);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .tmh-play {
+    width: 34px; height: 34px; border-radius: 50%; border: none;
+    background: rgba(40,110,220,0.80); color: #fff;
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer; flex-shrink: 0; font-size: 15px;
+  }
+  .tmh-scenes {
+    display: flex; gap: 6px; flex-wrap: wrap; justify-content: center;
+    margin-top: 8px;
+  }
+  .tmh-scene-btn {
+    background: rgba(30,40,60,0.80); border: 1px solid rgba(100,150,220,0.22);
+    border-radius: 20px; padding: 5px 11px; font-size: 12px;
+    color: rgba(180,210,245,0.85); cursor: pointer; white-space: nowrap;
+    transition: background .15s;
+  }
+  .tmh-scene-btn:hover, .tmh-scene-btn.active { background: rgba(40,110,220,0.55); }
 
   /* ── Location picker panel ── */
   /* ── Location picker — mobile-first collapsible drawer ── */
   #lp-toggle {
     display: none;
-    position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%);
-    z-index: 9;
+    position: fixed; bottom: 90px; left: 50%; transform: translateX(-50%);
+    z-index: 11;
     background: rgba(8,14,24,0.88); backdrop-filter: blur(12px);
     border: 1px solid rgba(100,160,230,0.30); border-radius: 24px;
     padding: 9px 20px; font-size: 12px; font-family: 'DM Sans', sans-serif;
@@ -340,7 +361,7 @@
   #train-location-picker {
     display: none;
     position: fixed; bottom: 0; left: 0; right: 0;
-    z-index: 8;
+    z-index: 12;
     background: rgba(6,10,18,0.94);
     backdrop-filter: blur(18px);
     border-top: 1px solid rgba(100,160,230,0.18);
@@ -676,6 +697,22 @@
 <!-- Train window frame overlay (visible only in train scene) -->
 <canvas id="train-frame-canvas"></canvas>
 <div id="train-hud" style="display:none"></div>
+
+<!-- Compact HUD — play/pause + scene switcher, always above canvas in train mode -->
+<div id="train-mini-hud">
+  <div class="tmh-row">
+    <span class="tmh-track" id="tmh-track-name">Now Playing…</span>
+    <button class="tmh-play" id="tmh-play-btn" onclick="togglePlay(); _tmhSyncPlay()" title="Play / Pause">▶</button>
+    <button onclick="window._lpToggle()" style="background:rgba(30,90,180,0.70);border:1px solid rgba(100,160,230,0.30);border-radius:18px;padding:6px 12px;font-size:12px;color:rgba(180,215,245,0.92);cursor:pointer;white-space:nowrap">✈️ Destination</button>
+  </div>
+  <div class="tmh-scenes">
+    <button class="tmh-scene-btn" onclick="switchScene('sea')">🌊 Sea</button>
+    <button class="tmh-scene-btn" onclick="switchScene('space')">🌌 Space</button>
+    <button class="tmh-scene-btn" onclick="switchScene('forest')">🌲 Forest</button>
+    <button class="tmh-scene-btn" onclick="switchScene('snow')">🏔️ Snow</button>
+    <button class="tmh-scene-btn" onclick="switchScene('aquarium')">🐠 Aquarium</button>
+  </div>
+</div>
 
 <!-- Location picker toggle button (always visible in train mode) -->
 <button id="lp-toggle" onclick="window._lpToggle()">✈️ Choose Destination</button>
@@ -1391,6 +1428,8 @@ function loadTrack(index) {
   console.log(`Loading track: ${track.title} (${track.file})`);
   trackTitleEl.textContent = track.title;
   trackArtistEl.textContent = track.artist;
+  const _th = document.getElementById('tmh-track-name');
+  if (_th) _th.textContent = track.title;
   audioElement.src = track.src || `/assets/music/${track.file}`;
   audioElement.load();
   progressSec = 0;
@@ -1514,6 +1553,10 @@ function formatTime(seconds) {
   return `${mins}:${secs.toString().padStart(2, '0')}`;
 }
 
+function _tmhSyncPlay() {
+  const b = document.getElementById('tmh-play-btn');
+  if (b) b.textContent = isPlaying ? '⏸' : '▶';
+}
 function togglePlay() {
   if (!tracks.length) {
     showToast('No tracks available. Add MP3 files to the music folder.');
@@ -1531,6 +1574,7 @@ function togglePlay() {
     playBtn.classList.remove('playing');
     if (eqBars) eqBars.classList.add('paused');
   }
+  _tmhSyncPlay();
 }
 
 function nextTrack() {
