@@ -2782,19 +2782,16 @@ const CanvasScenes = (() => {
     const VPW = W / (window.devicePixelRatio || 1) / 1.10;
     const isMobile = VPW < 640;
 
-    // Mobile: 2 wider windows; Desktop: 3 windows
-    const rawW  = isMobile ? W * 0.36 : W * 0.26;
+    // Mobile: single large centred window. Desktop: 3 windows.
+    const rawW  = isMobile ? W * 0.72 : W * 0.26;
     const maxW  = avH / WIN_ASPECT;
     const wW    = Math.min(rawW, maxW);
     const wH    = wW * WIN_ASPECT;
-    const wR    = wW * 0.42;
+    const wR    = wW * 0.38;   // slightly less rounded for the big mobile pane
 
-    // Window centres — 2 or 3, evenly balanced
-    const winCXs = isMobile
-      ? [W * 0.300, W * 0.700]
-      : [W * 0.210, W * 0.500, W * 0.790];
+    const winCXs = isMobile ? [W * 0.500] : [W * 0.210, W * 0.500, W * 0.790];
     const w1CX = winCXs[0];
-    const w2CX = winCXs[1];
+    const w2CX = winCXs[1] || null;
     const w3CX = winCXs[2] || null;
 
     // ─── 1. FULL DARK ATMOSPHERE ──────────────────────────────────────────────
