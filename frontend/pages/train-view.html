@@ -55,7 +55,7 @@ Cesium.Ion.defaultAccessToken =
   'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiI5NjgyMGZmMC01NTdlLTQxZjQtODIyMy00YWZlZGY1ZWU2ODgiLCJpZCI6NDQ2NDg3LCJpc3MiOiJodHRwczovL2FwaS5jZXNpdW0uY29tIiwiYXVkIjoidW5kZWZpbmVkX2RlZmF1bHQiLCJpYXQiOjE3ODE4NTAyMDF9.F9eYt0I4a44zm1zFRYyzJFfnLsytQJ8hP6He5yi8zAc';
 
 // Google key injected by server — empty string = no 3D tiles, falls back to Bing+terrain
-const GOOGLE_KEY = '%%GOOGLE_MAPS_KEY%%';
+const GOOGLE_KEY = 'AIzaSyB06lD1mKkembVapUAAnyQLEu43shN_U1k';
 if (GOOGLE_KEY) Cesium.GoogleMaps.defaultApiKey = GOOGLE_KEY;
 
 // ── Viewer ────────────────────────────────────────────────────────────────────
@@ -197,24 +197,21 @@ const loadingEl = document.getElementById('loading');
 
     // ── Scroll to zoom ────────────────────────────────────────────────────
     if (data.type === 'zoom') {
-      // Positive delta = zoom out (raise alt), negative = zoom in (lower alt)
-      // Clamp alt between 80 m and 4000 m
-      const factor = data.delta > 0 ? 1.12 : 0.89;
-      // Derive current alt from camera position
+      // Convention: scroll down (deltaY > 0) = zoom IN (lower alt), scroll up = zoom OUT
+      // This matches standard map zoom (Google Maps / Cesium default)
+      const factor = data.delta > 0 ? 0.88 : 1.14;
       const camPos = viewer.camera.positionCartographic;
-      const curAlt = camPos ? camPos.height : 550;
-      const newAlt = Math.max(80, Math.min(4000, curAlt * factor));
+      const curAlt = camPos ? camPos.height : 800;
+      // Min 400 m — below this the camera pitch can flip and look at sky
+      const newAlt = Math.max(400, Math.min(8000, curAlt * factor));
       const lon = Cesium.Math.toDegrees(camPos.longitude);
       const lat = Cesium.Math.toDegrees(camPos.latitude);
+      // Always lock pitch to a stable downward angle so camera never flips
+      const pitch = Cesium.Math.toRadians(-40);
       viewer.camera.setView({
         destination: Cesium.Cartesian3.fromDegrees(lon, lat, newAlt),
-        orientation: {
-          heading: viewer.camera.heading,
-          pitch:   viewer.camera.pitch,
-          roll:    0,
-        },
+        orientation: { heading: viewer.camera.heading, pitch, roll: 0 },
       });
-      // Also update orbit altitude for ongoing animation
       window._orbitAltBase = newAlt;
     }
 
